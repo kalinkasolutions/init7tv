@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>Init7Tv</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Init7Tv.BusinessLogic\Init7Tv.BusinessLogic.csproj" />
+      <ProjectReference Include="..\Init7Tv.Dal\Init7Tv.Dal.csproj" />
+      <ProjectReference Include="..\Init7Tv.Shared\Init7Tv.Shared.csproj" />
+    </ItemGroup>
+
+</Project>

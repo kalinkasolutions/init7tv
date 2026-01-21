@@ -1,0 +1,27 @@
+using System.Text.Json.Serialization;
+
+namespace Init7Tv.BusinessLogic.Ffprobe;
+
+public class FfprobeRoot
+{
+    [JsonPropertyName("streams")]
+    public List<StreamInfo> Streams { get; set; } = [];
+
+    [JsonPropertyName("format")]
+    public FormatInfo Format { get; set; } = new();
+
+
+    public string? GetVideoCodec => GetVideoStream?.CodecName;
+
+    public bool NeedsYuvAdaption => GetVideoStream?.PixelFormat != "yuv420p";
+
+    public StreamInfo? GetVideoStream => Streams.FirstOrDefault(x => x.CodecType == "video");
+
+    public string[] GetLanguages =>
+        Streams
+            .Where(x => x.CodecType == "audio")
+            .Select(x => x.Tags)
+            .Where(t => t != null && t.TryGetValue("language", out var _))
+            .Select(t => t!["language"])
+            .ToArray();
+}
