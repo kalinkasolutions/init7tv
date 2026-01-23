@@ -1,3 +1,5 @@
+import {notify} from "./notification.js";
+
 export async function getJson(url) {
     try {
         const res = await fetch(url);
@@ -5,15 +7,14 @@ export async function getJson(url) {
             window.location = res.url;
             return null;
         }
-        return res.json();
-    } catch (e) {
-        window.dispatchEvent(new CustomEvent('notify-error', {
-            detail: {
-                title: "Failed to load channels",
-                message: e.message,
-                type: "error"
-            }
-        }));
+        if (res.ok) {
+            return res.json();
+        }
+        if (res.status === 404) {
+            notify("Not Found", `${url} was not found.`, "error");
+        }
+    } catch (e) {w
+        notify("Failed to load channels", e.message, "error");
     }
     return null;
 }

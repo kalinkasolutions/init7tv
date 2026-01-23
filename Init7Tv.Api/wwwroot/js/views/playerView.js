@@ -1,4 +1,6 @@
-export const player = () => ({
+import {notify} from "../notification.js";
+
+export const playerView = () => ({
     currentChannel: null,
     languages: [],
     selectedLanguage: null,
@@ -25,7 +27,10 @@ export const player = () => ({
     },
 
     async onLanguageChange(audioStreamIndex) {
-        if (!this.currentChannel) return;
+        if (!this.currentChannel) {
+            return;
+        }
+
         await this.playChannel(this.currentChannel, audioStreamIndex);
     },
 
@@ -37,21 +42,22 @@ export const player = () => ({
         }
 
         if (!Hls.isSupported()) {
-            console.error("HLS not supported");
+            notify("Hls is not supported.", "Playing hls streams is not supported in this browser", "error");
             return;
         }
 
         this.hls = new Hls();
-        this.hls.loadSource(`/api/streaming/playlist?streamId=${streamId}`);
-        this.hls.attachMedia(player);
 
         this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
             player.play().catch(err => {
                 if (err.name !== "AbortError") {
-                    console.error("Playback error:", err);
+                    notify("Playback error.", "Something went wrong", "error");
                 }
             });
         });
+
+        this.hls.loadSource(`/api/streaming/playlist?streamId=${streamId}`);
+        this.hls.attachMedia(player);
     },
 
     async startStream(streamUrl, audioStreamIndex = null) {

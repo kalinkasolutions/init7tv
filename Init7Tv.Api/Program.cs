@@ -13,6 +13,7 @@ using var loggerFactory = LoggerFactory.Create(loggingBuilder => { loggingBuilde
 builder.Services.AddMemoryCache();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpClient<IHttpClientWrapper, HttpClientWrapper>();
+builder.Services.AddAntiforgery();
 
 builder.Services.AddDbContext<Init7TvContext>(options => options.UseSqlite("Data Source=Init7Tv.db"));
 
@@ -62,6 +63,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStreamingEndpoints();
+app.MapAuthEndpoints();
 
 await Seed.Initialize(app);
 

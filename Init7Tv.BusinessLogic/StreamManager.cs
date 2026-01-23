@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.Mapping;
 using Init7Tv.Dto;
@@ -11,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Init7Tv.BusinessLogic;
 
-public partial class StreamManager : IStreamManager, IDisposable
+public class StreamManager : IStreamManager, IDisposable
 {
     private readonly ILogger<StreamManager> m_logger;
 
@@ -23,8 +22,7 @@ public partial class StreamManager : IStreamManager, IDisposable
     private readonly TimeSpan m_timerDueTime = TimeSpan.FromSeconds(10);
     private readonly TimeSpan m_timerPeriod = TimeSpan.FromSeconds(10);
 
-    private static readonly JsonSerializerOptions JsonSerialierOptions = new() { PropertyNameCaseInsensitive = true };
-    private static readonly string[] CodecsToTranscode = ["mpeg2video"];
+    private static readonly JsonSerializerOptions JsonSerializerOptions = new() { PropertyNameCaseInsensitive = true };
 
     private bool m_disposed;
 
@@ -68,12 +66,12 @@ public partial class StreamManager : IStreamManager, IDisposable
             m_logger.LogInformation("starting stream: {StreamId}, videoCodec: {VideoCodec}, available lang: {Languages}",
                 streamId,
                 streamInfo.Value.GetVideoCodec,
-                string.Join(", ", streamInfo.Value.GetLanguages));
+                streamInfo.Value.GetLanguages);
 
             var stream = new TvStream
             {
                 StreamId = streamId,
-                Ffmpeg = await GetFfmpegProcess(streamUrl, audioStreamIndex, streamInfo.Value),
+                Ffmpeg = GetFfmpegProcess(streamUrl, audioStreamIndex),
                 StreamInfo = streamInfo.Value
             };
 
@@ -128,7 +126,7 @@ public partial class StreamManager : IStreamManager, IDisposable
         foreach (var segmentName in stream.Playlist)
         {
             sb.AppendLine("#EXTINF:6.0,");
-            sb.AppendLine($"/api/segment/{stream.StreamId}/{segmentName}");
+            sb.AppendLine($"/api/streaming/segment/{stream.StreamId}/{segmentName}");
         }
 
         return OperationResult<string>.Text(sb.ToString(), "application/vnd.apple.mpegurl");
@@ -210,44 +208,27 @@ public partial class StreamManager : IStreamManager, IDisposable
                 segmentStartTime = DateTime.UtcNow;
             }
         }
+        catch (OperationCanceledException)
+        {
+            m_logger.LogInformation("Stream was stopped streamId: {StreamId}", stream.StreamId);
+        }
         catch (Exception ex)
         {
             m_logger.LogError(ex, "Stream loop failed stream: {StreamId}", stream.StreamId);
         }
     }
 
-    private async Task<Process> GetFfmpegProcess(string streamUrl, int audioStreamIndex, FfprobeRoot streamInfo)
+    private Process GetFfmpegProcess(string streamUrl, int audioStreamIndex)
     {
-        var videoTranscodeOptions = "-c:v copy ";
-        var isInterlaced = await DetectInterlacing(streamUrl);
-
-        if (CodecsToTranscode.Contains(streamInfo.GetVideoCodec) || streamInfo.NeedsYuvAdaption || isInterlaced)
-        {
-            videoTranscodeOptions = "-c:v libx264 -preset fast -crf 23 ";
-            if (streamInfo.NeedsYuvAdaption)
-            {
-                videoTranscodeOptions += "-pix_fmt yuv420p ";
-            }
-
-            if (isInterlaced)
-            {
-                videoTranscodeOptions += "-vf \"yadif\" ";
-            }
-        }
-
-        if (await DetectInterlacing(streamUrl))
-        {
-        }
-
-        var ffmpegArgs = $"-i {streamUrl} " +
+        var ffmpegArgs = $"-loglevel error -i {streamUrl} " +
                          "-map 0:v:0 " +
+                         $"-c:v libx264 -preset veryfast -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
                          $"-map 0:a:{audioStreamIndex} " +
-                         $"{videoTranscodeOptions} " +
                          $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
                          "-f mpegts " +
                          "pipe:1";
 
-        m_logger.LogInformation("starting ffmpeg with args {FfmegArgs}", ffmpegArgs);
+        m_logger.LogInformation("starting ffmpeg with args: {FfmegArgs}", ffmpegArgs);
 
         return new Process
         {
@@ -280,7 +261,7 @@ public partial class StreamManager : IStreamManager, IDisposable
 
         try
         {
-            var streamInfo = JsonSerializer.Deserialize<FfprobeRoot>(output, JsonSerialierOptions);
+            var streamInfo = JsonSerializer.Deserialize<FfprobeRoot>(output, JsonSerializerOptions);
             if (streamInfo == null)
             {
                 return OperationResult<FfprobeRoot>.Error("Failed to parse ffprobe json");
@@ -292,63 +273,6 @@ public partial class StreamManager : IStreamManager, IDisposable
         {
             m_logger.LogError(e, "Failed to parse ffprobe json for url: {StreamUrl}", streamUrl);
             return OperationResult<FfprobeRoot>.Error("Failed to parse ffprobe json");
-        }
-    }
-
-    private async Task<bool> DetectInterlacing(string streamUrl)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "ffmpeg",
-            Arguments = $"-i \"{streamUrl}\" -vf idet -frames:v 100 -an -f null -",
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        try
-        {
-            using var process = Process.Start(startInfo);
-            if (process == null)
-            {
-                m_logger.LogWarning("Failed to start interlacing detection for: {StreamUrl}", streamUrl);
-                return false;
-            }
-
-            var stderr = await process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            // Finde ALLE Matches und nimm das LETZTE
-            var matches = Regex.Matches(stderr, @"Multi frame detection:\s+TFF:\s+(\d+)\s+BFF:\s+(\d+)\s+Progressive:\s+(\d+)");
-        
-            if (matches.Count > 0)
-            {
-                // Nimm das letzte Match (das ist die finale Statistik)
-                var match = matches[matches.Count - 1];
-            
-                var tff = int.Parse(match.Groups[1].Value);
-                var bff = int.Parse(match.Groups[2].Value);
-                var progressive = int.Parse(match.Groups[3].Value);
-            
-                var interlacedFrames = tff + bff;
-                var totalFrames = interlacedFrames + progressive;
-            
-                var isInterlaced = totalFrames > 0 && (interlacedFrames / (double)totalFrames) > 0.8;
-            
-                m_logger.LogInformation(
-                    "Interlacing detection for {StreamUrl}: TFF={TFF}, BFF={BFF}, Progressive={Progressive}, NeedsDeinterlacing={NeedsDeinterlacing}",
-                    streamUrl, tff, bff, progressive, isInterlaced);
-            
-                return isInterlaced;
-            }
-
-            m_logger.LogWarning("Could not parse interlacing detection output for: {StreamUrl}", streamUrl);
-            return false;
-        }
-        catch (Exception ex)
-        {
-            m_logger.LogError(ex, "Failed to detect interlacing for: {StreamUrl}", streamUrl);
-            return false;
         }
     }
 
@@ -400,7 +324,4 @@ public partial class StreamManager : IStreamManager, IDisposable
             m_logger.LogError(ex, "Failed to stop stream: {StreamId}", streamId);
         }
     }
-
-    [GeneratedRegex(@"Multi frame detection: TFF:\s*(\d+) BFF:\s*(\d+) Progressive:\s*(\d+)")]
-    private static partial Regex InterlacingRegex();
 }

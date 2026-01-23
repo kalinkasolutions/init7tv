@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <title>Init7TV</title>
+    <meta charset="UTF-8">
     <link rel="stylesheet" href="css/reset.css">
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/notification.css">
@@ -11,7 +12,7 @@
 
 <header>fda</header>
 <main>
-    <aside id="sidebar" x-data="sidebar()">
+    <aside id="sidebar" x-data="sidebarView()">
         <template x-for="c in channels" :key="c.hlsUrl">
             <div class="channel" @click="$dispatch('channel-selected', c)">
                 <span x-text="c.displayName"></span>
@@ -20,7 +21,7 @@
         </template>
     </aside>
 
-    <section class="player-container" x-data="player()" @channel-selected.window="await playChannel($event.detail)">
+    <section class="player-container" x-data="playerView()" @channel-selected.window="await playChannel($event.detail)">
         <div class="player-container-wrapper">
             <div class="player-title-wrapper" x-show="currentChannel">
                 <img :src="currentLogo" :alt="currentTitle"/>
@@ -43,7 +44,7 @@
     </section>
 </main>
 
-<div id="notification" x-data="notification()" @notify-error.window="show($event.detail)">
+<div id="notification" x-data="notificationView()" @notify-error.window="show($event.detail)">
     <template x-for="n in notifications" :key="n.id">
         <div class="notification-wrapper" :class="{ 'error': !n.isSuccess, 'success': n.isSuccess}">
             <div class="close" @click="closeNotification(n.id)">&times;</div>

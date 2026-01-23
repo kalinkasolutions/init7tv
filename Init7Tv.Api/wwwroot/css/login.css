@@ -1,0 +1,70 @@
+body, html {
+    width: 100%;
+    height: 100%;
+    background-color: #1c2420;
+    color: #f2f4f3;
+    user-select: none;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+input, button, div, main, body{
+    box-sizing: border-box;
+}
+
+h1 {
+    margin-bottom: 2em;
+}
+
+body {
+    justify-content: center;
+    align-items: center;
+    flex-direction: row;
+    display: flex;
+}
+
+main {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; 
+    justify-content: center; 
+    min-width: 315px;
+    max-width: 315px;
+    width: 315px;
+}
+
+main form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+main form input {
+    width: 100%;
+    margin-bottom: 1em;
+    background: none;
+    border: none;
+    padding: 0.5em;
+    border-bottom: 1px solid white;
+    color: white;
+}
+
+main form input:focus-visible {
+    border: none;
+    border-bottom: 1px solid #1e711e;
+    outline: none;
+}
+
+main form button {
+    border: none;
+    border-radius: 2px;
+    padding: 0.5em;
+    color: white;
+    background-color: #1e711e;
+    cursor: pointer;
+    width: 100%;
+}
+
+main form button:hover {
+    background-color: #165316;
+}
