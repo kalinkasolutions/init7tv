@@ -7,7 +7,7 @@ body, html {
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-input, button, div, main, body{
+input, button, div, main, body {
     box-sizing: border-box;
 }
 
@@ -26,8 +26,8 @@ main {
     height: 100%;
     display: flex;
     flex-direction: column;
-    align-items: flex-start; 
-    justify-content: center; 
+    align-items: flex-start;
+    justify-content: center;
     min-width: 315px;
     max-width: 315px;
     width: 315px;

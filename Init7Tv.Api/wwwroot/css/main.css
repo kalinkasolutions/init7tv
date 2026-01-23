@@ -6,6 +6,10 @@ body, html {
     user-select: none;
 }
 
+header, main, input, button, div, main, body {
+    box-sizing: border-box;
+}
+
 h1 {
     font-size: 2rem;
     padding: 0.5em;
@@ -16,18 +20,21 @@ h2 {
     padding: 0.5em;
 }
 
+a {
+    color: #1e711e;
+}
+
+a:hover {
+    color: #165316;
+}
+
 body {
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     display: flex;
     flex-direction: column;
 }
 
-header {
-    height: 10%;
-    display: flex;
-    align-items: center;
-    border-bottom: 1px solid white;
-}
+
 
 main {
     height: 90%;
@@ -35,115 +42,7 @@ main {
     flex-direction: row;
 }
 
-.player-container {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    align-items: center;
-    justify-content: center;
-}
-
-.player-container video {
-    width: 100%;
-    background-color: black;
-}
-
-.player-container-wrapper {
-    width: 50%;
-}
-
-#sidebar {
-    display: flex;
-    flex-direction: column;
-    overflow-y: scroll;
-    min-width: 200px;
-    max-width: 200px;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-    scrollbar-width: thin;
-}
-
-#sidebar img {
-    align-self: center;
-}
-
-#player-title {
-    padding-left: 0;
-}
-
-.channel {
-    cursor: pointer;
-    padding: 1em;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    border-bottom: 1px solid white;
-    border-right: 1px solid white;
-}
-
-.channel:hover {
-    background-color: #36453e;
-}
-
-.channel img {
-    max-width: 100px;
-}
-
-.player-title-wrapper {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-}
-
-.player-title-wrapper img {
-    height: 80px;
-    padding-right: 2em;
-}
-
-.player-title-wrapper > *:not(:last-child) {
-    padding-right: 2em;
-}
-
 select {
     border-radius: 0;
 }
 
-.lang-select-wrapper {
-    margin-left: auto;
-}
-
-#lang-select {
-    display: inline-block;
-    padding: 0.25em 0.5em;
-    font-size: 0.875rem;
-    line-height: 1.2;
-    border: none;
-    border-bottom: 1px solid white;
-    background-color: #222;
-    color: #eee;
-    cursor: pointer;
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-#lang-select option {
-    background-color: #222;
-    color: #eee;
-    padding: 0.2em 0.4em;
-}
-
-video::-webkit-media-controls-timeline {
-    display: none !important;
-}
-
-video::-webkit-media-controls-current-time-display {
-    display: none !important;
-}
-
-video::-webkit-media-controls-time-remaining-display {
-    display: none !important;
-}
-
-/* Für Firefox */
-video::-moz-media-controls-timeline {
-    display: none !important;
-}

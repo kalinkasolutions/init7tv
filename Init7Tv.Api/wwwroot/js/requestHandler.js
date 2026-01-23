@@ -1,6 +1,6 @@
 import {notify} from "./notification.js";
 
-export async function getJson(url) {
+export async function get(url) {
     try {
         const res = await fetch(url);
         if (res.redirected) {
@@ -13,8 +13,9 @@ export async function getJson(url) {
         if (res.status === 404) {
             notify("Not Found", `${url} was not found.`, "error");
         }
-    } catch (e) {w
+    } catch (e) {
         notify("Failed to load channels", e.message, "error");
     }
     return null;
 }
+

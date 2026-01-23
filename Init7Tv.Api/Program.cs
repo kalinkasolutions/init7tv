@@ -2,6 +2,7 @@ using Init7Tv;
 using Init7Tv.BusinessLogic;
 using Init7Tv.Dal;
 using Init7Tv.Endpoints;
+using Init7Tv.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,6 @@ using var loggerFactory = LoggerFactory.Create(loggingBuilder => { loggingBuilde
 
 builder.Services.AddMemoryCache();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddHttpClient<IHttpClientWrapper, HttpClientWrapper>();
 builder.Services.AddAntiforgery();
 
 builder.Services.AddDbContext<Init7TvContext>(options => options.UseSqlite("Data Source=Init7Tv.db"));
@@ -45,8 +45,11 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddTransient<IChannelParserService, ChannelParserService>();
+builder.Services.AddHttpClient<IHttpClientWrapper, HttpClientWrapper>();
+
 builder.Services.AddSingleton<IStreamManager, StreamManager>();
+builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
+builder.Services.AddTransient<IChannelParserService, ChannelParserService>();
 
 #if DEBUG
 builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001, listenOptions => { listenOptions.UseHttps("/home/kalinka/certs/kalinka.pfx"); }); });
@@ -64,6 +67,7 @@ app.UseAuthorization();
 
 app.MapStreamingEndpoints();
 app.MapAuthEndpoints();
+app.MapUserEndpoints();
 
 await Seed.Initialize(app);
 

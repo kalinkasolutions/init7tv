@@ -3,59 +3,20 @@
 <head>
     <title>Init7TV</title>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="css/reset.css">
-    <link rel="stylesheet" href="css/main.css">
-    <link rel="stylesheet" href="css/notification.css">
-
+    <link rel="stylesheet" href="css/bundle.css">
 </head>
 <body>
 
-<header>fda</header>
+<div x-init="$el.outerHTML = await loadPartial('partial/header.html')"></div>
+
 <main>
-    <aside id="sidebar" x-data="sidebarView()">
-        <template x-for="c in channels" :key="c.hlsUrl">
-            <div class="channel" @click="$dispatch('channel-selected', c)">
-                <span x-text="c.displayName"></span>
-                <img :src="`data:image/png;base64,${c.logo}`" :alt="c.displayName">
-            </div>
-        </template>
-    </aside>
-
-    <section class="player-container" x-data="playerView()" @channel-selected.window="await playChannel($event.detail)">
-        <div class="player-container-wrapper">
-            <div class="player-title-wrapper" x-show="currentChannel">
-                <img :src="currentLogo" :alt="currentTitle"/>
-                <h2 x-text="currentTitle"></h2>
-
-                <div class="lang-select-wrapper" x-show="languages.length > 0">
-                    <label for="lang-select">Language</label>
-                    <select id="lang-select"
-                            x-model="selectedLanguage"
-                            @change="await onLanguageChange(selectedLanguage)">
-                        <template x-for="l in languages" :key="l.audioStreamIndex">
-                            <option :value="l.audioStreamIndex" x-text="l.language"></option>
-                        </template>
-                    </select>
-                </div>
-            </div>
-
-            <video id="player" controls></video>
-        </div>
-    </section>
+    <div x-init="$el.outerHTML = await loadPartial('partial/sidebar.html')"></div>
+    <div x-init="$el.outerHTML = await loadPartial('partial/player.html')"></div>
 </main>
 
-<div id="notification" x-data="notificationView()" @notify-error.window="show($event.detail)">
-    <template x-for="n in notifications" :key="n.id">
-        <div class="notification-wrapper" :class="{ 'error': !n.isSuccess, 'success': n.isSuccess}">
-            <div class="close" @click="closeNotification(n.id)">&times;</div>
-            <div class="title" x-text="n.title"></div>
-            <div class="message" x-text="n.message"></div>
-        </div>
-    </template>
-</div>
+<div x-init="$el.outerHTML = await loadPartial('partial/notification.html')"></div>
 
 <script type="module" src="js/main.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
 </body>
 </html>

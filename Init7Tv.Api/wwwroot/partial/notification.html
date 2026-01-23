@@ -1,0 +1,9 @@
+<div id="notification" x-data="notificationView()" @notify-error.window="show($event.detail)">
+    <template x-for="n in notifications" :key="n.id">
+        <div class="notification-wrapper" :class="{ 'error': !n.isSuccess, 'success': n.isSuccess}">
+            <div class="close" @click="closeNotification(n.id)">&times;</div>
+            <div class="title" x-text="n.title"></div>
+            <div class="message" x-text="n.message"></div>
+        </div>
+    </template>
+</div>

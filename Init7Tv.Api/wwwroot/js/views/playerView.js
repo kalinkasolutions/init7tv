@@ -18,12 +18,19 @@ export const playerView = () => ({
 
     async playChannel(channel, audioStreamIndex = null) {
         this.currentChannel = channel;
-        this.selectedLanguage = audioStreamIndex;
+
 
         const streamId = await this.startStream(channel.hlsUrl, audioStreamIndex);
         if (streamId) {
+            this.selectedLanguage = audioStreamIndex;
             this.startHls(streamId);
+            this.safeLastChannelInfo(channel, audioStreamIndex);
         }
+    },
+
+    safeLastChannelInfo(channel, audioStreamIndex) {
+        localStorage.setItem("tv-name", channel.tvName)
+        localStorage.setItem("audio-stream-index", audioStreamIndex);
     },
 
     async onLanguageChange(audioStreamIndex) {
@@ -50,8 +57,10 @@ export const playerView = () => ({
 
         this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
             player.play().catch(err => {
-                if (err.name !== "AbortError") {
-                    notify("Playback error.", "Something went wrong", "error");
+                if (err.name === "NotAllowedError") {
+                    notify("Autoplay Error", "Autoplay is currently not allowed, you can allow it in your browser.", "error");
+                } else if (err.name !== "AbortError") {
+                    notify("Playback error", "Something went wrong", "error");
                 }
             });
         });
@@ -63,18 +72,17 @@ export const playerView = () => ({
     async startStream(streamUrl, audioStreamIndex = null) {
         try {
             const params = new URLSearchParams({streamUrl});
+
             if (audioStreamIndex !== null) {
                 params.set("audioStreamIndex", audioStreamIndex);
             }
 
             const res = await fetch(`/api/streaming/start-stream?${params}`);
-            if (!res.ok) throw new Error("Failed to start stream");
-
             const {streamId, languages} = await res.json();
             this.languages = languages ?? [];
             return streamId;
         } catch (err) {
-            console.error("Failed to start stream:", err);
+            notify("Failed to start stream.", "Something went wrong", "error");
             return null;
         }
     }
