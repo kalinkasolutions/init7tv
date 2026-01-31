@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Init7Tv.BusinessLogic.Ffprobe;
 
-public class StreamInfo
+public sealed class StreamInfo
 {
     [JsonPropertyName("index")]
     public int Index { get; set; }

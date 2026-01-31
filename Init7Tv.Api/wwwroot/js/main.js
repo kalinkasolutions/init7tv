@@ -5,14 +5,17 @@ import {sidebarView} from './views/sidebarView.js';
 import {playerView} from './views/playerView.js';
 import {notificationView} from './views/notificationView.js';
 import {headerView} from "./views/headerView.js";
-import {loadPartial} from "./loader.js";
 
 Alpine.data('sidebarView', sidebarView);
 Alpine.data('notificationView', notificationView);
 Alpine.data('headerView', headerView);
 Alpine.data('playerView', playerView);
 
-window.loadPartial = loadPartial;
+window.loadPartialView = async function loadPartial(url) {
+    const response = await fetch(url);
+    return await response.text();
+};
+
 window.Hls = Hls;
 
 Alpine.start();

@@ -1,4 +1,6 @@
 ﻿using Init7Tv.BusinessLogic;
+using Init7Tv.BusinessLogic.HttpClientWrapper;
+using Init7Tv.BusinessLogic.Init7Api;
 using Microsoft.Extensions.Caching.Memory;
 using Moq;
 
@@ -31,7 +33,7 @@ public class ChannelServiceTest
         {
             Assert.That(firstChannel.DisplayName, Is.EqualTo("SRF 1"));
             Assert.That(firstChannel.Logo, Is.EqualTo(bytes));
-            Assert.That(firstChannel.CannonicalName, Is.EqualTo("SRF1.ch"));
+            Assert.That(firstChannel.CanonicalName, Is.EqualTo("SRF1.ch"));
             Assert.That(firstChannel.Language, Is.EqualTo("de"));
             Assert.That(firstChannel.HlsUrl, Is.EqualTo("https://api.tv.init7.net/api/live/?channel=b87abb69-d5ed-44c5-8cab-0f7be4ef51b1"));
         });

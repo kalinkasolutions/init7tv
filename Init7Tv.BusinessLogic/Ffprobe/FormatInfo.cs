@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Init7Tv.BusinessLogic.Ffprobe;
 
-public class FormatInfo
+public sealed class FormatInfo
 {
     [JsonPropertyName("filename")]
     public string Filename { get; set; } = string.Empty;

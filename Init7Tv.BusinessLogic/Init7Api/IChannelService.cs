@@ -1,6 +1,6 @@
 using Init7Tv.Dto;
 
-namespace Init7Tv.BusinessLogic;
+namespace Init7Tv.BusinessLogic.Init7Api;
 
 public interface IChannelService
 {

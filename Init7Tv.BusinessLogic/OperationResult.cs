@@ -1,6 +1,6 @@
 namespace Init7Tv.BusinessLogic;
 
-public class OperationResult<T>
+public sealed class OperationResult<T>
 {
     private readonly T? m_value;
 

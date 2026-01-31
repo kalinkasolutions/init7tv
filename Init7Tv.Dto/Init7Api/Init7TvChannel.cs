@@ -1,8 +1,8 @@
 using System.Text.Json.Serialization;
 
-namespace Init7Tv.Dto;
+namespace Init7Tv.Dto.Init7Api;
 
-public class Init7TvChannel
+public sealed class Init7TvChannel
 {
     [JsonPropertyName("pk")]
     public Guid Pk { get; set; }

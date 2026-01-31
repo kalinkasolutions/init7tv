@@ -1,8 +1,8 @@
 using System.Net.Http.Json;
 
-namespace Init7Tv.BusinessLogic;
+namespace Init7Tv.BusinessLogic.HttpClientWrapper;
 
-public class HttpClientWrapper : IHttpClientWrapper
+public sealed class HttpClientWrapper : IHttpClientWrapper
 {
     private readonly HttpClient m_httpClient;
 

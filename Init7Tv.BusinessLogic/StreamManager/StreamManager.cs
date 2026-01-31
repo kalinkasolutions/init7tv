@@ -8,9 +8,9 @@ using Init7Tv.BusinessLogic.Mapping;
 using Init7Tv.Dto;
 using Microsoft.Extensions.Logging;
 
-namespace Init7Tv.BusinessLogic;
+namespace Init7Tv.BusinessLogic.StreamManager;
 
-public class StreamManager : IStreamManager, IDisposable
+public sealed class StreamManager : IStreamManager, IDisposable
 {
     private readonly ILogger<StreamManager> m_logger;
 

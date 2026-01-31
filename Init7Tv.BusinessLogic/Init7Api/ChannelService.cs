@@ -1,10 +1,11 @@
-using System.Text.RegularExpressions;
+using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.Dto;
+using Init7Tv.Dto.Init7Api;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace Init7Tv.BusinessLogic;
+namespace Init7Tv.BusinessLogic.Init7Api;
 
-public partial class ChannelService : IChannelService
+public sealed class ChannelService : IChannelService
 {
     private const string CacheKey = "channels";
     private const string ChannelEndpoint = "https://api.tv.init7.net/api/v4/tvchannel/";
@@ -31,7 +32,7 @@ public partial class ChannelService : IChannelService
             return channelResult;
         }
 
-        var channels = await m_httpClient.GetJsonAsync<PagedResponse<Init7TvChannel>>(ChannelEndpoint);
+        var channels = await m_httpClient.GetJsonAsync<Init7PagedResponse<Init7TvChannel>>(ChannelEndpoint);
         if (channels == null || channels.Results.Length == 0)
         {
             return OperationResult<IReadOnlyCollection<ChannelDto>>.BadGateway("Channel list was empty or unavailable");
@@ -54,7 +55,7 @@ public partial class ChannelService : IChannelService
                 Logo = await m_httpClient.GetByteArrayAsync(channel.Logo),
                 HlsUrl = channel.HlsSrc,
                 Language = channel.Language,
-                CannonicalName = channel.CanonicalName,
+                CanonicalName = channel.CanonicalName,
             });
         }
 

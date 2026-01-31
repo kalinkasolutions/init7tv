@@ -1,5 +1,8 @@
 using Init7Tv;
 using Init7Tv.BusinessLogic;
+using Init7Tv.BusinessLogic.HttpClientWrapper;
+using Init7Tv.BusinessLogic.Init7Api;
+using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.Dal;
 using Init7Tv.Endpoints;
 using Init7Tv.Services;

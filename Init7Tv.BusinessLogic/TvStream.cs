@@ -4,7 +4,7 @@ using Init7Tv.BusinessLogic.Ffprobe;
 
 namespace Init7Tv.BusinessLogic;
 
-public class TvStream
+public sealed class TvStream
 {
     public string StreamId { get; init; }
     public ConcurrentDictionary<string, byte[]> TsSegments { get; set; } = new();
