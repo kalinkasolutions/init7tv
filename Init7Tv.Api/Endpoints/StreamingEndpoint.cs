@@ -1,8 +1,6 @@
-using Init7Tv.BusinessLogic;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.Extensions;
-using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace Init7Tv.Endpoints;
 

@@ -1,5 +1,4 @@
-﻿using Init7Tv.BusinessLogic;
-using Init7Tv.BusinessLogic.HttpClientWrapper;
+﻿using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.BusinessLogic.Init7Api;
 using Microsoft.Extensions.Caching.Memory;
 using Moq;

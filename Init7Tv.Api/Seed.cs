@@ -1,4 +1,3 @@
-using Init7Tv.BusinessLogic;
 using Init7Tv.Dal;
 using Init7Tv.Extensions;
 using Init7Tv.Shared;
