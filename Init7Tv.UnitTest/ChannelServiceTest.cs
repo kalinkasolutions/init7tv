@@ -4,7 +4,7 @@ using Moq;
 
 namespace Init7Tv.UnitTest;
 
-public class ChannelParserServiceTest
+public class ChannelServiceTest
 {
     [Test]
     public async Task ParseChannelTest()
@@ -16,7 +16,7 @@ public class ChannelParserServiceTest
         httpClientMock.Setup(f => f.GetStringAsync("https://api.init7.net/tvchannels.m3u?rp=true")).ReturnsAsync(channelList);
         httpClientMock.Setup(f => f.GetByteArrayAsync(It.IsAny<string>())).ReturnsAsync(bytes);
 
-        var service = new ChannelParserService(httpClientMock.Object, new MemoryCache(new MemoryCacheOptions()));
+        var service = new ChannelService(httpClientMock.Object, new MemoryCache(new MemoryCacheOptions()));
 
         var result = await service.GetChannelsAsync();
 
@@ -31,7 +31,7 @@ public class ChannelParserServiceTest
         {
             Assert.That(firstChannel.DisplayName, Is.EqualTo("SRF 1"));
             Assert.That(firstChannel.Logo, Is.EqualTo(bytes));
-            Assert.That(firstChannel.TvName, Is.EqualTo("SRF1.ch"));
+            Assert.That(firstChannel.CannonicalName, Is.EqualTo("SRF1.ch"));
             Assert.That(firstChannel.Language, Is.EqualTo("de"));
             Assert.That(firstChannel.HlsUrl, Is.EqualTo("https://api.tv.init7.net/api/live/?channel=b87abb69-d5ed-44c5-8cab-0f7be4ef51b1"));
         });

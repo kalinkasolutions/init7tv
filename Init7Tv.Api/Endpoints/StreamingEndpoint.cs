@@ -17,9 +17,9 @@ public static class StreamingEndpoint
         group.MapGet("/segment/{streamId}/{name}", GetSegment);
     }
 
-    private static async Task<IResult> Channels(IChannelParserService channelParserService)
+    private static async Task<IResult> Channels(IChannelService channelService)
     {
-        return (await channelParserService.GetChannelsAsync()).ToHttpResult();
+        return (await channelService.GetChannelsAsync()).ToHttpResult();
     }
 
     private static async Task<IResult> StartStream(string streamUrl, int? audioStreamIndex, IStreamManager streamManager)

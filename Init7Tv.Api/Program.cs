@@ -49,7 +49,7 @@ builder.Services.AddHttpClient<IHttpClientWrapper, HttpClientWrapper>();
 
 builder.Services.AddSingleton<IStreamManager, StreamManager>();
 builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
-builder.Services.AddTransient<IChannelParserService, ChannelParserService>();
+builder.Services.AddTransient<IChannelService, ChannelService>();
 
 #if DEBUG
 builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001, listenOptions => { listenOptions.UseHttps("/home/kalinka/certs/kalinka.pfx"); }); });
