@@ -1,0 +1,80 @@
+<div x-data="usersView()" class="user-view">
+    <div class="box">
+        <h2>Add user</h2>
+        <form class="user-form" @submit.prevent="await addUser()">
+            <label for="username"></label>
+            <input x-model="addUserForm.userName" id="username" name="userName" placeholder="username" type="text"
+                   required/>
+            <label for="email"></label>
+            <input x-model="addUserForm.email" id="email" name="email" placeholder="email" type="email" required/>
+            <label for="password"></label>
+            <input x-model="addUserForm.password" id="password" name="password" placeholder="password" type="password"
+                   required/>
+            <div class="roles-container">
+                <template x-for="role in roles" :key="role">
+                    <label class="roles">
+                        <input x-model="addUserForm.roles" type="checkbox" :value="role" name="roles">
+                        <span x-text="role"></span>
+                    </label>
+                </template>
+            </div>
+            <button class="icon-button add-user" type="submit"><i class="bi bi-plus"></i></button>
+        </form>
+    </div>
+    <div class="box">
+        <h2>Current users</h2>
+        <ul class="user-list">
+            <li class="user-list-header">
+                <div>Username</div>
+                <div>Email</div>
+                <div>Roles</div>
+                <div>&nbsp;</div>
+            </li>
+            <template x-for="user in users" :key="user.id">
+                <li class="user-list-item">
+                    <div class="user-list-entry" x-show="!user.edit">
+                        <div x-text="user.userName"></div>
+                        <div x-text="user.email"></div>
+                        <div x-text="user.roles.join(', ')"></div>
+                        <div class="actions">
+                            <button class="icon-button" @click="toggleEdit(user)"><i class="bi bi-pencil"></i></button>
+                            <button x-show="isDeleteAble(user)" class="icon-button danger-icon" @click="deleteUser(user)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <form class="user-list-entry" @submit.prevent="await updateUser(user.id)" x-show="user.edit">
+                        <label for="usernameUpdate"></label>
+                        <input x-model="editUserForm.userName" id="usernameUpdate" name="userName"
+                               placeholder="username"
+                               type="text"
+                               required/>
+                        <label for="emailUpdate"></label>
+                        <input x-model="editUserForm.email" id="emailUpdate" name="email" placeholder="email"
+                               type="email"
+                               required/>
+                        <label for="passwordUpdate"></label>
+                        <input x-model="editUserForm.password" id="passwordUpdate" name="password"
+                               placeholder="password"
+                               type="password"
+                        />
+                        <div class="roles-container">
+                            <template x-for="role in roles" :key="role">
+                                <label class="roles">
+                                    <input x-model="editUserForm.roles" type="checkbox" :value="role" name="roles">
+                                    <span x-text="role"></span>
+                                </label>
+                            </template>
+                        </div>
+                        <div class="actions">
+                            <button class="icon-button danger-icon" type="button" @click="toggleEdit(user)"><i
+                                    class="bi bi-slash-circle"></i></button>
+                            <button class="icon-button" type="submit"><i class="bi bi-check"></i></button>
+                        </div>
+                    </form>
+                </li>
+            </template>
+        </ul>
+    </div>
+</div>

@@ -37,6 +37,12 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LogoutPath = "/login.html";
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
     options.SlidingExpiration = true;
+
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.Redirect("/");
+        return Task.CompletedTask;
+    };
 });
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -71,6 +77,7 @@ app.UseAuthorization();
 app.MapStreamingEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapAdminEndpoint();
 
 await Seed.Initialize(app);
 

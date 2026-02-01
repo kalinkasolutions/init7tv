@@ -6,6 +6,7 @@ using System.Text.Json;
 using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.Mapping;
 using Init7Tv.Dto;
+using Init7Tv.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Init7Tv.BusinessLogic.StreamManager;
@@ -162,8 +163,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
         {
             StopStream(stream.StreamId);
         }
-
-        GC.SuppressFinalize(this);
     }
 
     private async Task StreamLoopAsync(TvStream stream, CancellationToken cancellationToken)
@@ -278,8 +277,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
     private static string GetStreamId(string input)
     {
-        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexString(hashBytes).ToLower();
+        return Hash.GetSha256(input);
     }
 
     private void CleanupIdleStreams(object? state)

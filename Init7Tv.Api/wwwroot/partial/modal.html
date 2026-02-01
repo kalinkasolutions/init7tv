@@ -1,0 +1,10 @@
+<div id="modal" x-data="Alpine.store('modal')" x-show="visible">
+    <div class="content-wrapper">
+        <div x-text="title"></div>
+        <div x-text="description"></div>
+        <div>
+            <button type="button" x-text="cancelText" @click="fail()">cancel</button>
+            <button type="button" x-text="okText" @click="ok()"></button>
+        </div>
+    </div>
+</div>

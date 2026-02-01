@@ -6,3 +6,19 @@ header {
     justify-content: space-between;
     padding: 1em;
 }
+
+header ul {
+    display: flex;
+    flex-direction: row;
+}
+
+header ul li {
+    margin-right: 1em;
+}
+
+.active {
+    pointer-events: none;
+    cursor: default;
+    text-decoration: none;
+}
+

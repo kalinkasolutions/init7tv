@@ -6,11 +6,15 @@
     max-width: 300px;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: auto;
     overflow-y: auto;
+    pointer-events: none;
+
 }
 
 #notification .notification-wrapper {
+    pointer-events: auto;
+    height: auto;
     position: relative;
     border-radius: 0.25em;
     padding: 1em;

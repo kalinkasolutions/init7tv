@@ -1,4 +1,4 @@
-import {notify} from "../notification.js";
+import {notify} from "../../notification.js";
 
 export const playerView = () => ({
     currentChannel: null,

@@ -1,4 +1,4 @@
-import {get} from '../requestHandler.js';
+import {get} from '../../requestHandler.js';
 
 export const sidebarView = () => ({
     channels: [],

@@ -1,10 +1,18 @@
 <header x-data="headerView()">
     <h1>init7Tv</h1>
     <ul>
-        <template x-for="menuItem in menuItems">
+        <li>
+            <a href="/" :class="{ 'active': location.pathname === '/' }">tv</a>
+        </li>
+        <template x-if="userInfo?.isAdmin">
             <li>
-                <a href="/admin.html" x-text="menuItem"></a>
+                <a href="/admin.html" :class="{ 'active': location.pathname === '/admin.html' }">admin</a>
             </li>
         </template>
+        <li>
+            <form action="/logout" method="post">
+                <button class="link-button" type="submit">logout</button>
+            </form>
+        </li>
     </ul>
 </header>
