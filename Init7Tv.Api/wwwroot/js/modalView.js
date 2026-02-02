@@ -2,16 +2,12 @@ export const modalView = () => {
     return {
         title: "",
         description: "",
-        cancelText: "",
-        okText: "",
         res: null,
         visible: false,
 
-        show(title, description, okText = "ok", cancelText = "cancel") {
+        show(title, description) {
             this.title = title;
             this.description = description;
-            this.okText = okText;
-            this.cancelText = cancelText;
             this.visible = true;
 
             return new Promise((res) => {
@@ -19,14 +15,14 @@ export const modalView = () => {
             });
         },
 
-        ok() {
-            this.res(true);
+        modalConfirm() {
             this.visible = false;
+            this.res(true);
         },
 
-        fail() {
-            this.res(false);
+        modalFail() {
             this.visible = false;
+            this.res(false);
         }
     }
 }

@@ -1,10 +1,13 @@
-<div id="modal" x-data="Alpine.store('modal')" x-show="visible">
-    <div class="content-wrapper">
-        <div x-text="title"></div>
-        <div x-text="description"></div>
-        <div>
-            <button type="button" x-text="cancelText" @click="fail()">cancel</button>
-            <button type="button" x-text="okText" @click="ok()"></button>
+<div id="modal" x-data="Alpine.store('modal')" x-show="visible" x-trap="visible">
+    <div class="content-wrapper"
+         x-on:keydown.escape.prevent="modalFail()"
+         x-on:keydown.enter.prevent="modalConfirm()">
+        <h2 class="modal-title" x-text="title"></h2>
+        <div class="modal-text" x-text="description"></div>
+        <div class="modal-actions">
+            <button class="icon-button danger-icon" type="button" @click="modalFail()"><i class="bi bi-ban "></i>
+            </button>
+            <button class="icon-button" type="button" @click="modalConfirm()"><i class="bi bi-check-lg"></i></button>
         </div>
     </div>
 </div>

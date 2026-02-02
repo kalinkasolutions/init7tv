@@ -18,7 +18,7 @@
                     </label>
                 </template>
             </div>
-            <button class="icon-button add-user" type="submit"><i class="bi bi-plus"></i></button>
+            <button class="icon-button add-user" type="submit"><i class="bi bi-plus-lg"></i></button>
         </form>
     </div>
     <div class="box">
@@ -38,8 +38,8 @@
                         <div x-text="user.roles.join(', ')"></div>
                         <div class="actions">
                             <button class="icon-button" @click="toggleEdit(user)"><i class="bi bi-pencil"></i></button>
-                            <button x-show="isDeleteAble(user)" class="icon-button danger-icon" @click="deleteUser(user)">
-                                <i class="bi bi-trash"></i>
+                            <button x-show="isDeleteAble(user.id)" class="icon-button danger-icon" @click="deleteUser(user)">
+                                <i class="bi bi-trash3"></i>
                             </button>
                         </div>
                     </div>
@@ -70,7 +70,7 @@
                         <div class="actions">
                             <button class="icon-button danger-icon" type="button" @click="toggleEdit(user)"><i
                                     class="bi bi-slash-circle"></i></button>
-                            <button class="icon-button" type="submit"><i class="bi bi-check"></i></button>
+                            <button class="icon-button" type="submit"><i class="bi bi-check-lg"></i></button>
                         </div>
                     </form>
                 </li>

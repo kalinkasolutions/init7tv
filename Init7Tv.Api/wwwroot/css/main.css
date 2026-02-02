@@ -60,9 +60,8 @@ select {
 }
 
 .icon-button {
-    background-color: #1e711e;
-    color: #f0f0f0;
-    border: none;
+    color: rgba(47, 177, 47, 0.80);
+    background: transparent;
     width: 40px;
     height: 40px;
     border-radius: 2px;
@@ -72,25 +71,27 @@ select {
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
     padding: 0;
+    border: 0.1em solid rgba(255, 255, 255, 0.3);
 }
 
 .icon-button i {
     line-height: 1;
+    font-weight: bolder;
 }
 
 .icon-button:hover {
-    background-color: #258825;
+    color: rgba(47, 177, 47);
     transform: scale(1.05);
+    border: 0.1em solid rgba(255, 255, 255, 0.8);
 }
 
 .danger-icon {
-    background-color: #711e1e;
+    color: rgba(204, 17, 17, 0.80);
 }
 
 .danger-icon:hover {
-    background-color: #852424;
+    color: rgba(204, 17, 17);
 }
-
 
 .icon-button:active {
     transform: scale(0.95);

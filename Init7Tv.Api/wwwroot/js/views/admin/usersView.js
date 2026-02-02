@@ -15,11 +15,12 @@ export const usersView = () => {
             this.roles = await get("/api/admin/roles");
         },
 
-        isDeleteAble(user) {
-            if (!user.isAdmin) {
+        isDeleteAble(userId) {
+            const user = this.users.find(u => u.id === userId);
+            if (!user.roles.some(r => r === "Admin")) {
                 return true;
             }
-            return user.isAdmin && this.users.filter(u => u.isAdmin).length > 1
+            return this.users.filter(u => u.roles.some(r => r === "Admin")).length > 1
         },
 
         async addUser() {
@@ -35,16 +36,17 @@ export const usersView = () => {
         async deleteUser(user) {
 
             const modal = Alpine.store('modal');
-            const answer = await modal.show("Confirm", "Are you sure?", "Yes", "No");
-            console.log(answer);
-            /// show modal <==
+            const confirmed = await modal.show(`Delete user`, `Are you sure you want to delete user ${user.userName}?`, "Yes", "No");
 
+            if (!confirmed) {
+                return;
+            }
 
-            // const result = await deleteItem(`/api/admin/delete-user/${user.id}`);
-            // if (result === null) {
-            //     return;
-            // }
-            // this.users.splice(this.users.indexOf(user), 1);
+            const result = await deleteItem(`/api/admin/delete-user/${user.id}`);
+            if (result === null) {
+                return;
+            }
+            this.users.splice(this.users.indexOf(user), 1);
         },
 
         toggleEdit(user) {
@@ -58,10 +60,15 @@ export const usersView = () => {
                 return;
             }
 
-            const index = this.users.findIndex(u => u.id === updatedUser.id);
-            if (index !== -1) {
-                this.users.splice(index, 1, updatedUser);
-            }
+            this.users = this.users.map((u) => {
+                if (u.id !== userId) {
+                    return u;
+                }
+                return {
+                    ...updatedUser,
+                    edit: false
+                }
+            });
 
             this.addUserForm = {userName: '', email: '', password: '', roles: []};
         }
