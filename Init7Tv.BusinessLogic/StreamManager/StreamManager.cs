@@ -1,10 +1,11 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Init7Tv.BusinessLogic.Ffprobe;
+using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.Mapping;
+using Init7Tv.BusinessLogic.StreamEventBus;
 using Init7Tv.Dto;
 using Init7Tv.Shared;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,8 @@ namespace Init7Tv.BusinessLogic.StreamManager;
 public sealed class StreamManager : IStreamManager, IDisposable
 {
     private readonly ILogger<StreamManager> m_logger;
+    private readonly IChannelService m_channelService;
+    private readonly IStreamEventBus m_streamEventBus;
 
     private readonly ConcurrentDictionary<string, TvStream> m_streams = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> m_streamLocks = new();
@@ -28,24 +31,38 @@ public sealed class StreamManager : IStreamManager, IDisposable
     private bool m_disposed;
 
 
-    public StreamManager(ILogger<StreamManager> logger)
+    public StreamManager(
+        ILogger<StreamManager> logger,
+        IChannelService channelService,
+        IStreamEventBus streamEventBus
+    )
     {
         m_logger = logger;
+        m_channelService = channelService;
+        m_streamEventBus = streamEventBus;
         m_cleanupTimer = new Timer(
-            CleanupIdleStreams,
+            _ => CleanupIdleStreams(),
             null,
             m_timerDueTime,
             m_timerPeriod);
     }
 
-    public async Task<OperationResult<StreamDto>> StartStream(string streamUrl, int audioStreamIndex)
+    public async Task<OperationResult<StreamDto>> StartStream(Guid channelId, int audioStreamIndex, string userName)
     {
         if (m_disposed)
         {
             throw new ObjectDisposedException(nameof(StreamManager));
         }
 
-        var streamId = GetStreamId($"{streamUrl}_{audioStreamIndex}");
+        StopSingleUserStream(userName);
+
+        var channelResult = await m_channelService.GetChannelById(channelId);
+        if (!channelResult.IsSuccess)
+        {
+            return OperationResult<StreamDto>.Error(channelResult.ErrorMessage);
+        }
+
+        var streamId = GetStreamId($"{channelResult.Value.HlsUrl}_{audioStreamIndex}");
         var startStreamLock = m_streamLocks.GetOrAdd(streamId, _ => new SemaphoreSlim(1, 1));
 
         await startStreamLock.WaitAsync();
@@ -54,14 +71,16 @@ public sealed class StreamManager : IStreamManager, IDisposable
         {
             if (m_streams.TryGetValue(streamId, out var existingStream))
             {
+                existingStream.Users.Add(userName);
+                m_streamEventBus.Publish(GetCurrentStreams());
                 return OperationResult<StreamDto>.Success(StreamDtoMapper.Map(existingStream));
             }
 
-            var streamInfo = await GetFfprobeInfo(streamUrl);
+            var streamInfo = await GetFfprobeInfo(channelResult.Value.HlsUrl);
 
             if (streamInfo.HasError)
             {
-                return OperationResult<StreamDto>.Error($"Failed  to get stream info: {streamUrl}");
+                return OperationResult<StreamDto>.Error($"Failed  to get stream info: {channelResult.Value.HlsUrl}");
             }
 
             m_logger.LogInformation("starting stream: {StreamId}, videoCodec: {VideoCodec}, available lang: {Languages}",
@@ -72,8 +91,10 @@ public sealed class StreamManager : IStreamManager, IDisposable
             var stream = new TvStream
             {
                 StreamId = streamId,
-                Ffmpeg = GetFfmpegProcess(streamUrl, audioStreamIndex),
-                StreamInfo = streamInfo.Value
+                Ffmpeg = GetFfmpegProcess(channelResult.Value.HlsUrl, audioStreamIndex),
+                StreamInfo = streamInfo.Value,
+                Channel = channelResult.Value,
+                Users = [userName]
             };
 
             try
@@ -83,9 +104,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
             catch (Exception ex)
             {
                 m_logger.LogError(ex, "Failed to ffmpeg process: {StreamId}", streamId);
+                return OperationResult<StreamDto>.Error("Failed to start stream");
             }
 
             m_streams.TryAdd(streamId, stream);
+
+            m_streamEventBus.Publish(GetCurrentStreams());
 
             _ = Task.Run(async () =>
             {
@@ -109,14 +133,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
     }
 
-    public OperationResult<string> GetPlaylist(string streamId)
+    public OperationResult<string> GetPlaylist(string streamId, string userName)
     {
         if (!m_streams.TryGetValue(streamId, out var stream))
         {
             return OperationResult<string>.Error($"Could not find stream while getting playlist: {streamId}");
         }
 
-        stream.LastAccessed = DateTime.UtcNow;
+        stream.LastAccess[userName] = DateTime.UtcNow;
 
         var sb = new StringBuilder();
         sb.AppendLine("#EXTM3U");
@@ -147,6 +171,17 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
 
         return OperationResult<byte[]>.NotFound();
+    }
+
+    public CurrentStreamDto[] GetCurrentStreams()
+    {
+        return m_streams.Values.ToArray().Select(stream => new CurrentStreamDto()
+        {
+            ChannelId = stream.Channel.ChannelId,
+            ChannelDisplayName = stream.Channel.DisplayName,
+            ChannelLogo = stream.Channel.Logo,
+            UserNames = stream.Users.ToArray(),
+        }).ToArray();
     }
 
     public void Dispose()
@@ -280,19 +315,47 @@ public sealed class StreamManager : IStreamManager, IDisposable
         return Hash.GetSha256(input);
     }
 
-    private void CleanupIdleStreams(object? state)
+    private void StopSingleUserStream(string userName)
+    {
+        var stream = m_streams.Values.FirstOrDefault(s => s.Users.Contains(userName));
+        if (stream == null)
+        {
+            return;
+        }
+
+        stream.Users.Remove(userName);
+        if (stream.Users.Count == 0)
+        {
+            StopStream(stream.StreamId);
+        }
+
+        m_streamEventBus.Publish(GetCurrentStreams());
+    }
+
+    private void CleanupIdleStreams()
     {
         var now = DateTime.UtcNow;
 
         foreach (var (streamId, stream) in m_streams)
         {
-            if (now - stream.LastAccessed <= m_streamIdleTimeout)
+            foreach (var (userName, lastAccess) in stream.LastAccess)
+            {
+                if (now - lastAccess > m_streamIdleTimeout)
+                {
+                    m_logger.LogInformation("User {UserName} stopped streaming", userName);
+                    stream.Users.Remove(userName);
+                    stream.LastAccess.TryRemove(userName, out _);
+                }
+            }
+
+            if (!stream.LastAccess.IsEmpty)
             {
                 continue;
             }
 
             m_logger.LogInformation("Auto-stopping idle stream: {StreamId}", streamId);
             StopStream(streamId);
+            m_streamEventBus.Publish(GetCurrentStreams());
         }
     }
 

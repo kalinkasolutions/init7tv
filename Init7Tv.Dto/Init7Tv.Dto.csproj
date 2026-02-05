@@ -5,4 +5,8 @@
         <ImplicitUsings>enable</ImplicitUsings>
     </PropertyGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\Init7Tv.Shared\Init7Tv.Shared.csproj" />
+    </ItemGroup>
+
 </Project>

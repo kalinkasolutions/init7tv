@@ -2,6 +2,7 @@ using Init7Tv;
 using Init7Tv.BusinessLogic;
 using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.BusinessLogic.Init7Api;
+using Init7Tv.BusinessLogic.StreamEventBus;
 using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.Dal;
 using Init7Tv.Endpoints;
@@ -17,6 +18,7 @@ using var loggerFactory = LoggerFactory.Create(loggingBuilder => { loggingBuilde
 builder.Services.AddMemoryCache();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddAntiforgery();
+builder.Services.AddSignalR();
 
 builder.Services.AddDbContext<Init7TvContext>(options => options.UseSqlite("Data Source=Init7Tv.db"));
 
@@ -57,7 +59,12 @@ builder.Services.AddAuthorization();
 builder.Services.AddHttpClient<IHttpClientWrapper, HttpClientWrapper>();
 
 builder.Services.AddSingleton<IStreamManager, StreamManager>();
+builder.Services.AddSingleton<IStreamEventBus, StreamEventBus>();
+
+builder.Services.AddHostedService<DashboardNotifier>();
+
 builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
+
 builder.Services.AddTransient<IChannelService, ChannelService>();
 
 #if DEBUG
@@ -78,6 +85,7 @@ app.MapStreamingEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapAdminEndpoint();
+app.MapDashboardEndpoints();
 
 await Seed.Initialize(app);
 

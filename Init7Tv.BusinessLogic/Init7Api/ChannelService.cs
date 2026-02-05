@@ -43,6 +43,24 @@ public sealed class ChannelService : IChannelService
         return channelResult;
     }
 
+    public async Task<OperationResult<ChannelDto>> GetChannelById(Guid channelId)
+    {
+        var channelsResult = await GetChannelsAsync();
+
+        if (!channelsResult.IsSuccess)
+        {
+            return OperationResult<ChannelDto>.Error("Channel list was empty or unavailable");
+        }
+
+        var channel = channelsResult.Value.FirstOrDefault(x => x.ChannelId == channelId);
+        if (channel == null)
+        {
+            return OperationResult<ChannelDto>.NotFound("Channel not found");
+        }
+
+        return OperationResult<ChannelDto>.Success(channel);
+    }
+
     private async Task<OperationResult<IReadOnlyCollection<ChannelDto>>> GetChannelDtos(Init7TvChannel[] channels)
     {
         var channelDtos = new List<ChannelDto>(channels.Length);
@@ -50,7 +68,7 @@ public sealed class ChannelService : IChannelService
         {
             channelDtos.Add(new ChannelDto
             {
-                Pk = channel.Pk,
+                ChannelId = channel.Pk,
                 DisplayName = channel.Name,
                 Logo = await m_httpClient.GetByteArrayAsync(channel.Logo),
                 HlsUrl = channel.HlsSrc,

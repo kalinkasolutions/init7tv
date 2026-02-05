@@ -1,3 +1,4 @@
+using Init7Tv.BusinessLogic;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.Extensions;
@@ -23,18 +24,24 @@ public static class StreamingEndpoint
         return (await channelService.GetChannelsAsync()).ToHttpResult();
     }
 
-    private static async Task<IResult> StartStream(string streamUrl, int? audioStreamIndex, IStreamManager streamManager)
+    private static async Task<IResult> StartStream(Guid channelId, int? audioStreamIndex, IUserIdentityProvider userIdentityProvider, IStreamManager streamManager)
     {
-        return (await streamManager.StartStream(streamUrl, audioStreamIndex.GetValueOrDefault())).ToHttpResult();
+        return (await streamManager.StartStream(channelId, audioStreamIndex.GetValueOrDefault(), userIdentityProvider.UserName)).ToHttpResult();
     }
 
-    private static IResult GetPlaylist(string streamId, IStreamManager streamManager)
+    private static IResult GetPlaylist(string streamId, IStreamManager streamManager, IUserIdentityProvider userIdentityProvider)
     {
-        return streamManager.GetPlaylist(streamId).ToHttpResult();
+        return streamManager.GetPlaylist(streamId, userIdentityProvider.UserName).ToHttpResult();
     }
 
     private static IResult GetSegment(string streamId, string name, IStreamManager streamManager)
     {
         return streamManager.GetSegment(streamId, name).ToHttpResult();
+    }
+
+    private static IResult GetCurrentStreams(IStreamManager streamManager)
+    {
+        // return streamManager.GetCurrentStreams.ToHttpResult();
+        return null;
     }
 }

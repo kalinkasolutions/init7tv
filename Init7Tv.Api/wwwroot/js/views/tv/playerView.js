@@ -18,9 +18,7 @@ export const playerView = () => ({
 
     async playChannel(channel, audioStreamIndex = null) {
         this.currentChannel = channel;
-
-
-        const streamId = await this.startStream(channel.hlsUrl, audioStreamIndex);
+        const streamId = await this.startStream(channel.channelId, audioStreamIndex);
         if (streamId) {
             this.selectedLanguage = audioStreamIndex;
             this.startHls(streamId);
@@ -69,9 +67,9 @@ export const playerView = () => ({
         this.hls.attachMedia(player);
     },
 
-    async startStream(streamUrl, audioStreamIndex = null) {
+    async startStream(channelId, audioStreamIndex = null) {
         try {
-            const params = new URLSearchParams({streamUrl});
+            const params = new URLSearchParams({channelId});
 
             if (audioStreamIndex !== null) {
                 params.set("audioStreamIndex", audioStreamIndex);

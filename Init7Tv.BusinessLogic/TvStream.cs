@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Init7Tv.BusinessLogic.Ffprobe;
+using Init7Tv.Dto;
 
 namespace Init7Tv.BusinessLogic;
 
@@ -13,6 +14,8 @@ public sealed class TvStream
     public ulong SegmentIndex { get; set; }
     public CancellationTokenSource CancellationToken { get; set; } = new();
     public int MediaSequenceId { get; set; }
-    public DateTime LastAccessed { get; set; } = DateTime.UtcNow;
+    public ConcurrentDictionary<string, DateTime> LastAccess { get; set; } = [];
     public FfprobeRoot StreamInfo { get; set; }
+    public ChannelDto Channel { get; set; }
+    public HashSet<string> Users { get; set; }
 }

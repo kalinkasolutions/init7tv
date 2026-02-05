@@ -2,7 +2,7 @@
 
 public sealed class ChannelDto
 {
-    public Guid Pk { get; set; }
+    public Guid ChannelId { get; set; }
     public string DisplayName { get; set; }
     public string Language { get; set; }
     public string CanonicalName { get; set; }

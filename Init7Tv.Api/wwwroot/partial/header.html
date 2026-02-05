@@ -9,6 +9,11 @@
                 <a href="/admin.html" :class="{ 'active': location.pathname === '/admin.html' }">admin</a>
             </li>
         </template>
+        <template x-if="userInfo?.isAdmin">
+            <li>
+                <a href="/dashboard.html" :class="{ 'active': location.pathname === '/dashboard.html' }">dashboard</a>
+            </li>
+        </template>
         <li>
             <form action="/logout" method="post">
                 <button class="link-button" type="submit">logout</button>

@@ -29,5 +29,6 @@ public sealed class UserIdentityProvider : IUserIdentityProvider
         }
     }
 
-    public bool IsAdmin  => m_httpContextAccessor.HttpContext?.User?.IsInRole("Admin") ?? false;
+    public bool IsAdmin => m_httpContextAccessor.HttpContext?.User?.IsInRole("Admin") ?? false;
+    public string UserName => m_httpContextAccessor.HttpContext?.User?.Identity?.Name ?? string.Empty;
 }

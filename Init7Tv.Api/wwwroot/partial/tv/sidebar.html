@@ -1,5 +1,5 @@
 <aside id="sidebar" x-data="sidebarView()">
-    <template x-for="c in channels" :key="c.pk">
+    <template x-for="c in channels" :key="c.channelId">
         <div class="channel" :class="{ 'selected': c.selected }" @click="channelSelected(c)">
             <span x-text="c.displayName"></span>
             <img :src="`data:image/png;base64,${c.logo}`" :alt="c.displayName">

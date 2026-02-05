@@ -1,0 +1,12 @@
+<div id="dashboard" x-data="dashboardView">
+    <h2 class="text-xl font-bold mb-2">Current streams</h2>
+    <ul>
+        <template x-for="stream in streams" :key="stream.channelId">
+            <div style="border:1px solid white; margin: 1em;padding: 1em;">
+                <div x-text="stream.channelDisplayName"></div>
+                <img width="90px" :src="`data:image/png;base64,${stream.channelLogo}`">
+                <div x-text="stream.userNames.join(', ')"></div>
+            </div>
+        </template>
+    </ul>
+</div>
