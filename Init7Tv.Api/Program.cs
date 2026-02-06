@@ -4,7 +4,9 @@ using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.StreamEventBus;
 using Init7Tv.BusinessLogic.StreamManager;
+using Init7Tv.BusinessLogic.User;
 using Init7Tv.Dal;
+using Init7Tv.Dal.Repositories;
 using Init7Tv.Endpoints;
 using Init7Tv.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -63,6 +65,9 @@ builder.Services.AddSingleton<IStreamEventBus, StreamEventBus>();
 
 builder.Services.AddHostedService<DashboardNotifier>();
 
+builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
+builder.Services.AddScoped<IIdentityRepository, IdentityRepository>();
+builder.Services.AddScoped<IIdentityService, IdentityService>();
 builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
 
 builder.Services.AddTransient<IChannelService, ChannelService>();

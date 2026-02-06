@@ -7,6 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\Init7Tv.Dal\Init7Tv.Dal.csproj" />
       <ProjectReference Include="..\Init7Tv.Dto\Init7Tv.Dto.csproj" />
       <ProjectReference Include="..\Init7Tv.Shared\Init7Tv.Shared.csproj" />
     </ItemGroup>
@@ -14,6 +15,12 @@
     <ItemGroup>
       <Reference Include="JetBrains.ReSharper.TestRunner.Merged">
         <HintPath>..\..\..\..\.local\share\JetBrains\Toolbox\apps\rider\lib\ReSharperHost\TestRunner\netcoreapp3.0\JetBrains.ReSharper.TestRunner.Merged.dll</HintPath>
+      </Reference>
+      <Reference Include="Microsoft.Extensions.Identity.Core">
+        <HintPath>..\..\..\.nuget\packages\microsoft.extensions.identity.core\10.0.2\lib\net10.0\Microsoft.Extensions.Identity.Core.dll</HintPath>
+      </Reference>
+      <Reference Include="Microsoft.Extensions.Identity.Stores">
+        <HintPath>..\..\..\.nuget\packages\microsoft.extensions.identity.stores\10.0.2\lib\net10.0\Microsoft.Extensions.Identity.Stores.dll</HintPath>
       </Reference>
     </ItemGroup>
 

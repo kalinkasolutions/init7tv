@@ -1,4 +1,4 @@
-namespace Init7Tv.BusinessLogic;
+namespace Init7Tv.Shared;
 
 public sealed class OperationResult<T>
 {

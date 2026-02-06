@@ -1,6 +1,7 @@
 using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.Dto;
 using Init7Tv.Dto.Init7Api;
+using Init7Tv.Shared;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Init7Tv.BusinessLogic.Init7Api;

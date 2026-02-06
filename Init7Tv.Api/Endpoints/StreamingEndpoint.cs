@@ -38,10 +38,4 @@ public static class StreamingEndpoint
     {
         return streamManager.GetSegment(streamId, name).ToHttpResult();
     }
-
-    private static IResult GetCurrentStreams(IStreamManager streamManager)
-    {
-        // return streamManager.GetCurrentStreams.ToHttpResult();
-        return null;
-    }
 }
