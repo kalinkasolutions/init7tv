@@ -59,7 +59,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         var channelResult = await m_channelService.GetChannelById(channelId);
         if (!channelResult.IsSuccess)
         {
-            return OperationResult<StreamDto>.Error(channelResult.ErrorMessage);
+            return channelResult.MapError<StreamDto>();
         }
 
         var streamId = GetStreamId($"{channelResult.Value.HlsUrl}_{audioStreamIndex}");
@@ -80,7 +80,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
             if (streamInfo.HasError)
             {
-                return OperationResult<StreamDto>.Error($"Failed  to get stream info: {channelResult.Value.HlsUrl}");
+                return streamInfo.MapError<StreamDto>();
             }
 
             m_logger.LogInformation("starting stream: {StreamId}, videoCodec: {VideoCodec}, available lang: {Languages}",

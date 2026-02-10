@@ -35,7 +35,7 @@ public sealed class IdentityService : IIdentityService
             var getUserResult = await GetUserByEmailAsync(user.Email);
             if (!getUserResult.IsSuccess)
             {
-                return OperationResult<GetUserDto[]>.Error(getUserResult.ErrorMessage);
+                return getUserResult.MapError<GetUserDto[]>();
             }
 
             result.Add(getUserResult.Value);
@@ -62,7 +62,7 @@ public sealed class IdentityService : IIdentityService
 
         if (!addUserResult.IsSuccess)
         {
-            return OperationResult<GetUserDto>.Error(addUserResult.ErrorMessage);
+            return addUserResult.MapError<GetUserDto>();
         }
 
         return await GetUserByEmailAsync(addUserDto.Email);
@@ -82,7 +82,7 @@ public sealed class IdentityService : IIdentityService
         );
         if (!updateResult.IsSuccess)
         {
-            return OperationResult<GetUserDto>.Error(updateResult.ErrorMessage);
+            return updateResult.MapError<GetUserDto>();
         }
 
         return await GetUserById(updateResult.Value.Id);
@@ -98,7 +98,7 @@ public sealed class IdentityService : IIdentityService
         var userResult = await m_identityRepository.GetUserByEmailAsync(email);
         if (!userResult.IsSuccess)
         {
-            return OperationResult<GetUserDto>.Error(userResult.ErrorMessage);
+            return userResult.MapError<GetUserDto>();
         }
 
         return await ToGetUserDto(userResult);
@@ -109,7 +109,7 @@ public sealed class IdentityService : IIdentityService
         var userResult = await m_identityRepository.GetUserByIdAsync(userId);
         if (!userResult.IsSuccess)
         {
-            return OperationResult<GetUserDto>.Error(userResult.ErrorMessage);
+            return userResult.MapError<GetUserDto>();
         }
 
         return await ToGetUserDto(userResult);

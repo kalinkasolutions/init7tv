@@ -20,6 +20,21 @@ public sealed class OperationResult<T>
         ResultCode = resultCode;
     }
 
+    public OperationResult<TNew> MapError<TNew>()
+    {
+        if (IsSuccess)
+        {
+            throw new InvalidOperationException("Cannot map error from a successful result");
+        }
+
+        return ResultCode switch
+        {
+            ResultCode.NotFound => OperationResult<TNew>.NotFound(ErrorMessage),
+            ResultCode.BadGateway => OperationResult<TNew>.BadGateway(ErrorMessage),
+            _ => OperationResult<TNew>.Error(ErrorMessage)
+        };
+    }
+
     public static OperationResult<T> Success(T value)
     {
         ArgumentNullException.ThrowIfNull(value);

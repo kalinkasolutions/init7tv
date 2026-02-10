@@ -6,7 +6,7 @@ export const epgView = () => ({
     future: [],
 
     async getEpg(channel) {
-        this.epg = await get(`/api/epg/${channel.channelId}`)
+        this.epg = await get(`/api/epg/${channel.canonicalName}`)
         this.startProgressTimer();
     },
 
@@ -28,6 +28,13 @@ export const epgView = () => ({
     },
 
     adjustCurrentProgress() {
+
+        if (!this.epg || this.epg.length === 0) {
+            this.current = null;
+            this.future = [];
+            return;
+        }
+
         const now = new Date();
         const newCurrent = this.epg.find(c => now >= new Date(c.lower) && now <= new Date(c.upper));
         if (!this.current || this.current.id !== newCurrent.id) {

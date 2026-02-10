@@ -14,19 +14,28 @@ public sealed class EpgService : IEpgService
     private readonly TimeSpan m_cacheDuration = TimeSpan.FromDays(1);
     private readonly IHttpClientWrapper m_httpClient;
     private readonly IMemoryCache m_cache;
+    private readonly IChannelService m_channelService;
 
     public EpgService(
         IHttpClientWrapper httpClient,
-        IMemoryCache cache
+        IMemoryCache cache,
+        IChannelService channelService
     )
     {
         m_httpClient = httpClient;
         m_cache = cache;
+        m_channelService = channelService;
     }
 
-    public async Task<OperationResult<EpgDto[]>> GetEpg(Guid channelId)
+    public async Task<OperationResult<EpgDto[]>> GetEpg(string canonicalName)
     {
-        var url = BuildEpgUrl(channelId);
+        var channelResult = await m_channelService.GetByCanonicalName(canonicalName);
+        if (!channelResult.IsSuccess)
+        {
+            return channelResult.MapError<EpgDto[]>();
+        }
+
+        var url = BuildEpgUrl(channelResult.Value.ChannelId);
         var cacheKey = Hash.GetSha256(url);
 
         if (m_cache.TryGetValue(cacheKey, out EpgDto[]? cachedEpg) && cachedEpg != null)

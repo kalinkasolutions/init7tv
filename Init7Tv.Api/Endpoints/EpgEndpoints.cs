@@ -14,8 +14,8 @@ public static class EpgEndpoints
         group.MapGet("/{channelId:guid}", GetEpg);
     }
 
-    private static async Task<IResult> GetEpg(Guid channelId, IEpgService epgService)
+    private static async Task<IResult> GetEpg(string canonicalName, IEpgService epgService)
     {
-        return (await epgService.GetEpg(channelId)).ToHttpResult();
+        return (await epgService.GetEpg(canonicalName)).ToHttpResult();
     }
 }

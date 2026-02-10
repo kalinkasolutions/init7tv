@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.Dto;
 using Init7Tv.Dto.Init7Api;
@@ -14,6 +15,18 @@ public sealed class ChannelService : IChannelService
     private readonly TimeSpan m_cacheDuration = TimeSpan.FromDays(1);
     private readonly IHttpClientWrapper m_httpClient;
     private readonly IMemoryCache m_cache;
+
+    private readonly Init7TvChannel[] SRGFullHD =
+    [
+        new Init7TvChannel
+        {
+            CanonicalName = "SRF1FHD.ch",
+            Pk = new Guid("ed7d7676-9b05-419a-99b4-5f993d238f80"),
+            Logo = "https://vtvapi03.sys.init7.net/media/logos/1102_SRF1.ch.png",
+            Name = "SRF 1 FHD",
+            HlsSrc = "https://vtvapi03.sys.init7.net/api/live/?channel=ed7d7676-9b05-419a-99b4-5f993d238f80"
+        }
+    ];
 
     public ChannelService(
         IHttpClientWrapper httpClient,
@@ -35,7 +48,7 @@ public sealed class ChannelService : IChannelService
 
         var channels = await m_httpClient.GetInit7PagedResponseAsync<Init7TvChannel>(ChannelEndpoint);
 
-        channelResult = await GetChannelDtos(channels);
+        channelResult = await GetChannelDtos(SRGFullHD.Concat(channels).ToArray());
         m_cache.Set(CacheKey, channelResult, m_cacheDuration);
         return channelResult;
     }
@@ -46,13 +59,31 @@ public sealed class ChannelService : IChannelService
 
         if (!channelsResult.IsSuccess)
         {
-            return OperationResult<ChannelDto>.Error("Channel list was empty or unavailable");
+            return channelsResult.MapError<ChannelDto>();
         }
 
         var channel = channelsResult.Value.FirstOrDefault(x => x.ChannelId == channelId);
         if (channel == null)
         {
             return OperationResult<ChannelDto>.NotFound("Channel not found");
+        }
+
+        return OperationResult<ChannelDto>.Success(channel);
+    }
+
+    public async Task<OperationResult<ChannelDto>> GetByCanonicalName(string canonicalName)
+    {
+        var channelsResult = await GetChannelsAsync();
+
+        if (!channelsResult.IsSuccess)
+        {
+            return channelsResult.MapError<ChannelDto>();
+        }
+
+        var channel = channelsResult.Value.FirstOrDefault(x => string.Equals(x.CanonicalName, canonicalName, StringComparison.InvariantCultureIgnoreCase));
+        if (channel == null)
+        {
+            return OperationResult<ChannelDto>.NotFound($"Channel not found with canonical name: {canonicalName}");
         }
 
         return OperationResult<ChannelDto>.Success(channel);

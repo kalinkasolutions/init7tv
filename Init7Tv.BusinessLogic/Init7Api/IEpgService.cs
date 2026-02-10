@@ -5,5 +5,5 @@ namespace Init7Tv.BusinessLogic.Init7Api;
 
 public interface IEpgService
 {
-    Task<OperationResult<EpgDto[]>> GetEpg(Guid channelId);
+    Task<OperationResult<EpgDto[]>> GetEpg(string canonicalName);
 }
