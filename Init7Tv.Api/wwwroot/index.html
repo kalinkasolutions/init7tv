@@ -13,7 +13,10 @@
 
 <main>
     <div x-init="$el.outerHTML = await loadPartialView('partial/tv/sidebar.html')"></div>
-    <div x-init="$el.outerHTML = await loadPartialView('partial/tv/player.html')"></div>
+    <div class="stream-content">
+        <div x-init="$el.outerHTML = await loadPartialView('partial/tv/player.html')"></div>
+        <div x-init="$el.outerHTML = await loadPartialView('partial/tv/epg.html')"></div>
+    </div>
 </main>
 
 <div x-init="$el.outerHTML = await loadPartialView('partial/notification.html')"></div>

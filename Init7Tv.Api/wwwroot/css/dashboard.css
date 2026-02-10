@@ -1,0 +1,42 @@
+#dashboard,
+#dashboard ul {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+#dashboard ul {
+    display: flex;
+    padding: 1em;
+    flex-wrap: wrap;
+    gap: 1rem;
+    list-style: none;
+}
+
+#dashboard ul > li {
+    flex: 0 1 300px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    padding: 1rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    background-color: #373232;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+#dashboard img {
+    width: 90px;
+    object-fit: cover;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+#dashboard .dashcard-title {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid white;
+}

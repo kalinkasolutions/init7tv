@@ -1,9 +1,9 @@
-<section class="player-container" x-data="playerView()" @channel-selected.window="await playChannel($event.detail.channel, $event.detail.audioStreamIndex)">
-    <div class="player-container-wrapper">
-        <div class="player-title-wrapper" x-show="currentChannel">
+<section id="player-container" x-data="playerView()"
+         @channel-selected.window="await playChannel($event.detail.channel, $event.detail.audioStreamIndex)">
+    <div class="player-wrapper" x-show="currentChannel">
+        <div class="player-title-wrapper">
             <img :src="currentLogo" :alt="currentTitle"/>
             <h2 x-text="currentTitle"></h2>
-
             <div class="lang-select-wrapper" x-show="languages.length > 0">
                 <label for="lang-select">Language</label>
                 <select id="lang-select"
@@ -15,7 +15,6 @@
                 </select>
             </div>
         </div>
-
         <video id="player" controls></video>
     </div>
 </section>

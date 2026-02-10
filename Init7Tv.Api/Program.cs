@@ -71,6 +71,7 @@ builder.Services.AddScoped<IIdentityService, IdentityService>();
 builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
 
 builder.Services.AddTransient<IChannelService, ChannelService>();
+builder.Services.AddTransient<IEpgService, EpgService>();
 
 #if DEBUG
 builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001, listenOptions => { listenOptions.UseHttps("/home/kalinka/certs/kalinka.pfx"); }); });
@@ -91,6 +92,7 @@ app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapAdminEndpoint();
 app.MapDashboardEndpoints();
+app.MapEpgEndpoints();
 
 await Seed.Initialize(app);
 

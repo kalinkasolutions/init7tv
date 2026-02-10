@@ -1,0 +1,31 @@
+<div id="epg" x-data="epgView()"
+     @channel-selected.window="await getEpg($event.detail.channel)">
+    <template x-if="current">
+        <div class="epg-data">
+            <div class="title-wrapper">
+                <h4 x-text="current.title"></h4>
+                <h5 class="ends-at" x-text="endsAt(current)"></h5>
+            </div>
+            <h5 x-text="current.subTitle"></h5>
+            <div class="divider-white"></div>
+            <h5 x-text="current.categories.join(', ')"></h5>
+            <div class="divider-white"></div>
+            <div class="description" x-text="current.description"></div>
+        </div>
+    </template>
+    <template x-if="future.length">
+        <template x-for="e in future" :key="e.id">
+            <div class="epg-data">
+                <div class="title-wrapper">
+                    <h4 x-text="e.title"></h4>
+                    <h5 class="starts-at" x-text="beginsAt(e)"></h5>
+                </div>
+                <h5 x-text="e.subTitle"></h5>
+                <div class="divider-white"></div>
+                <h5 x-text="e.categories.join(', ')"></h5>
+                <div class="divider-white"></div>
+                <div class="description" x-text="e.description"></div>
+            </div>
+        </template>
+    </template>
+</div>

@@ -6,11 +6,13 @@ import {playerView} from './views/tv/playerView.js';
 import {notificationView} from './views/notificationView.js';
 import {headerView} from "./views/headerView.js";
 import {loadPartial} from "./loadPartial.js";
+import {epgView} from "./views/tv/epgView.js";
 
 Alpine.data('sidebarView', sidebarView);
 Alpine.data('notificationView', notificationView);
 Alpine.data('headerView', headerView);
 Alpine.data('playerView', playerView);
+Alpine.data('epgView', epgView)
 
 window.loadPartialView = loadPartial;
 

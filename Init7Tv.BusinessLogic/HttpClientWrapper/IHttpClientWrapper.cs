@@ -6,4 +6,5 @@ public interface IHttpClientWrapper
     Task<byte[]> GetByteArrayAsync(string url);
     Task<HttpResponseMessage> GetAsync(string url, HttpCompletionOption options);
     Task<T?> GetJsonAsync<T>(string url);
+    Task<T[]> GetInit7PagedResponseAsync<T>(string url);
 }

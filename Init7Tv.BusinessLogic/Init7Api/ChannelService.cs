@@ -33,13 +33,9 @@ public sealed class ChannelService : IChannelService
             return channelResult;
         }
 
-        var channels = await m_httpClient.GetJsonAsync<Init7PagedResponse<Init7TvChannel>>(ChannelEndpoint);
-        if (channels == null || channels.Results.Length == 0)
-        {
-            return OperationResult<IReadOnlyCollection<ChannelDto>>.BadGateway("Channel list was empty or unavailable");
-        }
+        var channels = await m_httpClient.GetInit7PagedResponseAsync<Init7TvChannel>(ChannelEndpoint);
 
-        channelResult = await GetChannelDtos(channels.Results);
+        channelResult = await GetChannelDtos(channels);
         m_cache.Set(CacheKey, channelResult, m_cacheDuration);
         return channelResult;
     }
@@ -73,7 +69,7 @@ public sealed class ChannelService : IChannelService
                 DisplayName = channel.Name,
                 Logo = await m_httpClient.GetByteArrayAsync(channel.Logo),
                 HlsUrl = channel.HlsSrc,
-                Language = channel.Language,
+                MainLaunguage = channel.Language,
                 CanonicalName = channel.CanonicalName,
             });
         }

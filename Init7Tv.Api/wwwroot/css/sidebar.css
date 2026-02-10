@@ -1,18 +1,38 @@
 #sidebar {
     display: flex;
     flex-direction: column;
-    overflow-y: scroll;
-    min-width: 200px;
-    max-width: 200px;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-    scrollbar-width: thin;
+    height: 100%;
+    flex: 0 0 auto;
+    min-height: 0;
 }
 
-#sidebar img {
+#sidebar .channels {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow-y: auto;
+    width: calc(200px + 10px);
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    scrollbar-width: thin;
+    box-sizing: content-box;
+    scrollbar-gutter: stable;
+    min-height: 0;
+}
+
+#sidebar .channel-search {
+    color: white;
+    background-color: transparent;
+    border-right: 1px solid white;
+    padding-right: 0;
+    margin-right: 0;
+    width: 200px;
+}
+
+#sidebar .channels img {
     align-self: center;
 }
 
-#sidebar .channel {
+#sidebar .channels .channel {
     cursor: pointer;
     padding: 1em;
     display: flex;
@@ -22,14 +42,20 @@
     border-right: 1px solid white;
 }
 
-#sidebar .channel:hover {
+#sidebar .channels .channel:hover {
     background-color: #36453e;
 }
 
-#sidebar .channel.selected {
+#sidebar .channels .channel.selected {
     color: #1e711e;
 }
 
 .channel img {
     max-width: 100px;
+}
+
+@-moz-document url-prefix() {
+    #sidebar .channels {
+        width: calc(200px + 6px)
+    }
 }

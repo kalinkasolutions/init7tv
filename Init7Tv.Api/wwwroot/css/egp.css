@@ -1,0 +1,49 @@
+#epg {
+    margin: 1em;
+    display: flex;
+    flex-direction: row;
+    gap: 1em;
+    justify-content: center;
+    align-items: center;
+}
+
+#epg .epg-data {
+    width: 320px;
+    border: 1px solid white;
+    padding: 0.5em;
+    background: linear-gradient(to right, rgba(81, 81, 138, 0.58) var(--progress, 0%), transparent 0%);
+    transition: background 0.3s linear;
+    height: 200px;
+    display: flex;
+    flex-direction: column;
+}
+
+#epg .description {
+    font-size: small;
+    overflow-y: auto;
+    flex-grow: 1;
+    margin-right: -0.5em;
+    padding-top: 0.5em;
+}
+
+#epg .title-wrapper {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+}
+
+#epg .title-wrapper h5 {
+    margin-left: auto;
+}
+
+#epg .divider-white {
+    width: calc(100% + 1em);
+    height: 0;
+    margin-left: -0.5em;
+    border-bottom: 1px solid white
+}
+
+#epg .ends-at,
+#epg .starts-at{
+    white-space: nowrap;
+}

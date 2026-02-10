@@ -18,4 +18,6 @@ public sealed class TvStream
     public FfprobeRoot StreamInfo { get; set; }
     public ChannelDto Channel { get; set; }
     public HashSet<string> Users { get; set; }
+    public int AudioStreamIndex { get; set; }
+    public string GetStreamedLanguage => StreamInfo.GetLanguages[AudioStreamIndex];
 }

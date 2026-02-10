@@ -22,12 +22,12 @@ export const playerView = () => ({
         if (streamId) {
             this.selectedLanguage = audioStreamIndex;
             this.startHls(streamId);
-            this.safeLastChannelInfo(channel, audioStreamIndex);
+            this.safeLastChannelInfo(streamId, audioStreamIndex);
         }
     },
 
-    safeLastChannelInfo(channel, audioStreamIndex) {
-        localStorage.setItem("tv-name", channel.tvName)
+    safeLastChannelInfo(streamId, audioStreamIndex) {
+        localStorage.setItem("channel-id", this.currentChannel.channelId);
         localStorage.setItem("audio-stream-index", audioStreamIndex);
     },
 

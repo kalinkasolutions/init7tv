@@ -91,6 +91,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
             var stream = new TvStream
             {
                 StreamId = streamId,
+                AudioStreamIndex = audioStreamIndex,
                 Ffmpeg = GetFfmpegProcess(channelResult.Value.HlsUrl, audioStreamIndex),
                 StreamInfo = streamInfo.Value,
                 Channel = channelResult.Value,
@@ -175,11 +176,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
     public CurrentStreamDto[] GetCurrentStreams()
     {
-        return m_streams.Values.ToArray().Select(stream => new CurrentStreamDto()
+        return m_streams.Values.ToArray().Select(stream => new CurrentStreamDto
         {
             ChannelId = stream.Channel.ChannelId,
             ChannelDisplayName = stream.Channel.DisplayName,
             ChannelLogo = stream.Channel.Logo,
+            Language = stream.GetStreamedLanguage,
             UserNames = stream.Users.ToArray(),
         }).ToArray();
     }
