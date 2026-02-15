@@ -12,6 +12,26 @@ namespace Init7Tv.Dal.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "AppSettings",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    EmailFrom = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
+                    SmtpHost = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
+                    Port = table.Column<int>(type: "INTEGER", nullable: false),
+                    Username = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
+                    Password = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
+                    EnableSsl = table.Column<bool>(type: "INTEGER", nullable: false),
+                    SecureSocketOptions = table.Column<int>(type: "INTEGER", nullable: false),
+                    BaseDomain = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppSettings", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AspNetRoles",
                 columns: table => new
                 {
@@ -197,6 +217,9 @@ namespace Init7Tv.Dal.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "AppSettings");
+
             migrationBuilder.DropTable(
                 name: "AspNetRoleClaims");
 

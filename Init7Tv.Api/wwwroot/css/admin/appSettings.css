@@ -1,0 +1,9 @@
+#app-settings {
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+}
+
+#app-settings .icon-button {
+    align-self: flex-end;
+}

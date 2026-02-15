@@ -1,0 +1,12 @@
+<div id="app-settings" class="box" x-data="generalSettingsView()">
+    <h2>General Settings</h2>
+    <div class="form-group">
+        <label for="base-domain"></label>
+        <input id="base-domain" placeholder="base domain: https://tv.example.org" type="text" x-model="appSettings.baseDomain"/>
+    </div>
+
+
+    <div class="actions">
+        <button class="icon-button" @click="await update()" :disabled="saving"><i class="bi bi-check-lg"></i></button>
+    </div>
+</div>
