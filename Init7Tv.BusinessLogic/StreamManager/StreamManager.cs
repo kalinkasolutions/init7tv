@@ -250,7 +250,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
         catch (Exception ex)
         {
-            m_logger.LogError(ex, "Stream loop failed stream: {StreamId}", stream.StreamId);
+            m_logger.LogError(ex, "Streaveryfastm loop failed stream: {StreamId}", stream.StreamId);
         }
     }
 
@@ -258,7 +258,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
     {
         var ffmpegArgs = $"-loglevel error -i {streamUrl} " +
                          "-map 0:v:0 " +
-                         $"-c:v libx264 -preset veryfast -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
+                         $"-c:v libx264 -preset ultrafast -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
                          $"-map 0:a:{audioStreamIndex} " +
                          $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
                          "-f mpegts " +
