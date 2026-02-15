@@ -102,14 +102,11 @@ app.Use(async (context, next) =>
     }
 });
 
-app.UseHttpsRedirection();
-
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
-
 
 app.MapStreamingEndpoints();
 app.MapAuthEndpoints();
