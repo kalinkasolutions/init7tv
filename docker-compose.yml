@@ -7,3 +7,5 @@ services:
     restart: always
     volumes:
       - ./data:/var/srv
+    environment:
+      - PROXY_ADDRESS=10.10.0.20

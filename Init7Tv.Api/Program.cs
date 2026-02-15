@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using Init7Tv;
 using Init7Tv.BusinessLogic;
@@ -85,13 +86,21 @@ builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001, listenOp
 builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001); });
 #endif
 
+var proxyAddress = builder.Configuration["ProxyAddress"];
+
 var app = builder.Build();
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+};
 
+if (proxyAddress is not null)
+{
+    forwardedHeadersOptions.KnownProxies.Add(IPAddress.Parse(proxyAddress));
+}
+
+app.UseForwardedHeaders(forwardedHeadersOptions);
 app.Use(async (context, next) =>
 {
     try
