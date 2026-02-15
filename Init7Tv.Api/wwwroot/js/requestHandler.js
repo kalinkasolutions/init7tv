@@ -23,7 +23,7 @@ async function request(url, options = {}) {
             "Error",
             Array.isArray(error)
                 ? error.map(x => x.description).join(", ")
-                : error.message ?? "Request failed",
+                : error.title ?? "Request failed",
             "error"
         );
     } catch (e) {

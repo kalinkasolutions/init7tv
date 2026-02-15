@@ -7,7 +7,6 @@ export const sidebarView = () => ({
 
     async init() {
         this.channels = await get("/api/streaming/channels") ?? [];
-        await get("/api/epg/b87abb69-d5ed-44c5-8cab-0f7be4ef51b1")
         this.allChannels = this.channels;
         this.dispatchLastWatchedChannel();
     },

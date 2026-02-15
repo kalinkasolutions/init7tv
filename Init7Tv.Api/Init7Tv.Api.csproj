@@ -9,12 +9,25 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\Init7Tv.BusinessLogic\Init7Tv.BusinessLogic.csproj" />
       <ProjectReference Include="..\Init7Tv.Dal\Init7Tv.Dal.csproj" />
       <ProjectReference Include="..\Init7Tv.Shared\Init7Tv.Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="EmailTemplates\TestEmailTemplate.html">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="EmailTemplates\ResetPasswordEmailTemplate.html">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>

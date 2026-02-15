@@ -1,5 +1,3 @@
-using Init7Tv.Shared;
-
 namespace Init7Tv.Dto;
 
 public sealed class CurrentStreamDto

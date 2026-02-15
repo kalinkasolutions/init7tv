@@ -1,4 +1,5 @@
 using Init7Tv.Dal;
+using Init7Tv.Dal.Repositories;
 using Init7Tv.Extensions;
 using Init7Tv.Shared;
 using Microsoft.AspNetCore.Identity;
@@ -8,16 +9,22 @@ namespace Init7Tv;
 
 public static class Seed
 {
-    public static async Task Initialize(WebApplication app)
+    public static async Task InitializeAsync(WebApplication app)
     {
         using var scope = app.Services.CreateScope();
         var services = scope.ServiceProvider;
 
         var db = services.GetRequiredService<Init7TvContext>();
+        await db.Database.MigrateAsync();
+        var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(Seed));
+        await AddInitialUsersAndRolesAsync(services, logger);
+        await AddInitialSettingsRecordAsync(services);
+    }
+
+    private static async Task AddInitialUsersAndRolesAsync(IServiceProvider services, ILogger logger)
+    {
         var userManager = services.GetRequiredService<UserManager<IdentityUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-        var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(Seed));
-        await db.Database.MigrateAsync();
 
         foreach (var role in Init7TvRoles.Roles)
         {
@@ -61,5 +68,11 @@ public static class Seed
         {
             logger.LogError("Failed to add Admin to role {Role}: {Errors}", Init7TvRoles.Admin, addAdminRoleRes.ToErrorText());
         }
+    }
+
+    private static async Task AddInitialSettingsRecordAsync(IServiceProvider services)
+    {
+        var appSettingsRepo = services.GetRequiredService<IAppSettingsRepository>();
+        await appSettingsRepo.CreateAppSettingsAsync();
     }
 }

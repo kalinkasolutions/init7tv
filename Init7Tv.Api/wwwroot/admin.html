@@ -4,16 +4,20 @@
     <meta charset="UTF-8">
     <title>Init7TV</title>
     <link rel="icon" href="/assets/favicon.ico" type="image/x-icon">
-    
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="css/bundle.css">
+    <link rel="stylesheet" href="css/admin/adminBundle.css">
 </head>
 <body>
 
 <div x-init="$el.outerHTML = await loadPartialView('partial/header.html')"></div>
 
-<main>
+<main class="admin">
     <div x-init="$el.outerHTML = await loadPartialView('partial/admin/users.html')"></div>
+    <div class="flex-row">
+        <div x-init="$el.outerHTML = await loadPartialView('partial/admin/appSettings.html')"></div>
+        <div x-init="$el.outerHTML = await loadPartialView('partial/admin/generalSettings.html')"></div>
+    </div>
 </main>
 
 <div x-init="$el.outerHTML = await loadPartialView('partial/notification.html')"></div>

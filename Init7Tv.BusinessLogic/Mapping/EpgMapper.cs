@@ -5,19 +5,19 @@ namespace Init7Tv.BusinessLogic.Mapping;
 
 public static class EpgMapper
 {
-    public static Func<Init7Epg, EpgDto> Map()
+    public static EpgDto[] ToDto(this Init7Epg[] init7Epgs)
     {
-        return x => new EpgDto
+        return init7Epgs.Select(epg => new EpgDto
         {
-            Id = x.Pk,
-            Date = x.Date,
-            Categories = x.Categories,
-            Description = x.Description,
-            Title = x.Title,
-            SubTitle = x.SubTitle,
-            Channel = x.Channel,
-            Lower = x.Timeslot.Lower,
-            Upper = x.Timeslot.Upper,
-        };
+            Id = epg.Pk,
+            Date = epg.Date,
+            Categories = epg.Categories,
+            Description = epg.Description,
+            Title = epg.Title,
+            SubTitle = epg.SubTitle,
+            Channel = epg.Channel,
+            Lower = epg.Timeslot.Lower,
+            Upper = epg.Timeslot.Upper,
+        }).ToArray();
     }
 }

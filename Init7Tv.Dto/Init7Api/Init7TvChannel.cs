@@ -48,4 +48,5 @@ public sealed class Init7TvChannel
 
     [JsonPropertyName("changed")]
     public DateTime Changed { get; set; }
+    public bool ManuallyAdded { get; set; } = false;
 }

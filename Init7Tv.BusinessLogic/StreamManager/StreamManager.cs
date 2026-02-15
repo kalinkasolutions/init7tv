@@ -73,7 +73,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
             {
                 existingStream.Users.Add(userName);
                 m_streamEventBus.Publish(GetCurrentStreams());
-                return OperationResult<StreamDto>.Success(StreamDtoMapper.Map(existingStream));
+                return OperationResult<StreamDto>.Success(existingStream.ToDto());
             }
 
             var streamInfo = await GetFfprobeInfo(channelResult.Value.HlsUrl);
@@ -125,7 +125,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
             });
 
 
-            return OperationResult<StreamDto>.Success(StreamDtoMapper.Map(stream));
+            return OperationResult<StreamDto>.Success(stream.ToDto());
         }
         finally
         {

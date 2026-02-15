@@ -40,19 +40,6 @@
     flex: 1;
 }
 
-.actions {
-    display: flex;
-    gap: 0.25rem;
-    justify-content: flex-end;
-    margin-left: auto;
-}
-
-.box {
-    border: 1px solid white;
-    margin: 1em;
-    padding: 0.5em;
-}
-
 .user-form {
     display: flex;
     justify-content: flex-start;

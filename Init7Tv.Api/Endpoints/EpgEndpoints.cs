@@ -11,7 +11,7 @@ public static class EpgEndpoints
             .WithTags("Epg")
             .RequireAuthorization();
 
-        group.MapGet("/{channelId:guid}", GetEpg);
+        group.MapGet("/{canonicalName}", GetEpg);
     }
 
     private static async Task<IResult> GetEpg(string canonicalName, IEpgService epgService)

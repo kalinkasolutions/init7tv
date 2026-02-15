@@ -1,15 +1,20 @@
 <div id="dashboard" x-data="dashboardView()">
     <h2 class="text-xl font-bold mb-2">Current streams</h2>
-    <ul>
-        <template x-for="stream in streams" :key="`${stream.channelId}_${stream.language}`">
-            <li>
-                <div class="dashcard-title">
-                    <img alt="tv-logo" :src="`data:image/png;base64,${stream.channelLogo}`">
-                    <h3 x-text="`${stream.channelDisplayName} (${stream.language})`"></h3>
-                </div>
-                <h4>Users watching</h4>
-                <div x-text="stream.userNames.join(', ')"></div>
-            </li>
-        </template>
-    </ul>
+    <template x-if="streams.length">
+        <ul>
+            <template x-for="stream in streams" :key="`${stream.channelId}_${stream.language}`">
+                <li>
+                    <div class="dashcard-title">
+                        <img alt="tv-logo" :src="`data:image/png;base64,${stream.channelLogo}`">
+                        <h3 x-text="`${stream.channelDisplayName} (${stream.language})`"></h3>
+                    </div>
+                    <h4>Users watching</h4>
+                    <div x-text="stream.userNames.join(', ')"></div>
+                </li>
+            </template>
+        </ul>
+    </template>
+    <template x-if="!streams.length">
+        <h3>No activity...</h3>
+    </template>
 </div>

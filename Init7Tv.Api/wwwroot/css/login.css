@@ -37,6 +37,7 @@ main form {
     width: 100%;
     display: flex;
     flex-direction: column;
+    align-items: center;
 }
 
 main form input {
@@ -67,5 +68,13 @@ main form button {
 
 main form button:hover {
     background-color: #165316;
+}
+
+a {
+    margin-top: 1em;
+}
+
+a:visited {
+    color: #1e6571;
 }
 

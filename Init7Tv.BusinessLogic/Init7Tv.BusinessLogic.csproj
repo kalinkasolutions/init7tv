@@ -25,6 +25,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="MailKit" Version="4.14.1" />
       <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.2" />
     </ItemGroup>
 

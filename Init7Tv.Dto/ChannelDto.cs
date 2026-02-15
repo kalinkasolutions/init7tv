@@ -8,4 +8,5 @@ public sealed class ChannelDto
     public string CanonicalName { get; set; }
     public byte[] Logo { get; set; }
     public string HlsUrl { get; set; }
+    public bool ManuallyAdded { get; set; }
 }

@@ -45,7 +45,7 @@ public sealed class EpgService : IEpgService
 
         var epgData = await m_httpClient.GetInit7PagedResponseAsync<Init7Epg>(url);
         return OperationResult<EpgDto[]>
-            .Success(m_cache.Set(cacheKey, epgData.Select(EpgMapper.Map()).ToArray(), m_cacheDuration));
+            .Success(m_cache.Set(cacheKey, epgData.ToDto(), m_cacheDuration));
     }
 
 

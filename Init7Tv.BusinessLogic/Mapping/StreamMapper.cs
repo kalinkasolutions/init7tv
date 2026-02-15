@@ -3,17 +3,18 @@ using Init7Tv.Dto;
 
 namespace Init7Tv.BusinessLogic.Mapping;
 
-public static class StreamDtoMapper
+public static class StreamMapper
 {
-    public static StreamDto Map(TvStream stream)
+    public static StreamDto ToDto(this TvStream stream)
     {
         return new StreamDto
         {
             StreamId = stream.StreamId,
-            Languages = GetLanguageDtos(stream.StreamInfo.Streams)
+            Languages = stream.StreamInfo.Streams.ToDto()
         };
     }
-    private static LanguageDto[] GetLanguageDtos(IReadOnlyCollection<StreamInfo> streamInfos)
+
+    private static LanguageDto[] ToDto(this IReadOnlyCollection<StreamInfo> streamInfos)
     {
         return streamInfos
             .Select((stream, channel) => new { stream, index = channel })
@@ -21,7 +22,7 @@ public static class StreamDtoMapper
             .Select(x => new
             {
                 Language = x.stream.Tags?.GetValueOrDefault("language"),
-                Index = x.index - 1 // index 0 is video, first audio index must also be 0
+                Index = x.index - 1
             })
             .Where(x => x.Language != null)
             .Select(x => new LanguageDto
@@ -31,5 +32,4 @@ public static class StreamDtoMapper
             })
             .ToArray();
     }
-   
 }

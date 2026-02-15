@@ -1,5 +1,8 @@
+using System.Text.Json;
 using Init7Tv;
 using Init7Tv.BusinessLogic;
+using Init7Tv.BusinessLogic.AppSettingsService;
+using Init7Tv.BusinessLogic.Email;
 using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.StreamEventBus;
@@ -67,8 +70,10 @@ builder.Services.AddHostedService<DashboardNotifier>();
 
 builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
 builder.Services.AddScoped<IIdentityRepository, IdentityRepository>();
+builder.Services.AddScoped<IAppSettingsRepository, AppSettingsRepository>();
 builder.Services.AddScoped<IIdentityService, IdentityService>();
-builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
+builder.Services.AddScoped<IAppSettingsService, AppSettingsService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 builder.Services.AddTransient<IChannelService, ChannelService>();
 builder.Services.AddTransient<IEpgService, EpgService>();
@@ -78,6 +83,22 @@ builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001, listenOp
 #endif
 
 var app = builder.Build();
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (BadHttpRequestException ex) when (ex.InnerException is JsonException jsonEx)
+    {
+        context.Response.StatusCode = 400;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new 
+        {
+            Title = jsonEx.Message,
+        });
+    }
+});
 
 app.UseHttpsRedirection();
 
@@ -87,6 +108,7 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
+
 app.MapStreamingEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
@@ -94,6 +116,6 @@ app.MapAdminEndpoint();
 app.MapDashboardEndpoints();
 app.MapEpgEndpoints();
 
-await Seed.Initialize(app);
+await Seed.InitializeAsync(app);
 
 app.Run();

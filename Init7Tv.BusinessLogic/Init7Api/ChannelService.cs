@@ -1,4 +1,3 @@
-using System.Threading.Channels;
 using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.Dto;
 using Init7Tv.Dto.Init7Api;
@@ -16,18 +15,6 @@ public sealed class ChannelService : IChannelService
     private readonly IHttpClientWrapper m_httpClient;
     private readonly IMemoryCache m_cache;
 
-    private readonly Init7TvChannel[] SRGFullHD =
-    [
-        new Init7TvChannel
-        {
-            CanonicalName = "SRF1FHD.ch",
-            Pk = new Guid("ed7d7676-9b05-419a-99b4-5f993d238f80"),
-            Logo = "https://vtvapi03.sys.init7.net/media/logos/1102_SRF1.ch.png",
-            Name = "SRF 1 FHD",
-            HlsSrc = "https://vtvapi03.sys.init7.net/api/live/?channel=ed7d7676-9b05-419a-99b4-5f993d238f80"
-        }
-    ];
-
     public ChannelService(
         IHttpClientWrapper httpClient,
         IMemoryCache cache
@@ -39,18 +26,17 @@ public sealed class ChannelService : IChannelService
 
     public async Task<OperationResult<IReadOnlyCollection<ChannelDto>>> GetChannelsAsync()
     {
-        if (m_cache.TryGetValue<OperationResult<IReadOnlyCollection<ChannelDto>>>(CacheKey, out var channelResult) &&
-            channelResult != null &&
-            !channelResult.HasError)
+        if (m_cache.TryGetValue<IReadOnlyCollection<ChannelDto>>(CacheKey, out var channelResult) &&
+            channelResult != null)
         {
-            return channelResult;
+            return OperationResult<IReadOnlyCollection<ChannelDto>>.Success(channelResult);
         }
 
         var channels = await m_httpClient.GetInit7PagedResponseAsync<Init7TvChannel>(ChannelEndpoint);
-
-        channelResult = await GetChannelDtos(SRGFullHD.Concat(channels).ToArray());
+        channelResult = await GetChannelDtos(FullHdSrg.FullHdChannels.Concat(channels).ToArray());
         m_cache.Set(CacheKey, channelResult, m_cacheDuration);
-        return channelResult;
+
+        return OperationResult<IReadOnlyCollection<ChannelDto>>.Success(channelResult);
     }
 
     public async Task<OperationResult<ChannelDto>> GetChannelById(Guid channelId)
@@ -80,7 +66,10 @@ public sealed class ChannelService : IChannelService
             return channelsResult.MapError<ChannelDto>();
         }
 
-        var channel = channelsResult.Value.FirstOrDefault(x => string.Equals(x.CanonicalName, canonicalName, StringComparison.InvariantCultureIgnoreCase));
+        var channel = channelsResult
+            .Value
+            .FirstOrDefault(x => string.Equals(x.CanonicalName, canonicalName, StringComparison.InvariantCultureIgnoreCase) && !x.ManuallyAdded);
+
         if (channel == null)
         {
             return OperationResult<ChannelDto>.NotFound($"Channel not found with canonical name: {canonicalName}");
@@ -89,7 +78,7 @@ public sealed class ChannelService : IChannelService
         return OperationResult<ChannelDto>.Success(channel);
     }
 
-    private async Task<OperationResult<IReadOnlyCollection<ChannelDto>>> GetChannelDtos(Init7TvChannel[] channels)
+    private async Task<IReadOnlyCollection<ChannelDto>> GetChannelDtos(Init7TvChannel[] channels)
     {
         var channelDtos = new List<ChannelDto>(channels.Length);
         foreach (var channel in channels)
@@ -102,9 +91,10 @@ public sealed class ChannelService : IChannelService
                 HlsUrl = channel.HlsSrc,
                 MainLaunguage = channel.Language,
                 CanonicalName = channel.CanonicalName,
+                ManuallyAdded = channel.ManuallyAdded,
             });
         }
 
-        return OperationResult<IReadOnlyCollection<ChannelDto>>.Success(channelDtos.ToArray());
+        return channelDtos.ToArray();
     }
 }
