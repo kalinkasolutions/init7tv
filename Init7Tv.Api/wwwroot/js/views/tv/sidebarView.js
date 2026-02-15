@@ -25,8 +25,8 @@ export const sidebarView = () => ({
     },
 
     dispatchLastWatchedChannel() {
-        const {tvName, audioStreamIndex} = this.getLastChannelInfo();
-        const channel = this.channels.find(ch => ch.tvName === tvName);
+        const {channelId, audioStreamIndex} = this.getLastChannelInfo();
+        const channel = this.channels.find(ch => ch.channelId === channelId);
 
         if (channel) {
             this.selectedChannel = channel;

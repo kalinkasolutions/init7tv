@@ -22,7 +22,7 @@ export const playerView = () => ({
         if (streamId) {
             this.selectedLanguage = audioStreamIndex;
             this.startHls(streamId);
-            this.safeLastChannelInfo(streamId, audioStreamIndex);
+            this.safeLastChannelInfo(channel.channelId, audioStreamIndex);
         }
     },
 
