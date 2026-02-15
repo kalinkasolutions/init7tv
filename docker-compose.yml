@@ -1,7 +1,9 @@
 services:
   app:
-    container_name: file-hub
+    container_name: init7tv
     image: kalinkasolutions/init7tv:latest
     ports:
       - "7880:5001"
     restart: always
+    volumes:
+      - ./data:/var/srv

@@ -25,7 +25,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddAntiforgery();
 builder.Services.AddSignalR();
 
-builder.Services.AddDbContext<Init7TvContext>(options => options.UseSqlite("Data Source=Init7Tv.db"));
+builder.Services.AddDbContext<Init7TvContext>(options => options.UseSqlite("Data Source=/var/srv/Init7Tv.db"));
 
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
     {

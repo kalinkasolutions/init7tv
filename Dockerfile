@@ -12,6 +12,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 
 COPY --from=dotnet_build_env /app/out ./
+RUN mkdir -p /var/srv
 
 EXPOSE 5001
 
