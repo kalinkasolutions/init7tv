@@ -1,7 +1,6 @@
 using Init7Tv.BusinessLogic.AppSettingsService;
 using Init7Tv.BusinessLogic.Email;
 using Init7Tv.BusinessLogic.User;
-using Init7Tv.Dto;
 using Init7Tv.Dto.Admin;
 using Init7Tv.Dto.Settings;
 using Init7Tv.Extensions;
@@ -23,6 +22,7 @@ public static class AdminEndpoint
         group.MapPost("/add-user", AddUserAsync);
         group.MapPut("/update-user/{id}", UpdateUserAsync);
         group.MapDelete("/delete-user/{id}", DeleteUserAsync);
+        group.MapPost("invite-user/{email}", InviteUserAsync);
         group.MapGet("/get-email-app-settings", GetEmailAppSettings);
         group.MapPut("/update-email-app-settings", UpdateEmailAppSettingsAsync);
         group.MapGet("/get-general-app-settings", GetGeneralSettingsAsync);
@@ -57,6 +57,17 @@ public static class AdminEndpoint
     private static async Task<IResult> DeleteUserAsync(string id, IIdentityService identityService)
     {
         return (await identityService.DeleteUserAsync(id)).ToHttpResult();
+    }
+
+    private static async Task<IResult> InviteUserAsync(string email, IIdentityService identityService, IEmailService emailService)
+    {
+        var tokenResult = await identityService.GetPasswordResetTokenAsync(email);
+        if (!tokenResult.IsSuccess)
+        {
+            return tokenResult.ToHttpResult();
+        }
+
+        return (await emailService.SendInviteEmailAsync(email, tokenResult.Value)).ToHttpResult();
     }
 
     private static async Task<IResult> GetEmailAppSettings(IAppSettingsService appSettingsService)

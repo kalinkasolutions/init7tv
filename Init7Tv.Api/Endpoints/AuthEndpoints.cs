@@ -1,4 +1,5 @@
 using Init7Tv.BusinessLogic.Email;
+using Init7Tv.BusinessLogic.User;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -44,20 +45,17 @@ public static class AuthEndpoints
 
     private static async Task<IResult> SendResetPasswordMailAsync(
         [FromForm] string email,
-        UserManager<IdentityUser> userManager,
+        IIdentityService identityService,
         IEmailService emailService
     )
     {
-        var user = await userManager.FindByEmailAsync(email);
-        if (user == null)
+        var tokenResult = await identityService.GetPasswordResetTokenAsync(email);
+        if (!tokenResult.IsSuccess)
         {
             return Results.Redirect("login.html");
         }
 
-        var token = await userManager.GeneratePasswordResetTokenAsync(user);
-
-        await emailService.SendResetPasswordMailAsync(email, email, token);
-
+        await emailService.SendResetPasswordMailAsync(email, tokenResult.Value);
         return Results.Redirect("login.html");
     }
 

@@ -1,7 +1,7 @@
 import {get, putJson} from "../../requestHandler.js";
 import {notify} from "../../notification.js";
 
-export const appSettingsView = () => {
+export const emailAppSettingsView = () => {
     return {
         appSettings: {},
         saving: false,

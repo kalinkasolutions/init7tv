@@ -37,6 +37,7 @@
                         <div x-text="user.email"></div>
                         <div x-text="user.roles.join(', ')"></div>
                         <div class="actions">
+                            <button class="icon-button" type="button" @click="await inviteUser(user)"><i class="bi bi-envelope"></i></button>
                             <button class="icon-button" @click="toggleEdit(user)"><i class="bi bi-pencil"></i></button>
                             <button x-show="isDeleteAble(user.id)" class="icon-button danger-icon" @click="deleteUser(user)">
                                 <i class="bi bi-trash3"></i>

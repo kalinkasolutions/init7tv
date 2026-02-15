@@ -93,6 +93,17 @@ public sealed class IdentityService : IIdentityService
         return m_identityRepository.DeleteUserAsync(userId);
     }
 
+    public async Task<OperationResult<string>> GetPasswordResetTokenAsync(string email)
+    {
+        var userResult = await m_identityRepository.GetUserByEmailAsync(email);
+        if (!userResult.IsSuccess)
+        {
+            return userResult.MapError<string>();
+        }
+
+        return OperationResult<string>.Success(await m_identityRepository.GeneratePasswordResetTokenAsync(userResult.Value));
+    }
+
     private async Task<OperationResult<GetUserDto>> GetUserByEmailAsync(string email)
     {
         var userResult = await m_identityRepository.GetUserByEmailAsync(email);

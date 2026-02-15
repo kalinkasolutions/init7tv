@@ -174,4 +174,9 @@ public sealed class IdentityRepository : IIdentityRepository
 
         return OperationResult<IdentityUser>.Success(user);
     }
+
+    public Task<string> GeneratePasswordResetTokenAsync(IdentityUser user)
+    {
+        return m_userManager.GeneratePasswordResetTokenAsync(user);
+    }
 }

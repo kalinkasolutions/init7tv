@@ -6,5 +6,6 @@ namespace Init7Tv.BusinessLogic.Email;
 public interface IEmailService
 {
     Task<OperationResult<MessageDto>> SendTestMailAsync();
-    Task<OperationResult<MessageDto>> SendResetPasswordMailAsync(string recipient, string email, string token);
+    Task<OperationResult<MessageDto>> SendResetPasswordMailAsync(string recipient, string resetToken);
+    Task<OperationResult<MessageDto>> SendInviteEmailAsync(string recipient, string resetToken);
 }

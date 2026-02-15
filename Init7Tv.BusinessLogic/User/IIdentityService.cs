@@ -10,4 +10,5 @@ public interface IIdentityService
     Task<OperationResult<GetUserDto>> AddUserAsync(AddUserDto addUserDto);
     Task<OperationResult<GetUserDto>> UpdateUserAsync(string userId, UpdateUserDto updateUserDto);
     Task<OperationResult<string>> DeleteUserAsync(string userId);
+    Task<OperationResult<string>> GetPasswordResetTokenAsync(string email);
 }

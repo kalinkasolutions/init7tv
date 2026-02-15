@@ -1,4 +1,5 @@
 import {deleteItem, get, postJson, putJson} from "../../requestHandler.js";
+import {notify} from "../../notification.js";
 
 export const usersView = () => {
     return {
@@ -71,6 +72,23 @@ export const usersView = () => {
             });
 
             this.addUserForm = {userName: '', email: '', password: '', roles: []};
+        },
+
+        async inviteUser(user) {
+            try {
+                this.sendingTestMail = true
+                const message = await postJson(`api/admin/invite-user/${user.email}`)
+                if (!message) {
+                    return;
+                }
+                notify(
+                    "User invited successfully",
+                    message.message,
+                    "success"
+                );
+            } finally {
+                this.sendingTestMail = false;
+            }
         }
     }
 }

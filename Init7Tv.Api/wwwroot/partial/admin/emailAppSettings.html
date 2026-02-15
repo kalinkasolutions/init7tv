@@ -1,4 +1,4 @@
-<div id="app-settings" class="box" x-data="appSettingsView()">
+<div id="app-settings" class="box" x-data="emailAppSettingsView()">
     <h2>Email Settings</h2>
     <div class="form-group">
         <label for="email-from"></label>
@@ -43,7 +43,7 @@
     <div class="actions">
         <button title="test email settings" class="icon-button" @click="await sendTestMail()"
                 :disabled="sendingTestMail"><i
-                class="bi bi-lightning-fill"></i>
+                class="bi bi-envelope"></i>
         </button>
         <button class="icon-button" @click="await update()" :disabled="saving"><i class="bi bi-check-lg"></i></button>
     </div>

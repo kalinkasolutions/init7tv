@@ -19,4 +19,33 @@
       <ProjectReference Include="..\Init7Tv.Shared\Init7Tv.Shared.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\cs\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\de\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\es\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\fr\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\it\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\ja\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\ko\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\pl\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\pt-BR\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\ru\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\tr\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\zh-Hans\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-net472\zh-Hant\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\cs\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\de\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\es\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\fr\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\it\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\ja\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\ko\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\pl\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\pt-BR\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\ru\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\tr\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\zh-Hans\" />
+      <Folder Include="bin\Debug\net10.0\BuildHost-netcore\zh-Hant\" />
+    </ItemGroup>
+
 </Project>

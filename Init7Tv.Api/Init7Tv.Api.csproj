@@ -28,6 +28,9 @@
       <None Update="EmailTemplates\ResetPasswordEmailTemplate.html">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
+      <None Update="EmailTemplates\InviteUserTemplate.html">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>

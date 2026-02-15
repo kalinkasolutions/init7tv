@@ -1,5 +1,6 @@
 using Init7Tv.BusinessLogic.AppSettingsService;
 using Init7Tv.Dto;
+using Init7Tv.Dto.Settings;
 using Init7Tv.Shared;
 using MailKit.Net.Smtp;
 using Microsoft.Extensions.Logging;
@@ -70,7 +71,7 @@ public sealed class EmailService : IEmailService
         return await SendMailAsync("Email settings test Init7Tv", appSettings.Value.EmailFrom, body);
     }
 
-    public async Task<OperationResult<MessageDto>> SendResetPasswordMailAsync(string recipient, string email, string token)
+    public async Task<OperationResult<MessageDto>> SendResetPasswordMailAsync(string recipient, string resetToken)
     {
         var appSettings = await m_appSettingsService.GetGeneralSettingsAsync();
         if (!appSettings.IsSuccess)
@@ -78,13 +79,35 @@ public sealed class EmailService : IEmailService
             return appSettings.MapError<MessageDto>();
         }
 
-        var resetUrl = $"{appSettings.Value.BaseDomain}/resetPassword.html?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
         var body = await LoadTemplate("ResetPasswordEmailTemplate.html", new Dictionary<string, string>()
         {
             ["Title"] = "Reset password request",
-            ["ResetUrl"] = resetUrl
+            ["ResetUrl"] = GetResetUrl(recipient, resetToken, appSettings)
         });
-        return await SendMailAsync("Reset password request", email, body);
+        return await SendMailAsync("Reset password request", recipient, body);
+    }
+
+
+    public async Task<OperationResult<MessageDto>> SendInviteEmailAsync(string recipient, string resetToken)
+    {
+        var appSettings = await m_appSettingsService.GetGeneralSettingsAsync();
+        if (!appSettings.IsSuccess)
+        {
+            return appSettings.MapError<MessageDto>();
+        }
+
+        var body = await LoadTemplate("InviteUserTemplate.html", new Dictionary<string, string>()
+        {
+            ["Title"] = "You're invited",
+            ["SetPasswordUrl"] = GetResetUrl(recipient, resetToken, appSettings)
+        });
+
+        return await SendMailAsync("Invite to Init7Tv", recipient, body);
+    }
+
+    private static string GetResetUrl(string recipient, string resetToken, OperationResult<GeneralAppSettingsDto> appSettings)
+    {
+        return $"{appSettings.Value.BaseDomain}/resetPassword.html?email={Uri.EscapeDataString(recipient)}&token={Uri.EscapeDataString(resetToken)}";
     }
 
     private async Task<string> LoadTemplate(string templateName, Dictionary<string, string> templateData)
