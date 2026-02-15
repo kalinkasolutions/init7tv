@@ -7,14 +7,16 @@ Init7TV is a self-hosted IPTV web application for Init7 fiber subscribers. It pr
 ## Requirements
 
 - Docker and Docker Compose
-- An nginx reverse proxy with SSL termination
 - An Init7 fiber subscription with access to the Init7 TV service
+- Either an nginx reverse proxy with SSL termination, or a certificate for direct Kestrel HTTPS
 
 ---
 
 ## Setup
 
-### 1. Create the docker-compose.yml
+### Option A: Behind a reverse proxy (nginx)
+
+#### 1. Create the docker-compose.yml
 
 ```yaml
 services:
@@ -28,11 +30,12 @@ services:
       - ./data:/var/srv
     environment:
       - ProxyAddress=10.10.0.1   # IP address of your nginx proxy
+      - KESTREL__ENDPOINTS__HTTPS__URL=http://*:5001
 ```
 
 The `data` directory will be created automatically and contains the SQLite database.
 
-### 2. Configure nginx
+#### 2. Configure nginx
 
 ```nginx
 server {
@@ -71,7 +74,33 @@ server {
 
 > **Important:** The `X-Forwarded-Proto` header is required. Without it the application will generate `http://` redirect URLs, which browsers will block as mixed content.
 
-### 3. Start the application
+---
+
+### Option B: Direct HTTPS (no reverse proxy)
+
+#### 1. Create the docker-compose.yml
+
+```yaml
+services:
+  app:
+    container_name: init7tv
+    image: kalinkasolutions/init7tv:latest
+    ports:
+      - "5001:5001"
+    restart: always
+    volumes:
+      - ./data:/var/srv
+      - ./certs:/var/certs
+    environment:
+      - KESTREL__CERTIFICATES__DEFAULT__PATH=/var/certs/cert.pfx
+      - KESTREL__CERTIFICATES__DEFAULT__PASSWORD=yourpassword
+```
+
+Place your `.pfx` certificate in the `./certs` directory. No `ProxyAddress` is needed since there is no proxy.
+
+---
+
+### Start the application
 
 ```bash
 docker compose up -d
@@ -84,7 +113,7 @@ user: admin
 password: admin
 ```
 
-### 4. Log in
+### Log in
 
 Navigate to `https://tv.example.com` and log in with the default admin credentials. It is strongly recommended to change the password immediately after first login.
 
@@ -93,8 +122,10 @@ Navigate to `https://tv.example.com` and log in with the default admin credentia
 ## Configuration
 
 | Environment Variable | Description | Required |
-|----------------------|---|---|
-| `ProxyAddress`       | IP address of your nginx reverse proxy | Yes (when behind a proxy) |
+|---|---|---|
+| `ProxyAddress` | IP address of your nginx reverse proxy | Yes (Option A only) |
+| `KESTREL__CERTIFICATES__DEFAULT__PATH` | Path to the `.pfx` certificate inside the container | Yes (Option B only) |
+| `KESTREL__CERTIFICATES__DEFAULT__PASSWORD` | Password for the `.pfx` certificate | Yes (Option B only) |
 
 ---
 

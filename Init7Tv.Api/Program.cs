@@ -80,27 +80,20 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddTransient<IChannelService, ChannelService>();
 builder.Services.AddTransient<IEpgService, EpgService>();
 
-#if DEBUG
-builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001, listenOptions => { listenOptions.UseHttps("/home/kalinka/certs/kalinka.pfx"); }); });
-#else
-builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001); });
-#endif
-
 var proxyAddress = builder.Configuration["ProxyAddress"];
 
 var app = builder.Build();
 
-var forwardedHeadersOptions = new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-};
-
 if (proxyAddress is not null)
 {
+    var forwardedHeadersOptions = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    };
     forwardedHeadersOptions.KnownProxies.Add(IPAddress.Parse(proxyAddress));
+    app.UseForwardedHeaders(forwardedHeadersOptions);
 }
 
-app.UseForwardedHeaders(forwardedHeadersOptions);
 app.Use(async (context, next) =>
 {
     try
