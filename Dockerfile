@@ -8,7 +8,10 @@ RUN dotnet restore --disable-parallel
 RUN dotnet publish -c Release -o out
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
-
+RUN apt-get update && \
+    apt-get install -y ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
+    
 WORKDIR /app
 
 COPY --from=dotnet_build_env /app/out ./

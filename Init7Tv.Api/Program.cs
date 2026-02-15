@@ -13,6 +13,7 @@ using Init7Tv.Dal.Repositories;
 using Init7Tv.Endpoints;
 using Init7Tv.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -85,6 +86,12 @@ builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001); });
 #endif
 
 var app = builder.Build();
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
 app.Use(async (context, next) =>
 {
     try
