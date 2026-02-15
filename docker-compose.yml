@@ -1,0 +1,7 @@
+services:
+  app:
+    container_name: file-hub
+    image: kalinkasolutions/init7tv:latest
+    ports:
+      - "7880:5001"
+    restart: always

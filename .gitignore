@@ -61,4 +61,4 @@ nunit-*.xml
 *.db-wal
 bin/
 obj/
-\Debug/
+out/
