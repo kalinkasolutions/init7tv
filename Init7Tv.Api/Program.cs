@@ -80,6 +80,8 @@ builder.Services.AddTransient<IEpgService, EpgService>();
 
 #if DEBUG
 builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001, listenOptions => { listenOptions.UseHttps("/home/kalinka/certs/kalinka.pfx"); }); });
+#else
+builder.WebHost.ConfigureKestrel(options => { options.ListenAnyIP(5001); });
 #endif
 
 var app = builder.Build();
@@ -93,7 +95,7 @@ app.Use(async (context, next) =>
     {
         context.Response.StatusCode = 400;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new 
+        await context.Response.WriteAsJsonAsync(new
         {
             Title = jsonEx.Message,
         });
