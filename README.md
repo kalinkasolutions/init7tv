@@ -24,13 +24,14 @@ services:
     container_name: init7tv
     image: kalinkasolutions/init7tv:latest
     ports:
-      - "7880:5001"
+      - "7880:8080"
     restart: always
     volumes:
       - ./data:/var/srv
     environment:
       - ProxyAddress=10.10.0.1   # IP address of your nginx proxy
-      - KESTREL__ENDPOINTS__HTTPS__URL=http://*:5001
+      - Init7TvOptions__UseMultiCast=true
+      - Init7TvOptions__FfmpegLogLevel=info
 ```
 
 The `data` directory will be created automatically and contains the SQLite database.
@@ -94,6 +95,8 @@ services:
     environment:
       - KESTREL__CERTIFICATES__DEFAULT__PATH=/var/certs/cert.pfx
       - KESTREL__CERTIFICATES__DEFAULT__PASSWORD=yourpassword
+      - Init7TvOptions__UseMultiCast=true
+      - Init7TvOptions__FfmpegLogLevel=info
 ```
 
 Place your `.pfx` certificate in the `./certs` directory. No `ProxyAddress` is needed since there is no proxy.
@@ -121,12 +124,13 @@ Navigate to `https://tv.example.com` and log in with the default admin credentia
 
 ## Configuration
 
-| Environment Variable | Description | Required |
-|---|---|---|
-| `ProxyAddress` | IP address of your nginx reverse proxy | Yes (Option A only) |
-| `KESTREL__CERTIFICATES__DEFAULT__PATH` | Path to the `.pfx` certificate inside the container | Yes (Option B only) |
-| `KESTREL__CERTIFICATES__DEFAULT__PASSWORD` | Password for the `.pfx` certificate | Yes (Option B only) |
-
+| Environment Variable | Description | Default | Required |
+|---|---|---|---|
+| `ProxyAddress` | IP address of your nginx reverse proxy | — | Yes (Option A only) |
+| `KESTREL__CERTIFICATES__DEFAULT__PATH` | Path to the `.pfx` certificate inside the container | — | Yes (Option B only) |
+| `KESTREL__CERTIFICATES__DEFAULT__PASSWORD` | Password for the `.pfx` certificate | — | Yes (Option B only) |
+| `Init7TvOptions__UseMultiCast` | Enable multicast for IPTV stream reception | `true` | No |
+| `Init7TvOptions__FfmpegLogLevel` | FFmpeg log level | `warning` | No |
 ---
 
 ## Updating
