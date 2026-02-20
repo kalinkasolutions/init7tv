@@ -1,0 +1,75 @@
+# Build output
+**/bin/
+**/obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# Test results
+**/TestResults/
+**/*.trx
+**/coverage/
+**/coverage.xml
+
+# NuGet
+**/*.nupkg
+**/*.snupkg
+**/packages/
+!**/packages/build/
+**/paket-files/
+.paket/
+
+# Publish output
+**/publish/
+**/out/
+
+# Logs
+*.log
+logs/
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.azure-pipelines/
+Jenkinsfile
+
+# Environment / secrets
+.env
+.env.*
+**/*.pfx
+**/*.p12
+**/*.key
+**/*.pem
+appsettings.Development.json
+appsettings.Local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs / misc
+README*
+LICENSE*
+*.md
+
+# sqlite
+*.db
+*.db-wal
+*..db-shm
