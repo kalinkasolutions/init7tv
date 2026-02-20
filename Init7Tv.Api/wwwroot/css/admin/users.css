@@ -20,7 +20,7 @@
 }
 
 .user-list-item:not(:last-child) {
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid #ffffff80;
 }
 
 .user-list-header {

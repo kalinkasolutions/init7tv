@@ -2,7 +2,7 @@ body, html {
     width: 100%;
     height: 100%;
     background-color: #1c2420;
-    color: #f2f4f3;
+    color: #ffffff80;
     user-select: none;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
