@@ -2,7 +2,7 @@ body, html {
     height: 100%;
     width: 100%;
     background-color: #1c2420;
-    color: #f2f4f3;
+    color: #ffffffcf;
     user-select: none;
 }
 
@@ -140,13 +140,13 @@ main input {
     border: none;
     padding: 0.5em;
     border-bottom: 1px solid #ffffff80;
-    color: #ffffff80;
+    color: #ffffffcf;
     max-width: 320px;
 }
 
 main select {
     background: none;
-    color: #ffffff80;
+    color: #ffffffcf;
     border: none;
     border-bottom: 1px solid #ffffff80;
 }
