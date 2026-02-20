@@ -27,7 +27,7 @@ public sealed class EpgService : IEpgService
         m_channelService = channelService;
     }
 
-    public async Task<OperationResult<EpgDto[]>> GetEpg(string canonicalName)
+    public async Task<OperationResult<EpgDto[]>> GetEpg(string canonicalName, bool tomorrow)
     {
         var channelResult = await m_channelService.GetByCanonicalName(canonicalName);
         if (!channelResult.IsSuccess)
@@ -35,7 +35,7 @@ public sealed class EpgService : IEpgService
             return channelResult.MapError<EpgDto[]>();
         }
 
-        var url = BuildEpgUrl(channelResult.Value.ChannelId);
+        var url = BuildEpgUrl(channelResult.Value.ChannelId, tomorrow);
         var cacheKey = Hash.GetSha256(url);
 
         if (m_cache.TryGetValue(cacheKey, out EpgDto[]? cachedEpg) && cachedEpg != null)
@@ -44,15 +44,19 @@ public sealed class EpgService : IEpgService
         }
 
         var epgData = await m_httpClient.GetInit7PagedResponseAsync<Init7Epg>(url);
-        return OperationResult<EpgDto[]>
-            .Success(m_cache.Set(cacheKey, epgData.ToDto(), m_cacheDuration));
+        return OperationResult<EpgDto[]>.Success(m_cache.Set(cacheKey, epgData.ToDto(), m_cacheDuration));
     }
 
-
-    private static string BuildEpgUrl(Guid channelId)
+    private static string BuildEpgUrl(Guid channelId, bool tomorrow)
     {
         var start = DateTime.UtcNow.Date;
         var end = start.AddDays(1);
+        if (tomorrow)
+        {
+            start = start.AddDays(1);
+            end = start.AddDays(1);
+        }
+
         var url = $"{EpgApiUrl}/?channel={channelId}&start__gte={start:o}&stop__lte={end:o}";
         return url;
     }

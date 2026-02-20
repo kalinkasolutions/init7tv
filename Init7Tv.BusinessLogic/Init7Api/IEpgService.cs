@@ -5,5 +5,5 @@ namespace Init7Tv.BusinessLogic.Init7Api;
 
 public interface IEpgService
 {
-    Task<OperationResult<EpgDto[]>> GetEpg(string canonicalName);
+    Task<OperationResult<EpgDto[]>> GetEpg(string canonicalName, bool tomorrow);
 }

@@ -14,8 +14,8 @@ public static class EpgEndpoints
         group.MapGet("/{canonicalName}", GetEpg);
     }
 
-    private static async Task<IResult> GetEpg(string canonicalName, IEpgService epgService)
+    private static async Task<IResult> GetEpg(string canonicalName, bool? tomorrow, IEpgService epgService)
     {
-        return (await epgService.GetEpg(canonicalName)).ToHttpResult();
+        return (await epgService.GetEpg(canonicalName, tomorrow ?? false)).ToHttpResult();
     }
 }
