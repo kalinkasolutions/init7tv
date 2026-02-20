@@ -20,9 +20,9 @@
 }
 
 #sidebar .channel-search {
-    color: white;
+    color: #ffffff80;
     background-color: transparent;
-    border-right: 1px solid white;
+    border-right: 1px solid #ffffff80;
     padding-right: 0;
     margin-right: 0;
     width: 200px;
@@ -38,8 +38,8 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    border-bottom: 1px solid white;
-    border-right: 1px solid white;
+    border-bottom: 1px solid #ffffff80;
+    border-right: 1px solid #ffffff80;
 }
 
 #sidebar .channels .channel:hover {

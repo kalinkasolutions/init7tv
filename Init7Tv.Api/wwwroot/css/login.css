@@ -46,8 +46,8 @@ main form input {
     background: none;
     border: none;
     padding: 0.5em;
-    border-bottom: 1px solid white;
-    color: white;
+    border-bottom: 1px solid #ffffff80;
+    color: #ffffff80;
 }
 
 main form input:focus-visible {
@@ -60,7 +60,7 @@ main form button {
     border: none;
     border-radius: 2px;
     padding: 0.5em;
-    color: white;
+    color: #ffffff80;
     background-color: #1e711e;
     cursor: pointer;
     width: 100%;

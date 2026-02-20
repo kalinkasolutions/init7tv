@@ -9,7 +9,7 @@
 
 #epg .epg-data {
     width: 320px;
-    border: 1px solid white;
+    border: 1px solid #ffffff80;
     padding: 0.5em;
     background: linear-gradient(to right, rgba(81, 81, 138, 0.58) var(--progress, 0%), transparent 0%);
     transition: background 0.3s linear;
@@ -40,10 +40,10 @@
     width: calc(100% + 1em);
     height: 0;
     margin-left: -0.5em;
-    border-bottom: 1px solid white
+    border-bottom: 1px solid #ffffff80;
 }
 
 #epg .ends-at,
-#epg .starts-at{
+#epg .starts-at {
     white-space: nowrap;
 }
