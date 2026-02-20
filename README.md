@@ -1,6 +1,8 @@
 # Init7TV
 
-Init7TV is a self-hosted IPTV web application for Init7 fiber subscribers. It provides a clean browser-based interface for watching live TV channels over your Init7 internet connection, including an integrated EPG (Electronic Programme Guide), stream management, and user authentication.
+Init7TV is a self-hosted IPTV web application for Init7 fiber subscribers. It provides a clean browser-based interface
+for watching live TV channels over your Init7 internet connection, including an integrated EPG (Electronic Programme
+Guide), stream management, and user authentication.
 
 ---
 
@@ -12,11 +14,45 @@ Init7TV is a self-hosted IPTV web application for Init7 fiber subscribers. It pr
 
 ---
 
+## Multicast vs. HLS
+
+Init7TV can receive IPTV streams in two modes:
+
+- **Multicast** (`UseMultiCast=true`, default): The application joins IP multicast groups to receive streams directly
+  from the Init7 network. This is more efficient as the stream is delivered once to the host regardless of how many
+  viewers are watching. **Requires `network_mode: host`** in Docker so the container can join multicast groups on the
+  host's network interface.
+
+- **HLS** (`UseMultiCast=false`): The application fetches streams over HTTP instead. Standard Docker bridge networking
+  with `ports` mappings works fine in this mode.
+
+---
+
 ## Setup
 
 ### Option A: Behind a reverse proxy (nginx)
 
 #### 1. Create the docker-compose.yml
+
+**With multicast (`network_mode: host`):**
+
+```yaml
+services:
+  app:
+    container_name: init7tv
+    image: kalinkasolutions/init7tv:latest
+    network_mode: host
+    restart: always
+    volumes:
+      - ./data:/var/srv
+    environment:
+      - ProxyAddress=10.10.0.1   # IP address of your nginx proxy
+      - Init7TvOptions__UseMultiCast=true
+      - Init7TvOptions__FfmpegLogLevel=info
+      - ASPNETCORE_HTTP_PORTS=8080
+```
+
+**With HLS (bridge networking):**
 
 ```yaml
 services:
@@ -30,7 +66,7 @@ services:
       - ./data:/var/srv
     environment:
       - ProxyAddress=10.10.0.1   # IP address of your nginx proxy
-      - Init7TvOptions__UseMultiCast=true
+      - Init7TvOptions__UseMultiCast=false
       - Init7TvOptions__FfmpegLogLevel=info
 ```
 
@@ -68,18 +104,42 @@ server {
     proxy_buffering     off;
 
     location / {
-        proxy_pass http://127.0.0.1:7880;
+        # Use port 8080 for multicast (host networking), 7880 for HLS (bridge networking)
+        proxy_pass http://127.0.0.1:8080;
     }
 }
 ```
 
-> **Important:** The `X-Forwarded-Proto` header is required. Without it the application will generate `http://` redirect URLs, which browsers will block as mixed content.
+> **Important:** The `X-Forwarded-Proto` header is required. Without it the application will generate `http://` redirect
+> URLs, which browsers will block as mixed content.
 
 ---
 
 ### Option B: Direct HTTPS (no reverse proxy)
 
 #### 1. Create the docker-compose.yml
+
+**With multicast (`network_mode: host`):**
+
+```yaml
+services:
+  app:
+    container_name: init7tv
+    image: kalinkasolutions/init7tv:latest
+    network_mode: host
+    restart: always
+    volumes:
+      - ./data:/var/srv
+      - ./certs:/var/certs
+    environment:
+      - KESTREL__CERTIFICATES__DEFAULT__PATH=/var/certs/cert.pfx
+      - KESTREL__CERTIFICATES__DEFAULT__PASSWORD=yourpassword
+      - Init7TvOptions__UseMultiCast=true
+      - Init7TvOptions__FfmpegLogLevel=info
+      - ASPNETCORE_HTTP_PORTS=8080
+```
+
+**With HLS (bridge networking):**
 
 ```yaml
 services:
@@ -95,7 +155,7 @@ services:
     environment:
       - KESTREL__CERTIFICATES__DEFAULT__PATH=/var/certs/cert.pfx
       - KESTREL__CERTIFICATES__DEFAULT__PASSWORD=yourpassword
-      - Init7TvOptions__UseMultiCast=true
+      - Init7TvOptions__UseMultiCast=false
       - Init7TvOptions__FfmpegLogLevel=info
 ```
 
@@ -118,19 +178,21 @@ password: admin
 
 ### Log in
 
-Navigate to `https://tv.example.com` and log in with the default admin credentials. It is strongly recommended to change the password immediately after first login.
+Navigate to `https://tv.example.com` and log in with the default admin credentials. It is strongly recommended to change
+the password immediately after first login.
 
 ---
 
 ## Configuration
 
-| Environment Variable | Description | Default | Required |
-|---|---|---|---|
-| `ProxyAddress` | IP address of your nginx reverse proxy | — | Yes (Option A only) |
-| `KESTREL__CERTIFICATES__DEFAULT__PATH` | Path to the `.pfx` certificate inside the container | — | Yes (Option B only) |
-| `KESTREL__CERTIFICATES__DEFAULT__PASSWORD` | Password for the `.pfx` certificate | — | Yes (Option B only) |
-| `Init7TvOptions__UseMultiCast` | Enable multicast for IPTV stream reception | `true` | No |
-| `Init7TvOptions__FfmpegLogLevel` | FFmpeg log level | `warning` | No |
+| Environment Variable                       | Description                                                                                    | Default   | Required            |
+|--------------------------------------------|------------------------------------------------------------------------------------------------|-----------|---------------------|
+| `ProxyAddress`                             | IP address of your nginx reverse proxy                                                         | —         | Yes (Option A only) |
+| `KESTREL__CERTIFICATES__DEFAULT__PATH`     | Path to the `.pfx` certificate inside the container                                            | —         | Yes (Option B only) |
+| `KESTREL__CERTIFICATES__DEFAULT__PASSWORD` | Password for the `.pfx` certificate                                                            | —         | Yes (Option B only) |
+| `Init7TvOptions__UseMultiCast`             | Enable multicast stream reception. Requires `network_mode: host`. Set to `false` to use HLS.  | `true`    | No                  |
+| `Init7TvOptions__FfmpegLogLevel`           | FFmpeg log level                                                                               | `warning` | No                  |
+
 ---
 
 ## Updating
