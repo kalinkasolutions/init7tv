@@ -9,6 +9,7 @@ using Init7Tv.BusinessLogic.StreamEventBus;
 using Init7Tv.Dto;
 using Init7Tv.Shared;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Init7Tv.BusinessLogic.StreamManager;
 
@@ -17,6 +18,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
     private readonly ILogger<StreamManager> m_logger;
     private readonly IChannelService m_channelService;
     private readonly IStreamEventBus m_streamEventBus;
+    private readonly Init7TvOptions m_options;
 
     private readonly ConcurrentDictionary<string, TvStream> m_streams = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> m_streamLocks = new();
@@ -34,12 +36,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
     public StreamManager(
         ILogger<StreamManager> logger,
         IChannelService channelService,
-        IStreamEventBus streamEventBus
+        IStreamEventBus streamEventBus,
+        IOptions<Init7TvOptions> options
     )
     {
         m_logger = logger;
         m_channelService = channelService;
         m_streamEventBus = streamEventBus;
+        m_options = options.Value;
         m_cleanupTimer = new Timer(
             _ => CleanupIdleStreams(),
             null,
@@ -62,7 +66,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
             return channelResult.MapError<StreamDto>();
         }
 
-        var streamId = GetStreamId($"{channelResult.Value.HlsUrl}_{audioStreamIndex}");
+        var streamId = GetStreamId($"{channelResult.Value.HlsSource}_{audioStreamIndex}");
         var startStreamLock = m_streamLocks.GetOrAdd(streamId, _ => new SemaphoreSlim(1, 1));
 
         await startStreamLock.WaitAsync();
@@ -76,7 +80,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 return OperationResult<StreamDto>.Success(existingStream.ToDto());
             }
 
-            var streamInfo = await GetFfprobeInfo(channelResult.Value.HlsUrl);
+            var streamInfo = await GetFfprobeInfo(channelResult.Value.HlsSource);
 
             if (streamInfo.HasError)
             {
@@ -92,7 +96,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
             {
                 StreamId = streamId,
                 AudioStreamIndex = audioStreamIndex,
-                Ffmpeg = GetFfmpegProcess(channelResult.Value.HlsUrl, audioStreamIndex),
+                Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex),
                 StreamInfo = streamInfo.Value,
                 Channel = channelResult.Value,
                 Users = [userName]
@@ -147,9 +151,18 @@ public sealed class StreamManager : IStreamManager, IDisposable
         sb.AppendLine("#EXTM3U");
         sb.AppendLine("#EXT-X-VERSION:6");
         sb.AppendLine("#EXT-X-TARGETDURATION:6");
-        sb.AppendLine($"#EXT-X-MEDIA-SEQUENCE:{stream.MediaSequenceId}");
 
-        foreach (var segmentName in stream.Playlist)
+        string[] segments;
+        int mediaSequenceId;
+        lock (stream.PlaylistLock)
+        {
+            segments = stream.Playlist.ToArray();
+            mediaSequenceId = stream.MediaSequenceId;
+        }
+
+        sb.AppendLine($"#EXT-X-MEDIA-SEQUENCE:{mediaSequenceId}");
+
+        foreach (var segmentName in segments)
         {
             sb.AppendLine("#EXTINF:6.0,");
             sb.AppendLine($"/api/streaming/segment/{stream.StreamId}/{segmentName}");
@@ -208,7 +221,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         {
             var segmentStartTime = DateTime.UtcNow;
             var stdout = stream.Ffmpeg.StandardOutput.BaseStream;
-            var buffer = new byte[64 * 1024];
+            var buffer = new byte[188 * 1024];
             var segmentBuffer = new MemoryStream();
 
             while (!cancellationToken.IsCancellationRequested)
@@ -229,13 +242,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 var name = $"seg{stream.SegmentIndex++}.ts";
                 stream.TsSegments[name] = segmentBuffer.ToArray();
 
-                lock (stream.Playlist)
+                lock (stream.PlaylistLock)
                 {
                     stream.Playlist.Add(name);
                     while (stream.Playlist.Count > 5)
                     {
-                        stream.TsSegments.TryRemove(stream.Playlist[0], out _);
+                        var oldSegment = stream.Playlist[0];
                         stream.Playlist.RemoveAt(0);
+                        stream.TsSegments.TryRemove(oldSegment, out _);
                         stream.MediaSequenceId++;
                     }
                 }
@@ -250,20 +264,13 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
         catch (Exception ex)
         {
-            m_logger.LogError(ex, "Streaveryfastm loop failed stream: {StreamId}", stream.StreamId);
+            m_logger.LogError(ex, "Stream loop failed stream: {StreamId}", stream.StreamId);
         }
     }
 
-    private Process GetFfmpegProcess(string streamUrl, int audioStreamIndex)
+    private Process GetFfmpegProcess(ChannelDto channel, int audioStreamIndex)
     {
-        var ffmpegArgs = $"-loglevel error -i {streamUrl} " +
-                         "-map 0:v:0 " +
-                         $"-c:v libx264 -preset ultrafast -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
-                         $"-map 0:a:{audioStreamIndex} " +
-                         $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
-                         "-f mpegts " +
-                         "pipe:1";
-
+        var ffmpegArgs = GetFfmpegArgs(channel, audioStreamIndex);
         m_logger.LogInformation("starting ffmpeg with args: {FfmegArgs}", ffmpegArgs);
 
         return new Process
@@ -278,6 +285,35 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 CreateNoWindow = true
             }
         };
+    }
+
+    private string GetFfmpegArgs(ChannelDto channel, int audioStreamIndex)
+    {
+        if (m_options.UseMultiCast)
+        {
+            return $"-loglevel {m_options.FfmpegLogLevel} " +
+                   "-fflags +genpts+discardcorrupt " +
+                   "-flags low_delay " +
+                   "-analyzeduration 5000000 " +
+                   "-probesize 10000000 " +
+                   $"-i {channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1 " +
+                   "-map 0:v:0 " +
+                   "-g 300 " +
+                   $"-c:v libx264 -preset ultrafast -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
+                   $"-map 0:a:{audioStreamIndex} " +
+                   $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
+                   "-f mpegts " +
+                   "pipe:1";
+        }
+
+        return $"-loglevel {m_options.FfmpegLogLevel} " +
+               $"-i {channel.HlsSource} " +
+               "-map 0:v:0 " +
+               $"-c:v libx264 -preset ultrafast -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
+               $"-map 0:a:{audioStreamIndex} " +
+               $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
+               "-f mpegts " +
+               "pipe:1";
     }
 
     private async Task<OperationResult<FfprobeRoot>> GetFfprobeInfo(string streamUrl)

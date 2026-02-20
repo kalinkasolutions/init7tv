@@ -13,6 +13,7 @@ using Init7Tv.Dal;
 using Init7Tv.Dal.Repositories;
 using Init7Tv.Endpoints;
 using Init7Tv.Services;
+using Init7Tv.Shared;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -26,6 +27,8 @@ builder.Services.AddMemoryCache();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddAntiforgery();
 builder.Services.AddSignalR();
+
+builder.Services.Configure<Init7TvOptions>(builder.Configuration.GetSection("Init7TvOptions"));
 
 builder.Services.AddDbContext<Init7TvContext>(options => options.UseSqlite("Data Source=/var/srv/Init7Tv.db"));
 

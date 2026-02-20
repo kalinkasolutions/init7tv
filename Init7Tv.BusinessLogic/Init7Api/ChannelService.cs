@@ -100,10 +100,11 @@ public sealed class ChannelService : IChannelService
                 ChannelId = channel.Pk,
                 DisplayName = channel.Name,
                 Logo = await m_httpClient.GetByteArrayAsync(channel.Logo),
-                HlsUrl = channel.HlsSrc,
+                HlsSource = channel.HlsSrc,
                 MainLaunguage = channel.Language,
                 CanonicalName = channel.CanonicalName,
                 ManuallyAdded = channel.ManuallyAdded,
+                UdpSource = channel.Src
             });
         }
 
