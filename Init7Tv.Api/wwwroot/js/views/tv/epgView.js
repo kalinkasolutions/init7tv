@@ -31,8 +31,7 @@ export const epgView = () => ({
 
     async adjustCurrentProgress() {
         if (!this.epg || this.epg.length === 0) {
-            this.current = null;
-            this.future = [];
+            this.epg = await get(`/api/epg/${this.channel.canonicalName}`)
             return;
         }
 
@@ -42,8 +41,6 @@ export const epgView = () => ({
         );
 
         if (currentIndex === -1) {
-            this.current = null;
-            this.future = [];
             return;
         }
 

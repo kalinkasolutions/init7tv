@@ -1,4 +1,5 @@
 using Init7Tv.BusinessLogic;
+using Init7Tv.BusinessLogic.AppSettingsService;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.Extensions;
@@ -24,9 +25,20 @@ public static class StreamingEndpoint
         return (await channelService.GetChannelsAsync()).ToHttpResult();
     }
 
-    private static async Task<IResult> StartStream(Guid channelId, int? audioStreamIndex, IUserIdentityProvider userIdentityProvider, IStreamManager streamManager)
+    private static async Task<IResult> StartStream(Guid channelId,
+        int? audioStreamIndex,
+        IUserIdentityProvider userIdentityProvider,
+        IStreamManager streamManager,
+        IAppSettingsService appSettingsService
+    )
     {
-        return (await streamManager.StartStream(channelId, audioStreamIndex.GetValueOrDefault(), userIdentityProvider.UserName)).ToHttpResult();
+        var appSettings = await appSettingsService.GetGeneralSettingsAsync();
+        if (!appSettings.IsSuccess)
+        {
+            return appSettings.ToHttpResult();
+        }
+
+        return (await streamManager.StartStream(channelId, audioStreamIndex.GetValueOrDefault(), userIdentityProvider.UserName, appSettings.Value)).ToHttpResult();
     }
 
     private static IResult GetPlaylist(string streamId, IStreamManager streamManager, IUserIdentityProvider userIdentityProvider)

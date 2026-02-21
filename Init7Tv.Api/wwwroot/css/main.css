@@ -146,7 +146,8 @@ main input {
 
 main select {
     background: none;
-    color: #ffffffcf;
+    color: #ffffff80;
+    padding: 0.5em;
     border: none;
     border-bottom: 1px solid #ffffff80;
 }

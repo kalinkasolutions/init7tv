@@ -1,7 +1,6 @@
 using Init7Tv.BusinessLogic.Mapping;
 using Init7Tv.Dal.Entities;
 using Init7Tv.Dal.Repositories;
-using Init7Tv.Dto;
 using Init7Tv.Dto.Settings;
 using Init7Tv.Shared;
 using Microsoft.Extensions.Caching.Memory;

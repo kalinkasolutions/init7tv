@@ -7,6 +7,7 @@ using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.Mapping;
 using Init7Tv.BusinessLogic.StreamEventBus;
 using Init7Tv.Dto;
+using Init7Tv.Dto.Settings;
 using Init7Tv.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -51,7 +52,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
             m_timerPeriod);
     }
 
-    public async Task<OperationResult<StreamDto>> StartStream(Guid channelId, int audioStreamIndex, string userName)
+    public async Task<OperationResult<StreamDto>> StartStream(
+        Guid channelId,
+        int audioStreamIndex,
+        string userName,
+        GeneralAppSettingsDto appSettings
+    )
     {
         if (m_disposed)
         {
@@ -96,7 +102,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
             {
                 StreamId = streamId,
                 AudioStreamIndex = audioStreamIndex,
-                Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex),
+                Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex, appSettings),
                 StreamInfo = streamInfo.Value,
                 Channel = channelResult.Value,
                 Users = [userName]
@@ -268,9 +274,10 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
     }
 
-    private Process GetFfmpegProcess(ChannelDto channel, int audioStreamIndex)
+    private Process GetFfmpegProcess(ChannelDto channel, int audioStreamIndex, GeneralAppSettingsDto appSettings)
     {
-        var ffmpegArgs = GetFfmpegArgs(channel, audioStreamIndex);
+        var ffmpegArgs = GetFfmpegArgs(channel, audioStreamIndex, appSettings);
+
         m_logger.LogInformation("starting ffmpeg with args: {FfmegArgs}", ffmpegArgs);
 
         return new Process
@@ -287,11 +294,11 @@ public sealed class StreamManager : IStreamManager, IDisposable
         };
     }
 
-    private string GetFfmpegArgs(ChannelDto channel, int audioStreamIndex)
+    private string GetFfmpegArgs(ChannelDto channel, int audioStreamIndex, GeneralAppSettingsDto appSettings)
     {
         if (m_options.UseMultiCast)
         {
-            return $"-loglevel {m_options.FfmpegLogLevel} " +
+            return $"-loglevel {appSettings.FfmpegLogLevel} " +
                    "-fflags +genpts+discardcorrupt " +
                    "-flags low_delay " +
                    "-analyzeduration 5000000 " +
@@ -299,17 +306,17 @@ public sealed class StreamManager : IStreamManager, IDisposable
                    $"-i {channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1 " +
                    "-map 0:v:0 " +
                    "-g 300 " +
-                   $"-c:v libx264 -preset ultrafast -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
+                   $"-c:v libx264 -preset {appSettings.FfmpegPreset} -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
                    $"-map 0:a:{audioStreamIndex} " +
                    $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
                    "-f mpegts " +
                    "pipe:1";
         }
 
-        return $"-loglevel {m_options.FfmpegLogLevel} " +
+        return $"-loglevel {appSettings.FfmpegLogLevel} " +
                $"-i {channel.HlsSource} " +
                "-map 0:v:0 " +
-               $"-c:v libx264 -preset ultrafast -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
+               $"-c:v libx264 -preset {appSettings.FfmpegPreset} -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
                $"-map 0:a:{audioStreamIndex} " +
                $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
                "-f mpegts " +

@@ -1,5 +1,4 @@
 using Init7Tv.Dal.Entities;
-using Init7Tv.Dto;
 using Init7Tv.Dto.Settings;
 
 namespace Init7Tv.BusinessLogic.Mapping;
@@ -24,7 +23,9 @@ public static class AppSettingsMapper
     {
         return new GeneralAppSettingsDto
         {
-            BaseDomain = appSettings.BaseDomain
+            BaseDomain = appSettings.BaseDomain,
+            FfmpegPreset = appSettings.FfmpegPreset,
+            FfmpegLogLevel = appSettings.FfmpegLogLevel
         };
     }
 
@@ -32,7 +33,9 @@ public static class AppSettingsMapper
     {
         return new AppSettings
         {
-            BaseDomain = appSettingsDto.BaseDomain
+            BaseDomain = appSettingsDto.BaseDomain,
+            FfmpegLogLevel = appSettingsDto.FfmpegLogLevel,
+            FfmpegPreset =  appSettingsDto.FfmpegPreset,
         };
     }
 

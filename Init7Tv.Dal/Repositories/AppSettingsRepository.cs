@@ -64,6 +64,8 @@ public sealed class AppSettingsRepository : IAppSettingsRepository
         var existing = existingResult.Value;
 
         existing.BaseDomain = update.BaseDomain;
+        existing.FfmpegPreset = update.FfmpegPreset;
+        existing.FfmpegLogLevel = update.FfmpegLogLevel;
 
         await m_context.SaveChangesAsync();
 

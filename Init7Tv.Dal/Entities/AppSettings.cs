@@ -27,4 +27,10 @@ public sealed class AppSettings
 
     [MaxLength(255)]
     public string BaseDomain { get; set; } = string.Empty;
+
+    [MaxLength(10)]
+    public string FfmpegLogLevel { get; set; } = "warning";
+
+    [MaxLength(10)]
+    public string FfmpegPreset { get; set; } = "ultrafast";
 }
