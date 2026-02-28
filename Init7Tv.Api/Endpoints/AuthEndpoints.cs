@@ -22,7 +22,7 @@ public static class AuthEndpoints
         UserManager<IdentityUser> userManager
     )
     {
-        var user = await userManager.FindByNameAsync(username);
+        var user = await userManager.FindByNameAsync(username) ?? await userManager.FindByEmailAsync(username);
         if (user == null)
         {
             return Results.Redirect("/login.html?error=invalid");

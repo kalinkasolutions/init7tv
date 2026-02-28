@@ -41,7 +41,7 @@ public static class Seed
         }
 
         const string adminUserName = "admin";
-        const string adminEmail = "admin@localhost";
+        const string adminEmail = "admin@local";
         const string adminPassword = "admin";
 
         var adminUser = await userManager.FindByNameAsync(adminUserName);
