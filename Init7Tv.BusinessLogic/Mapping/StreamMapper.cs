@@ -14,15 +14,18 @@ public static class StreamMapper
         };
     }
 
+    /// <summary>
+    /// Indexes are positions among the audio streams, matching ffmpeg's <c>-map 0:a:N</c>.
+    /// Tracks without a language tag keep their slot so the numbering stays aligned.
+    /// </summary>
     private static LanguageDto[] ToDto(this IReadOnlyCollection<StreamInfo> streamInfos)
     {
         return streamInfos
-            .Select((stream, channel) => new { stream, index = channel })
-            .Where(x => x.stream.CodecType == "audio")
-            .Select(x => new
+            .Where(x => x.CodecType == "audio")
+            .Select((stream, audioIndex) => new
             {
-                Language = x.stream.Tags?.GetValueOrDefault("language"),
-                Index = x.index - 1
+                Language = stream.Tags?.GetValueOrDefault("language"),
+                Index = audioIndex
             })
             .Where(x => x.Language != null)
             .Select(x => new LanguageDto

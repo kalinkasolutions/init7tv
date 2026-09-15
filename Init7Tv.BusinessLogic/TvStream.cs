@@ -22,5 +22,5 @@ public sealed class TvStream
     public FfprobeRoot StreamInfo { get; set; }
     public ChannelDto Channel { get; set; }
     public int AudioStreamIndex { get; set; }
-    public string GetStreamedLanguage => StreamInfo.GetLanguages[AudioStreamIndex];
+    public string GetStreamedLanguage => StreamInfo.GetAudioLanguage(AudioStreamIndex) ?? "unknown";
 }
