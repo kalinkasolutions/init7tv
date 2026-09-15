@@ -392,6 +392,19 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
     private void CleanupIdleStreams()
     {
+        // runs on a timer thread, where an escaping exception would kill the process
+        try
+        {
+            RemoveIdleStreams();
+        }
+        catch (Exception ex)
+        {
+            m_logger.LogError(ex, "Failed to clean up idle streams");
+        }
+    }
+
+    private void RemoveIdleStreams()
+    {
         var now = DateTime.UtcNow;
 
         foreach (var (streamId, stream) in m_streams)
