@@ -9,11 +9,11 @@ export const usersView = () => {
         editUserForm: {userName: '', email: '', password: '', roles: []},
 
         async init() {
-            this.users = (await get("/api/admin/users")).map(user => ({
+            this.users = (await get("/api/admin/users") ?? []).map(user => ({
                 ...user,
                 edit: false
             }));
-            this.roles = await get("/api/admin/roles");
+            this.roles = await get("/api/admin/roles") ?? [];
         },
 
         isDeleteAble(userId) {
@@ -77,7 +77,7 @@ export const usersView = () => {
         async inviteUser(user) {
             try {
                 this.sendingTestMail = true
-                const message = await postJson(`api/admin/invite-user/${user.email}`)
+                const message = await postJson(`api/admin/invite-user/${encodeURIComponent(user.email)}`)
                 if (!message) {
                     return;
                 }

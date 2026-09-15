@@ -1,3 +1,4 @@
+import {get} from "../../requestHandler.js";
 import {notify} from "../../notification.js";
 
 export const playerView = () => ({
@@ -22,13 +23,13 @@ export const playerView = () => ({
         if (streamId) {
             this.selectedLanguage = audioStreamIndex;
             this.startHls(streamId);
-            this.safeLastChannelInfo(channel.channelId, audioStreamIndex);
+            this.saveLastChannelInfo(audioStreamIndex);
         }
     },
 
-    safeLastChannelInfo(streamId, audioStreamIndex) {
+    saveLastChannelInfo(audioStreamIndex) {
         localStorage.setItem("channel-id", this.currentChannel.channelId);
-        localStorage.setItem("audio-stream-index", audioStreamIndex);
+        localStorage.setItem("audio-stream-index", JSON.stringify(audioStreamIndex));
     },
 
     async onLanguageChange(audioStreamIndex) {
@@ -68,20 +69,18 @@ export const playerView = () => ({
     },
 
     async startStream(channelId, audioStreamIndex = null) {
-        try {
-            const params = new URLSearchParams({channelId});
+        const params = new URLSearchParams({channelId});
 
-            if (audioStreamIndex !== null) {
-                params.set("audioStreamIndex", audioStreamIndex);
-            }
+        if (audioStreamIndex !== null) {
+            params.set("audioStreamIndex", audioStreamIndex);
+        }
 
-            const res = await fetch(`/api/streaming/start-stream?${params}`);
-            const {streamId, languages} = await res.json();
-            this.languages = languages ?? [];
-            return streamId;
-        } catch (err) {
-            notify("Failed to start stream.", "Something went wrong", "error");
+        const stream = await get(`/api/streaming/start-stream?${params}`);
+        if (!stream) {
             return null;
         }
+
+        this.languages = stream.languages ?? [];
+        return stream.streamId;
     }
 })

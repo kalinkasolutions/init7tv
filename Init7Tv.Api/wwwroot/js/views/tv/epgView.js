@@ -8,7 +8,10 @@ export const epgView = () => ({
 
     async getEpg(channel) {
         this.channel = channel;
-        this.epg = await get(`/api/epg/${channel.canonicalName}`)
+        this.current = null;
+        this.future = [];
+        this.tomorrowFetched = false;
+        this.epg = await get(`/api/epg/${channel.canonicalName}`) ?? [];
         this.startProgressTimer();
     },
 
@@ -30,8 +33,7 @@ export const epgView = () => ({
     },
 
     async adjustCurrentProgress() {
-        if (!this.epg || this.epg.length === 0) {
-            this.epg = await get(`/api/epg/${this.channel.canonicalName}`)
+        if (!this.epg.length) {
             return;
         }
 
@@ -53,8 +55,10 @@ export const epgView = () => ({
             if (this.future.length < 3 && !this.tomorrowFetched) {
                 this.tomorrowFetched = true;
                 const tomorrow = await get(`/api/epg/${this.channel.canonicalName}?tomorrow=true`);
-                this.epg = this.epg.concat(tomorrow);
-                this.future = this.epg.slice(currentIndex + 1, currentIndex + 4);
+                if (tomorrow?.length) {
+                    this.epg = this.epg.concat(tomorrow);
+                    this.future = this.epg.slice(currentIndex + 1, currentIndex + 4);
+                }
             }
         }
 

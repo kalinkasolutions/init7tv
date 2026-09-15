@@ -7,7 +7,7 @@ export const generalSettingsView = () => {
         saving: false,
 
         async init() {
-            this.appSettings = await get("api/admin/get-general-app-settings");
+            this.appSettings = await get("api/admin/get-general-app-settings") ?? {};
         },
 
         async update() {

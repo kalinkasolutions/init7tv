@@ -42,9 +42,12 @@ export const sidebarView = () => ({
     },
 
     getLastChannelInfo() {
+        const storedIndex = localStorage.getItem("audio-stream-index");
+        const audioStreamIndex = Number(storedIndex);
+
         return {
             channelId: localStorage.getItem("channel-id"),
-            audioStreamIndex: Number(JSON.parse(localStorage.getItem("audio-stream-index")))
+            audioStreamIndex: storedIndex === null || Number.isNaN(audioStreamIndex) ? null : audioStreamIndex
         }
     },
 })

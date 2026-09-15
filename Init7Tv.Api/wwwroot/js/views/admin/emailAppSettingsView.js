@@ -8,7 +8,7 @@ export const emailAppSettingsView = () => {
         sendingTestMail: false,
 
         async init() {
-            this.appSettings = await get("api/admin/get-email-app-settings");
+            this.appSettings = await get("api/admin/get-email-app-settings") ?? {};
         },
 
         async update() {
