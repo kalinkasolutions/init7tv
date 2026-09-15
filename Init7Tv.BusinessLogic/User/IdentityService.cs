@@ -24,21 +24,15 @@ public sealed class IdentityService : IIdentityService
     {
         var users = await m_identityRepository.GetUsersAsync();
         var result = new List<GetUserDto>(users.Length);
+
         foreach (var user in users)
         {
             if (user.Email == null)
             {
                 m_logger.LogWarning("User {UserId} does not have an email", user.Id);
-                continue;
             }
 
-            var getUserResult = await GetUserByEmailAsync(user.Email);
-            if (!getUserResult.IsSuccess)
-            {
-                return getUserResult.MapError<GetUserDto[]>();
-            }
-
-            result.Add(getUserResult.Value);
+            result.Add(await ToGetUserDto(user));
         }
 
         return OperationResult<GetUserDto[]>.Success(result.ToArray());
@@ -112,7 +106,7 @@ public sealed class IdentityService : IIdentityService
             return userResult.MapError<GetUserDto>();
         }
 
-        return await ToGetUserDto(userResult);
+        return OperationResult<GetUserDto>.Success(await ToGetUserDto(userResult.Value));
     }
 
     private async Task<OperationResult<GetUserDto>> GetUserById(string userId)
@@ -123,18 +117,20 @@ public sealed class IdentityService : IIdentityService
             return userResult.MapError<GetUserDto>();
         }
 
-        return await ToGetUserDto(userResult);
+        return OperationResult<GetUserDto>.Success(await ToGetUserDto(userResult.Value));
     }
 
-    private async Task<OperationResult<GetUserDto>> ToGetUserDto(OperationResult<IdentityUser> userResult)
+    private async Task<GetUserDto> ToGetUserDto(IdentityUser user)
     {
-        return OperationResult<GetUserDto>.Success(new GetUserDto
+        var roles = await m_identityRepository.GetRolesForUserAsync(user);
+
+        return new GetUserDto
         {
-            Id = userResult.Value.Id,
-            UserName = userResult.Value.UserName,
-            Email = userResult.Value.Email,
-            Roles = await m_identityRepository.GetRolesForUserAsync(userResult.Value),
-            IsAdmin = await m_identityRepository.IsAdminAsync(userResult.Value)
-        });
+            Id = user.Id,
+            UserName = user.UserName ?? string.Empty,
+            Email = user.Email ?? string.Empty,
+            Roles = roles,
+            IsAdmin = roles.Contains(Init7TvRoles.Admin)
+        };
     }
 }
