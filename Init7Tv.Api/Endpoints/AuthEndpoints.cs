@@ -1,5 +1,6 @@
 using Init7Tv.BusinessLogic.Email;
 using Init7Tv.BusinessLogic.User;
+using Init7Tv.Extensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -72,7 +73,15 @@ public static class AuthEndpoints
             return Results.Redirect("/login.html");
         }
 
-        await userManager.ResetPasswordAsync(user, token, password);
+        var result = await userManager.ResetPasswordAsync(user, token, password);
+        if (!result.Succeeded)
+        {
+            // keep email and token so a rejected password can just be retyped
+            return Results.Redirect(
+                $"/resetPassword.html?email={Uri.EscapeDataString(email)}" +
+                $"&token={Uri.EscapeDataString(token)}" +
+                $"&error={Uri.EscapeDataString(result.ToErrorText())}");
+        }
 
         return Results.Redirect("/login.html?reset=success");
     }

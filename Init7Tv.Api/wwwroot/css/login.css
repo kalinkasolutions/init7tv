@@ -78,3 +78,22 @@ a:visited {
     color: #1e6571;
 }
 
+
+.form-message {
+    width: 100%;
+    margin-top: 1em;
+    padding: 0.5em;
+    border-radius: 2px;
+    font-size: 0.9em;
+    text-align: center;
+}
+
+.form-message.error {
+    color: #ffb4b4;
+    background-color: #711e1e40;
+}
+
+.form-message.success {
+    color: #b4ffb4;
+    background-color: #1e711e40;
+}
