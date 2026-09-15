@@ -28,6 +28,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
     private readonly Timer m_cleanupTimer;
     private readonly TimeSpan m_streamIdleTimeout = TimeSpan.FromSeconds(30);
+    private readonly TimeSpan m_ffprobeTimeout = TimeSpan.FromSeconds(20);
     private readonly TimeSpan m_timerDueTime = TimeSpan.FromSeconds(10);
     private readonly TimeSpan m_timerPeriod = TimeSpan.FromSeconds(10);
 
@@ -353,9 +354,29 @@ public sealed class StreamManager : IStreamManager, IDisposable
             CreateNoWindow = true
         };
 
-        using var process = Process.Start(startInfo)!;
-        var output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        using var process = Process.Start(startInfo);
+        if (process == null)
+        {
+            m_logger.LogError("Failed to start ffprobe for url: {StreamUrl}", streamUrl);
+            return OperationResult<FfprobeRoot>.Error("Failed to probe the stream");
+        }
+
+        // runs while holding the stream lock, so a hung probe would block
+        // everyone tuning to this channel
+        using var timeout = new CancellationTokenSource(m_ffprobeTimeout);
+
+        string output;
+        try
+        {
+            output = await process.StandardOutput.ReadToEndAsync(timeout.Token);
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            m_logger.LogError("ffprobe timed out after {Timeout} for url: {StreamUrl}", m_ffprobeTimeout, streamUrl);
+            KillProcess(process);
+            return OperationResult<FfprobeRoot>.Error("Timed out while probing the stream");
+        }
 
         try
         {
@@ -452,17 +473,27 @@ public sealed class StreamManager : IStreamManager, IDisposable
         try
         {
             stream.CancellationToken.Cancel();
-
-            if (!stream.Ffmpeg.HasExited)
-            {
-                stream.Ffmpeg.Kill();
-            }
-
+            KillProcess(stream.Ffmpeg);
             stream.Ffmpeg.Dispose();
         }
         catch (Exception ex)
         {
             m_logger.LogError(ex, "Failed to stop stream: {StreamId}", stream.StreamId);
+        }
+    }
+
+    private void KillProcess(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill();
+            }
+        }
+        catch (Exception ex)
+        {
+            m_logger.LogError(ex, "Failed to kill {FileName}", process.StartInfo.FileName);
         }
     }
 }
