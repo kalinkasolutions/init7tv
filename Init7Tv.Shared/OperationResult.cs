@@ -32,6 +32,7 @@ public sealed class OperationResult<T>
             ResultCode.NotFound => OperationResult<TNew>.NotFound(ErrorMessage),
             ResultCode.BadGateway => OperationResult<TNew>.BadGateway(ErrorMessage),
             ResultCode.Conflict => OperationResult<TNew>.Conflict(ErrorMessage),
+            ResultCode.Invalid => OperationResult<TNew>.Invalid(ErrorMessage),
             _ => OperationResult<TNew>.Error(ErrorMessage)
         };
     }
@@ -66,6 +67,13 @@ public sealed class OperationResult<T>
         return new OperationResult<T>(default, null, message, ResultCode.BadGateway);
     }
 
+    /// <summary>The request payload itself is not acceptable.</summary>
+    public static OperationResult<T> Invalid(string message)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        return new OperationResult<T>(default, null, message, ResultCode.Invalid);
+    }
+
     /// <summary>The request was understood but conflicts with the current state.</summary>
     public static OperationResult<T> Conflict(string message)
     {
@@ -88,6 +96,7 @@ public enum ResultCode
     NotFound,
     BadGateway,
     Conflict,
+    Invalid,
     Error
 }
 
@@ -98,6 +107,7 @@ public static class ResultCodeExtensions
         ResultCode.NotFound => true,
         ResultCode.BadGateway => true,
         ResultCode.Conflict => true,
+        ResultCode.Invalid => true,
         ResultCode.Error => true,
         _ => false
     };

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Init7Tv.Dal.Repositories;
 using Init7Tv.Dto.Admin;
 using Init7Tv.Shared;
@@ -45,6 +46,12 @@ public sealed class IdentityService : IIdentityService
 
     public async Task<OperationResult<GetUserDto>> AddUserAsync(AddUserDto addUserDto)
     {
+        var validation = Validate<GetUserDto>(addUserDto);
+        if (validation != null)
+        {
+            return validation;
+        }
+
         var addUserResult = await m_identityRepository.AddUserAsync(
             new IdentityUser
             {
@@ -64,6 +71,12 @@ public sealed class IdentityService : IIdentityService
 
     public async Task<OperationResult<GetUserDto>> UpdateUserAsync(string userId, UpdateUserDto updateUserDto)
     {
+        var validation = Validate<GetUserDto>(updateUserDto);
+        if (validation != null)
+        {
+            return validation;
+        }
+
         var updateResult = await m_identityRepository.UpdateUserAsync(
             new IdentityUser
             {
@@ -118,6 +131,18 @@ public sealed class IdentityService : IIdentityService
         }
 
         return OperationResult<GetUserDto>.Success(await ToGetUserDto(userResult.Value));
+    }
+
+    /// <summary>Returns null when the payload is valid.</summary>
+    private static OperationResult<T>? Validate<T>(object dto)
+    {
+        var results = new List<ValidationResult>();
+        if (Validator.TryValidateObject(dto, new ValidationContext(dto), results, validateAllProperties: true))
+        {
+            return null;
+        }
+
+        return OperationResult<T>.Invalid(string.Join(", ", results.Select(x => x.ErrorMessage)));
     }
 
     private async Task<GetUserDto> ToGetUserDto(IdentityUser user)

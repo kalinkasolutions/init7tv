@@ -25,6 +25,11 @@ public static class OperationResultExtension
                 statusCode: StatusCodes.Status404NotFound
             ),
 
+            ResultCode.Invalid => Results.Problem(
+                title: operationResult.ErrorMessage,
+                statusCode: StatusCodes.Status400BadRequest
+            ),
+
             ResultCode.Conflict => Results.Problem(
                 title: operationResult.ErrorMessage,
                 statusCode: StatusCodes.Status409Conflict

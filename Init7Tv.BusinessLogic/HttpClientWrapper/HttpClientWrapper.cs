@@ -5,6 +5,8 @@ namespace Init7Tv.BusinessLogic.HttpClientWrapper;
 
 public sealed class HttpClientWrapper : IHttpClientWrapper
 {
+    private const int MaxPages = 100;
+
     private readonly HttpClient m_httpClient;
 
     public HttpClientWrapper(HttpClient httpClient)
@@ -20,7 +22,8 @@ public sealed class HttpClientWrapper : IHttpClientWrapper
         var results = new List<T>();
         var nextUrl = url;
 
-        while (!string.IsNullOrEmpty(nextUrl))
+        // a self referencing "next" would otherwise loop forever
+        for (var page = 0; page < MaxPages && !string.IsNullOrEmpty(nextUrl); page++)
         {
             var response = await GetJsonAsync<Init7PagedResponse<T>>(nextUrl);
             if (response == null)
@@ -33,7 +36,7 @@ public sealed class HttpClientWrapper : IHttpClientWrapper
                 results.AddRange(response.Results);
             }
 
-            nextUrl = response.Next;
+            nextUrl = response.Next == nextUrl ? null : response.Next;
         }
 
         return results.ToArray();
