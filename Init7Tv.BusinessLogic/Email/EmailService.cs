@@ -24,18 +24,31 @@ public sealed class EmailService : IEmailService
 
     private async Task<OperationResult<MessageDto>> SendMailAsync(string subject, string recipient, string body)
     {
-        var appSettings = (await m_appSettingsService.GetEmailAppSettingsAsync()).Value;
-        var email = new MimeMessage();
-        email.From.Add(MailboxAddress.Parse(appSettings.EmailFrom));
-        email.To.Add(MailboxAddress.Parse(recipient));
-        email.Subject = subject;
-
-        email.Body = new TextPart("html")
+        var appSettingsResult = await m_appSettingsService.GetEmailAppSettingsAsync();
+        if (!appSettingsResult.IsSuccess)
         {
-            Text = body
-        };
+            return appSettingsResult.MapError<MessageDto>();
+        }
+
+        var appSettings = appSettingsResult.Value;
+        if (string.IsNullOrWhiteSpace(appSettings.SmtpHost) || string.IsNullOrWhiteSpace(appSettings.EmailFrom))
+        {
+            return OperationResult<MessageDto>.Conflict("Email has not been configured yet");
+        }
+
         try
         {
+            // MailboxAddress.Parse throws on a malformed address
+            var email = new MimeMessage();
+            email.From.Add(MailboxAddress.Parse(appSettings.EmailFrom));
+            email.To.Add(MailboxAddress.Parse(recipient));
+            email.Subject = subject;
+
+            email.Body = new TextPart("html")
+            {
+                Text = body
+            };
+
             using var smtp = new SmtpClient();
             await smtp.ConnectAsync(
                 appSettings.SmtpHost,
