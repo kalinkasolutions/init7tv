@@ -33,12 +33,17 @@ public static class AuthEndpoints
             user,
             password,
             isPersistent: true,
-            lockoutOnFailure: false
+            lockoutOnFailure: true
         );
 
         if (result.Succeeded)
         {
             return Results.Redirect("/");
+        }
+
+        if (result.IsLockedOut)
+        {
+            return Results.Redirect("/login.html?error=locked");
         }
 
         return Results.Redirect("/login.html?error=invalid");

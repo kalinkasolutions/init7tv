@@ -11,7 +11,11 @@
 
     if (error) {
         // textContent, never innerHTML: this string comes from the query string
-        element.textContent = error === "invalid" ? "Wrong username or password." : error;
+        const known = {
+            invalid: "Wrong username or password.",
+            locked: "Too many failed attempts. Try again in a few minutes."
+        };
+        element.textContent = known[error] ?? error;
         element.classList.add("error");
     } else if (reset === "success") {
         element.textContent = "Your password has been reset, you can log in now.";
