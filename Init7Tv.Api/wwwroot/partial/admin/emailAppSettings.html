@@ -22,7 +22,8 @@
 
     <div class="form-group">
         <label for="password"></label>
-        <input id="password" placeholder="password" type="password" x-model="appSettings.password"/>
+        <input id="password" placeholder="password (leave blank to keep)" type="password"
+               x-model="appSettings.password" autocomplete="new-password"/>
     </div>
 
     <div class="form-group checkbox">

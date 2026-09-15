@@ -79,6 +79,34 @@ public class AppSettingsRepositoryTest
     }
 
     [Test]
+    public async Task UpdateEmailAppSettings_KeepsTheStoredPasswordWhenNoneIsSupplied()
+    {
+        await m_repository.CreateAppSettingsAsync();
+        await m_repository.UpdateEmailAppSettingsAsync(new Dal.Entities.AppSettings { Password = "hunter2" });
+
+        // the browser never receives the password back, so a save without one means "unchanged"
+        await m_repository.UpdateEmailAppSettingsAsync(new Dal.Entities.AppSettings { SmtpHost = "smtp.example.org", Password = "" });
+
+        var settings = (await m_repository.GetAppSettingsAsync()).Value;
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings.Password, Is.EqualTo("hunter2"));
+            Assert.That(settings.SmtpHost, Is.EqualTo("smtp.example.org"));
+        });
+    }
+
+    [Test]
+    public async Task UpdateEmailAppSettings_ReplacesTheStoredPasswordWhenOneIsSupplied()
+    {
+        await m_repository.CreateAppSettingsAsync();
+        await m_repository.UpdateEmailAppSettingsAsync(new Dal.Entities.AppSettings { Password = "hunter2" });
+
+        await m_repository.UpdateEmailAppSettingsAsync(new Dal.Entities.AppSettings { Password = "correct horse" });
+
+        Assert.That((await m_repository.GetAppSettingsAsync()).Value.Password, Is.EqualTo("correct horse"));
+    }
+
+    [Test]
     public async Task UpdateGeneralSettings_LeavesTheEmailSettingsAlone()
     {
         await m_repository.CreateAppSettingsAsync();

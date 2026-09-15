@@ -57,7 +57,12 @@ public sealed class AppSettingsRepository : IAppSettingsRepository
         existing.SmtpHost = update.SmtpHost;
         existing.Port = update.Port;
         existing.Username = update.Username;
-        existing.Password = update.Password;
+
+        if (!string.IsNullOrEmpty(update.Password))
+        {
+            existing.Password = update.Password;
+        }
+
         existing.EnableSsl = update.EnableSsl;
         existing.SecureSocketOptions = update.SecureSocketOptions;
 

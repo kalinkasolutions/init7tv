@@ -13,7 +13,8 @@ public static class AppSettingsMapper
             Port = appSettings.Port,
             SmtpHost = appSettings.SmtpHost,
             Username = appSettings.Username,
-            Password = appSettings.Password,
+            // write-only: never sent back to the browser, blank on update means "keep"
+            Password = string.Empty,
             EnableSsl = appSettings.EnableSsl,
             SecureSocketOptions = appSettings.SecureSocketOptions,
         };
