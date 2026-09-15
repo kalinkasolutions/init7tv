@@ -22,6 +22,8 @@ public sealed class StreamManager : IStreamManager, IDisposable
     private readonly Init7TvOptions m_options;
 
     private readonly ConcurrentDictionary<string, TvStream> m_streams = new();
+    // one lock per channel + audio track, kept for the lifetime of the manager:
+    // removing entries would let two callers start the same stream at once
     private readonly ConcurrentDictionary<string, SemaphoreSlim> m_streamLocks = new();
 
     private readonly Timer m_cleanupTimer;
@@ -64,13 +66,13 @@ public sealed class StreamManager : IStreamManager, IDisposable
             throw new ObjectDisposedException(nameof(StreamManager));
         }
 
-        StopSingleUserStream(userName);
-
         var channelResult = await m_channelService.GetChannelById(channelId);
         if (!channelResult.IsSuccess)
         {
             return channelResult.MapError<StreamDto>();
         }
+
+        StopSingleUserStream(userName);
 
         var streamId = GetStreamId($"{channelResult.Value.HlsSource}_{audioStreamIndex}");
         var startStreamLock = m_streamLocks.GetOrAdd(streamId, _ => new SemaphoreSlim(1, 1));
@@ -121,7 +123,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 return OperationResult<StreamDto>.Error("Failed to start stream");
             }
 
-            m_streams.TryAdd(streamId, stream);
+            if (!m_streams.TryAdd(streamId, stream))
+            {
+                m_logger.LogError("Stream {StreamId} was registered concurrently, discarding it", streamId);
+                StopProcess(stream);
+                return OperationResult<StreamDto>.Error("Failed to start stream");
+            }
 
             m_streamEventBus.Publish(GetCurrentStreams());
 
@@ -151,7 +158,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
         finally
         {
             startStreamLock.Release();
-            m_streamLocks.TryRemove(streamId, out _);
         }
     }
 
@@ -437,10 +443,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
             return;
         }
 
+        m_logger.LogInformation("Stopping stream: {StreamId}", streamId);
+        StopProcess(stream);
+    }
+
+    private void StopProcess(TvStream stream)
+    {
         try
         {
-            m_logger.LogInformation("Stopping stream: {StreamId}", streamId);
-
             stream.CancellationToken.Cancel();
 
             if (!stream.Ffmpeg.HasExited)
@@ -452,7 +462,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
         catch (Exception ex)
         {
-            m_logger.LogError(ex, "Failed to stop stream: {StreamId}", streamId);
+            m_logger.LogError(ex, "Failed to stop stream: {StreamId}", stream.StreamId);
         }
     }
 }
