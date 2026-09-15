@@ -14,7 +14,6 @@ using Init7Tv.Dal.Repositories;
 using Init7Tv.Endpoints;
 using Init7Tv.Services;
 using Init7Tv.Shared;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -59,13 +58,6 @@ builder.Services.ConfigureApplicationCookie(options =>
         return Task.CompletedTask;
     };
 });
-
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/login.html";
-        options.ExpireTimeSpan = TimeSpan.FromHours(8);
-    });
 
 builder.Services.AddAuthorization();
 

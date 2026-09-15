@@ -12,9 +12,7 @@ public sealed class HttpClientWrapper : IHttpClientWrapper
         m_httpClient = httpClient;
     }
 
-    public Task<string> GetStringAsync(string url) => m_httpClient.GetStringAsync(url);
     public Task<byte[]> GetByteArrayAsync(string url) => m_httpClient.GetByteArrayAsync(url);
-    public Task<HttpResponseMessage> GetAsync(string url, HttpCompletionOption options) => m_httpClient.GetAsync(url, options);
     public Task<T?> GetJsonAsync<T>(string url) => m_httpClient.GetFromJsonAsync<T>(url);
 
     public async Task<T[]> GetInit7PagedResponseAsync<T>(string url)

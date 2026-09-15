@@ -13,8 +13,6 @@ public sealed class FfprobeRoot
 
     public string? GetVideoCodec => GetVideoStream?.CodecName;
 
-    public bool NeedsYuvAdaption => GetVideoStream?.PixelFormat != "yuv420p";
-
     public StreamInfo? GetVideoStream => Streams.FirstOrDefault(x => x.CodecType == "video");
 
     public string[] GetLanguages =>

@@ -8,9 +8,7 @@ public static class OperationResultExtension
     {
         return operationResult.ResultCode switch
         {
-            ResultCode.Success => operationResult.Value is not null
-                ? Results.Ok(operationResult.Value)
-                : Results.Ok(),
+            ResultCode.Success => Results.Ok(operationResult.Value),
 
             ResultCode.TextSuccess => Results.Text(
                 operationResult.Value as string ?? string.Empty,

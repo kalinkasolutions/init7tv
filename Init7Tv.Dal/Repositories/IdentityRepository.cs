@@ -33,11 +33,6 @@ public sealed class IdentityRepository : IIdentityRepository
         return (await m_userManager.GetRolesAsync(user)).ToArray();
     }
 
-    public Task<bool> IsAdminAsync(IdentityUser user)
-    {
-        return m_userManager.IsInRoleAsync(user, Init7TvRoles.Admin);
-    }
-
     public async Task<string[]> GetRoleNamesAsync()
     {
         return await m_roleManager.Roles
