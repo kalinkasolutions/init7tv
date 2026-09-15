@@ -298,49 +298,59 @@ public sealed class StreamManager : IStreamManager, IDisposable
     {
         var ffmpegArgs = GetFfmpegArgs(channel, audioStreamIndex, appSettings);
 
-        m_logger.LogInformation("starting ffmpeg with args: {FfmegArgs}", ffmpegArgs);
+        m_logger.LogInformation("starting ffmpeg with args: {FfmpegArgs}", string.Join(' ', ffmpegArgs));
 
-        return new Process
+        var startInfo = new ProcessStartInfo
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "ffmpeg",
-                Arguments = ffmpegArgs,
-                RedirectStandardOutput = true,
-                RedirectStandardError = false,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
+            FileName = "ffmpeg",
+            RedirectStandardOutput = true,
+            RedirectStandardError = false,
+            UseShellExecute = false,
+            CreateNoWindow = true
         };
-    }
 
-    private string GetFfmpegArgs(ChannelDto channel, int audioStreamIndex, GeneralAppSettingsDto appSettings)
-    {
-        if (m_options.UseMultiCast)
+        // ArgumentList quotes each entry, so a source url can never inject extra flags
+        foreach (var arg in ffmpegArgs)
         {
-            return $"-loglevel {appSettings.FfmpegLogLevel} " +
-                   "-fflags +genpts+discardcorrupt " +
-                   "-flags low_delay " +
-                   "-analyzeduration 5000000 " +
-                   "-probesize 10000000 " +
-                   $"-i {channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1 " +
-                   "-map 0:v:0 " +
-                   "-g 300 " +
-                   $"-c:v libx264 -preset {appSettings.FfmpegPreset} -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
-                   $"-map 0:a:{audioStreamIndex} " +
-                   $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
-                   "-f mpegts " +
-                   "pipe:1";
+            startInfo.ArgumentList.Add(arg);
         }
 
-        return $"-loglevel {appSettings.FfmpegLogLevel} " +
-               $"-i {channel.HlsSource} " +
-               "-map 0:v:0 " +
-               $"-c:v libx264 -preset {appSettings.FfmpegPreset} -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
-               $"-map 0:a:{audioStreamIndex} " +
-               $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
-               "-f mpegts " +
-               "pipe:1";
+        return new Process { StartInfo = startInfo };
+    }
+
+    private string[] GetFfmpegArgs(ChannelDto channel, int audioStreamIndex, GeneralAppSettingsDto appSettings)
+    {
+        var args = new List<string> { "-loglevel", appSettings.FfmpegLogLevel };
+
+        if (m_options.UseMultiCast)
+        {
+            args.AddRange(["-fflags", "+genpts+discardcorrupt"]);
+            args.AddRange(["-flags", "low_delay"]);
+            args.AddRange(["-analyzeduration", "5000000"]);
+            args.AddRange(["-probesize", "10000000"]);
+            args.AddRange(["-i", $"{channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1"]);
+            args.AddRange(["-map", "0:v:0"]);
+            args.AddRange(["-g", "300"]);
+        }
+        else
+        {
+            args.AddRange(["-i", channel.HlsSource]);
+            args.AddRange(["-map", "0:v:0"]);
+        }
+
+        args.AddRange(["-c:v", "libx264"]);
+        args.AddRange(["-preset", appSettings.FfmpegPreset]);
+        args.AddRange(["-vf", "yadif=mode=send_frame:parity=auto"]);
+        args.AddRange(["-pix_fmt", "yuv420p"]);
+        args.AddRange(["-map", $"0:a:{audioStreamIndex}"]);
+        args.AddRange(["-c:a", "aac"]);
+        args.AddRange(["-b:a", "128k"]);
+        args.AddRange(["-ac", "2"]);
+        args.AddRange(["-ar", "48000"]);
+        args.AddRange(["-f", "mpegts"]);
+        args.Add("pipe:1");
+
+        return args.ToArray();
     }
 
     private async Task<OperationResult<FfprobeRoot>> GetFfprobeInfo(string streamUrl)
@@ -348,7 +358,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         var startInfo = new ProcessStartInfo
         {
             FileName = "ffprobe",
-            Arguments = $"-v quiet -print_format json -show_format -show_streams \"{streamUrl}\"",
+            ArgumentList = { "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", streamUrl },
             RedirectStandardOutput = true,
             UseShellExecute = false,
             CreateNoWindow = true
