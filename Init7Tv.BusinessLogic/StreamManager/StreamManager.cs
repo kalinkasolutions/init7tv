@@ -81,7 +81,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         {
             if (m_streams.TryGetValue(streamId, out var existingStream))
             {
-                existingStream.Users.Add(userName);
+                existingStream.Viewers[userName] = DateTime.UtcNow;
                 m_streamEventBus.Publish(GetCurrentStreams());
                 return OperationResult<StreamDto>.Success(existingStream.ToDto());
             }
@@ -104,9 +104,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 AudioStreamIndex = audioStreamIndex,
                 Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex, appSettings),
                 StreamInfo = streamInfo.Value,
-                Channel = channelResult.Value,
-                Users = [userName]
+                Channel = channelResult.Value
             };
+
+            // must be set before the stream is published, or the cleanup timer
+            // can reap it in the gap before the first playlist request
+            stream.Viewers[userName] = DateTime.UtcNow;
 
             try
             {
@@ -159,7 +162,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
             return OperationResult<string>.Error($"Could not find stream while getting playlist: {streamId}");
         }
 
-        stream.LastAccess[userName] = DateTime.UtcNow;
+        stream.Viewers[userName] = DateTime.UtcNow;
 
         var sb = new StringBuilder();
         sb.AppendLine("#EXTM3U");
@@ -209,7 +212,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
             ChannelDisplayName = stream.Channel.DisplayName,
             ChannelLogo = stream.Channel.Logo,
             Language = stream.GetStreamedLanguage,
-            UserNames = stream.Users.ToArray(),
+            UserNames = stream.Viewers.Keys.ToArray(),
         }).ToArray();
     }
 
@@ -372,14 +375,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
     private void StopSingleUserStream(string userName)
     {
-        var stream = m_streams.Values.FirstOrDefault(s => s.Users.Contains(userName));
+        var stream = m_streams.Values.FirstOrDefault(s => s.Viewers.ContainsKey(userName));
         if (stream == null)
         {
             return;
         }
 
-        stream.Users.Remove(userName);
-        if (stream.Users.Count == 0)
+        stream.Viewers.TryRemove(userName, out _);
+        if (stream.Viewers.IsEmpty)
         {
             StopStream(stream.StreamId);
         }
@@ -393,17 +396,16 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
         foreach (var (streamId, stream) in m_streams)
         {
-            foreach (var (userName, lastAccess) in stream.LastAccess)
+            foreach (var (userName, lastAccess) in stream.Viewers)
             {
                 if (now - lastAccess > m_streamIdleTimeout)
                 {
                     m_logger.LogInformation("User {UserName} stopped streaming", userName);
-                    stream.Users.Remove(userName);
-                    stream.LastAccess.TryRemove(userName, out _);
+                    stream.Viewers.TryRemove(userName, out _);
                 }
             }
 
-            if (!stream.LastAccess.IsEmpty)
+            if (!stream.Viewers.IsEmpty)
             {
                 continue;
             }

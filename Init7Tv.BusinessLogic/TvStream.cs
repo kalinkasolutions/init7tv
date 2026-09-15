@@ -15,10 +15,12 @@ public sealed class TvStream
     public ulong SegmentIndex { get; set; }
     public CancellationTokenSource CancellationToken { get; set; } = new();
     public int MediaSequenceId { get; set; }
-    public ConcurrentDictionary<string, DateTime> LastAccess { get; set; } = [];
+
+    /// <summary>User name to the time they last fetched a playlist.</summary>
+    public ConcurrentDictionary<string, DateTime> Viewers { get; } = new();
+
     public FfprobeRoot StreamInfo { get; set; }
     public ChannelDto Channel { get; set; }
-    public HashSet<string> Users { get; set; }
     public int AudioStreamIndex { get; set; }
     public string GetStreamedLanguage => StreamInfo.GetLanguages[AudioStreamIndex];
 }
