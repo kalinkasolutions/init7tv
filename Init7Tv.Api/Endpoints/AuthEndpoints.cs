@@ -1,6 +1,6 @@
 using Init7Tv.BusinessLogic.Email;
 using Init7Tv.BusinessLogic.User;
-using Init7Tv.Extensions;
+using Init7Tv.Dal.Extensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -85,7 +85,7 @@ public static class AuthEndpoints
             return Results.Redirect(
                 $"/resetPassword.html?email={Uri.EscapeDataString(email)}" +
                 $"&token={Uri.EscapeDataString(token)}" +
-                $"&error={Uri.EscapeDataString(result.ToErrorText())}");
+                $"&error={Uri.EscapeDataString(result.ToErrorString())}");
         }
 
         return Results.Redirect("/login.html?reset=success");

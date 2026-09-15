@@ -1,6 +1,6 @@
 using Init7Tv.Dal;
+using Init7Tv.Dal.Extensions;
 using Init7Tv.Dal.Repositories;
-using Init7Tv.Extensions;
 using Init7Tv.Shared;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -36,7 +36,7 @@ public static class Seed
             var addRoleRes = await roleManager.CreateAsync(new IdentityRole(role));
             if (!addRoleRes.Succeeded)
             {
-                logger.LogError("Failed to seed roles: {Errors}", addRoleRes.ToErrorText());
+                logger.LogError("Failed to seed roles: {Errors}", addRoleRes.ToErrorString());
             }
         }
 
@@ -60,13 +60,13 @@ public static class Seed
         var addAdmin = await userManager.CreateAsync(adminUser, adminPassword);
         if (!addAdmin.Succeeded)
         {
-            logger.LogError("Failed to add Admin: {Errors}", addAdmin.ToErrorText());
+            logger.LogError("Failed to add Admin: {Errors}", addAdmin.ToErrorString());
         }
 
         var addAdminRoleRes = await userManager.AddToRoleAsync(adminUser, Init7TvRoles.Admin);
         if (!addAdminRoleRes.Succeeded)
         {
-            logger.LogError("Failed to add Admin to role {Role}: {Errors}", Init7TvRoles.Admin, addAdminRoleRes.ToErrorText());
+            logger.LogError("Failed to add Admin to role {Role}: {Errors}", Init7TvRoles.Admin, addAdminRoleRes.ToErrorString());
         }
     }
 
