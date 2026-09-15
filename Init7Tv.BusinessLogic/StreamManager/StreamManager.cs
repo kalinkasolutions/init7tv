@@ -132,6 +132,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 {
                     m_logger.LogError(ex, "Failed to start stream: {StreamId}", streamId);
                 }
+                finally
+                {
+                    if (!stream.CancellationToken.IsCancellationRequested)
+                    {
+                        StopStream(streamId);
+                        m_streamEventBus.Publish(GetCurrentStreams());
+                    }
+                }
             });
 
 
@@ -233,9 +241,11 @@ public sealed class StreamManager : IStreamManager, IDisposable
             while (!cancellationToken.IsCancellationRequested)
             {
                 var read = await stdout.ReadAsync(buffer, cancellationToken);
-                if (read <= 0)
+                if (read == 0)
                 {
-                    continue;
+                    // ffmpeg closed the pipe: the source is gone, retrying would just spin
+                    m_logger.LogWarning("ffmpeg output ended for stream: {StreamId}", stream.StreamId);
+                    return;
                 }
 
                 segmentBuffer.Write(buffer, 0, read);
