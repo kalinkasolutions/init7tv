@@ -82,7 +82,7 @@ public sealed class IdentityRepository : IIdentityRepository
             (await m_userManager.GetUsersInRoleAsync(Init7TvRoles.Admin)).Count <= 1 &&
             !roles.Contains(Init7TvRoles.Admin))
         {
-            return OperationResult<IdentityUser>.NotFound("Unable to remove last admin role");
+            return OperationResult<IdentityUser>.Conflict("Unable to remove the last admin role");
         }
 
         var currentRoles = await m_userManager.GetRolesAsync(userToUpdate);
@@ -135,13 +135,13 @@ public sealed class IdentityRepository : IIdentityRepository
         var deleteUser = await m_userManager.FindByIdAsync(userId);
         if (deleteUser == null)
         {
-            return OperationResult<string>.Error("User not found");
+            return OperationResult<string>.NotFound("User not found");
         }
 
         if (await m_userManager.IsInRoleAsync(deleteUser, Init7TvRoles.Admin) &&
             (await m_userManager.GetUsersInRoleAsync(Init7TvRoles.Admin)).Count <= 1)
         {
-            return OperationResult<string>.Error("Unable to delete last admin");
+            return OperationResult<string>.Conflict("Unable to delete the last admin");
         }
 
         var deleteResult = await m_userManager.DeleteAsync(deleteUser);

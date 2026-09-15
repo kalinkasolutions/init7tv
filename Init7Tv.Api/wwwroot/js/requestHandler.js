@@ -13,24 +13,28 @@ async function request(url, options = {}) {
             return res.status !== 204 ? res.json() : null;
         }
 
-        if (res.status === 404) {
-            notify("Not Found", `${url} was not found.`, "error");
-            return null;
-        }
-
-        const error = await res.json();
-        notify(
-            "Error",
-            Array.isArray(error)
-                ? error.map(x => x.description).join(", ")
-                : error.title ?? "Request failed",
-            "error"
-        );
+        notify("Error", await errorMessage(res, url), "error");
     } catch (e) {
         notify("Error", e.message, "error");
     }
 
     return null;
+}
+
+async function errorMessage(res, url) {
+    let body;
+    try {
+        body = await res.json();
+    } catch {
+        // not every failure comes from an endpoint, 404s on a bad path return html
+        return res.status === 404 ? `${url} was not found.` : `Request failed with status ${res.status}.`;
+    }
+
+    if (Array.isArray(body)) {
+        return body.map(x => x.description).join(", ");
+    }
+
+    return body.title ?? body.error ?? `Request failed with status ${res.status}.`;
 }
 
 export function get(url) {
