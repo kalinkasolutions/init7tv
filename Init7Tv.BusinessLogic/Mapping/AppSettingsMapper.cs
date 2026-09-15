@@ -15,7 +15,6 @@ public static class AppSettingsMapper
             Username = appSettings.Username,
             // write-only: never sent back to the browser, blank on update means "keep"
             Password = string.Empty,
-            EnableSsl = appSettings.EnableSsl,
             SecureSocketOptions = appSettings.SecureSocketOptions,
         };
     }
@@ -49,7 +48,6 @@ public static class AppSettingsMapper
             SmtpHost = emailAppSettingsDto.SmtpHost,
             Username = emailAppSettingsDto.Username,
             Password = emailAppSettingsDto.Password,
-            EnableSsl = emailAppSettingsDto.EnableSsl,
             SecureSocketOptions = emailAppSettingsDto.SecureSocketOptions,
         };
     }

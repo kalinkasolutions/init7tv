@@ -22,7 +22,6 @@ public sealed class AppSettings
     [MaxLength(255)]
     public string Password { get; set; } = string.Empty;
 
-    public bool EnableSsl { get; set; }
     public EmailSocketOptions SecureSocketOptions { get; set; }
 
     [MaxLength(255)]

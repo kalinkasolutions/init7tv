@@ -63,7 +63,6 @@ public sealed class AppSettingsRepository : IAppSettingsRepository
             existing.Password = update.Password;
         }
 
-        existing.EnableSsl = update.EnableSsl;
         existing.SecureSocketOptions = update.SecureSocketOptions;
 
         await m_context.SaveChangesAsync();
