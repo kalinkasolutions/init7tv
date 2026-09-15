@@ -9,6 +9,8 @@ namespace Init7Tv.BusinessLogic.AppSettingsService;
 
 public sealed class AppSettingsService : IAppSettingsService
 {
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
+
     private readonly IAppSettingsRepository m_appSettingsRepository;
     private readonly IMemoryCache m_memoryCache;
 
@@ -34,12 +36,13 @@ public sealed class AppSettingsService : IAppSettingsService
 
     public async Task<OperationResult<EmailAppSettingsDto>> UpdateEmailAppSettingsAsync(EmailAppSettingsDto emailAppSettings)
     {
-        m_memoryCache.Remove(nameof(AppSettings));
         var updateResult = await m_appSettingsRepository.UpdateEmailAppSettingsAsync(emailAppSettings.ToEntity());
         if (!updateResult.IsSuccess)
         {
             return updateResult.MapError<EmailAppSettingsDto>();
         }
+
+        m_memoryCache.Remove(nameof(AppSettings));
 
         return OperationResult<EmailAppSettingsDto>.Success(updateResult.Value.ToDto());
     }
@@ -57,12 +60,13 @@ public sealed class AppSettingsService : IAppSettingsService
 
     public async Task<OperationResult<GeneralAppSettingsDto>> UpdateGeneralSettingsAsync(GeneralAppSettingsDto appSettingsDto)
     {
-        m_memoryCache.Remove(nameof(AppSettings));
         var updateResult = await m_appSettingsRepository.UpdateGeneralSettingsAsync(appSettingsDto.ToEntity());
         if (!updateResult.IsSuccess)
         {
             return updateResult.MapError<GeneralAppSettingsDto>();
         }
+
+        m_memoryCache.Remove(nameof(AppSettings));
 
         return OperationResult<GeneralAppSettingsDto>.Success(updateResult.Value.ToGeneralDto());
     }
@@ -74,6 +78,12 @@ public sealed class AppSettingsService : IAppSettingsService
             return OperationResult<AppSettings>.Success(appSettings);
         }
 
-        return await m_appSettingsRepository.GetAppSettingsAsync();
+        var result = await m_appSettingsRepository.GetAppSettingsAsync();
+        if (result.IsSuccess)
+        {
+            m_memoryCache.Set(nameof(AppSettings), result.Value, CacheDuration);
+        }
+
+        return result;
     }
 }
