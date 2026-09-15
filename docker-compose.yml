@@ -3,13 +3,13 @@ services:
     container_name: init7tv
     image: kalinkasolutions/init7tv:latest
     ports:
-      - "7880:5001"
+      - "7880:8080"
     restart: always
     volumes:
       - ./data:/var/srv
     environment:
       - ProxyAddress=10.10.0.20
-      - KESTREL__ENDPOINTS__HTTPS__URL=http://*:5001
-    # Without reverse proxy
-    # - KESTREL__CERTIFICATES__DEFAULT__PATH=/var/certs/cert.pfx
-    # - KESTREL__CERTIFICATES__DEFAULT__PASSWORD=yourpassword
+      - Init7TvOptions__UseMultiCast=false
+      - ASPNETCORE_HTTP_PORTS=8080
+    # Multicast needs network_mode: host instead of the ports mapping above,
+    # see the README.

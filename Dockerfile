@@ -2,7 +2,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS dotnet_build_env
 
 WORKDIR /app
 
-COPY ./ ./ 
+COPY ./ ./
 RUN dotnet restore --disable-parallel
 
 RUN dotnet publish -c Release -o out
@@ -17,6 +17,6 @@ WORKDIR /app
 COPY --from=dotnet_build_env /app/out ./
 RUN mkdir -p /var/srv
 
-EXPOSE 5001
+EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "Init7Tv.Api.dll"]

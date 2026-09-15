@@ -48,7 +48,6 @@ services:
     environment:
       - ProxyAddress=10.10.0.1   # IP address of your nginx proxy
       - Init7TvOptions__UseMultiCast=true
-      - Init7TvOptions__FfmpegLogLevel=info
       - ASPNETCORE_HTTP_PORTS=8080
 ```
 
@@ -67,7 +66,6 @@ services:
     environment:
       - ProxyAddress=10.10.0.1   # IP address of your nginx proxy
       - Init7TvOptions__UseMultiCast=false
-      - Init7TvOptions__FfmpegLogLevel=info
 ```
 
 The `data` directory will be created automatically and contains the SQLite database.
@@ -135,8 +133,7 @@ services:
       - KESTREL__CERTIFICATES__DEFAULT__PATH=/var/certs/cert.pfx
       - KESTREL__CERTIFICATES__DEFAULT__PASSWORD=yourpassword
       - Init7TvOptions__UseMultiCast=true
-      - Init7TvOptions__FfmpegLogLevel=info
-      - ASPNETCORE_HTTP_PORTS=8080
+      - ASPNETCORE_HTTPS_PORTS=5001
 ```
 
 **With HLS (bridge networking):**
@@ -156,7 +153,7 @@ services:
       - KESTREL__CERTIFICATES__DEFAULT__PATH=/var/certs/cert.pfx
       - KESTREL__CERTIFICATES__DEFAULT__PASSWORD=yourpassword
       - Init7TvOptions__UseMultiCast=false
-      - Init7TvOptions__FfmpegLogLevel=info
+      - ASPNETCORE_HTTPS_PORTS=5001
 ```
 
 Place your `.pfx` certificate in the `./certs` directory. No `ProxyAddress` is needed since there is no proxy.
@@ -191,7 +188,9 @@ the password immediately after first login.
 | `KESTREL__CERTIFICATES__DEFAULT__PATH`     | Path to the `.pfx` certificate inside the container                                            | —         | Yes (Option B only) |
 | `KESTREL__CERTIFICATES__DEFAULT__PASSWORD` | Password for the `.pfx` certificate                                                            | —         | Yes (Option B only) |
 | `Init7TvOptions__UseMultiCast`             | Enable multicast stream reception. Requires `network_mode: host`. Set to `false` to use HLS.  | `true`    | No                  |
-| `Init7TvOptions__FfmpegLogLevel`           | FFmpeg log level                                                                               | `warning` | No                  |
+
+The FFmpeg preset and log level are not environment variables; they are configured at runtime under **admin → General
+Settings**.
 
 ---
 
