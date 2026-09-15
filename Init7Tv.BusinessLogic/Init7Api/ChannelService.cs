@@ -101,7 +101,7 @@ public sealed class ChannelService : IChannelService
                 DisplayName = channel.Name,
                 Logo = await m_httpClient.GetByteArrayAsync(channel.Logo),
                 HlsSource = channel.HlsSrc,
-                MainLaunguage = channel.Language,
+                MainLanguage = channel.Language,
                 CanonicalName = channel.CanonicalName,
                 ManuallyAdded = channel.ManuallyAdded,
                 UdpSource = channel.Src

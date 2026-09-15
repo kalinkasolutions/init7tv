@@ -28,7 +28,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <None Update="Data\ChannelFile.txt">
+      <None Update="Data\Channels.json">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
     </ItemGroup>
