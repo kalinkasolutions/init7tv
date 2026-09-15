@@ -1,5 +1,5 @@
-import Alpine from 'https://cdn.jsdelivr.net/npm/alpinejs/dist/module.esm.js';
-import Hls from 'https://cdn.jsdelivr.net/npm/hls.js/dist/hls.mjs';
+import Alpine from 'https://cdn.jsdelivr.net/npm/alpinejs@3.17.3/dist/module.esm.js';
+import Hls from 'https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.mjs';
 
 import {sidebarView} from './views/tv/sidebarView.js';
 import {playerView} from './views/tv/playerView.js';
