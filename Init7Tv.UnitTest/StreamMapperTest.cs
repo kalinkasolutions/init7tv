@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Init7Tv.BusinessLogic;
 using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.Mapping;
@@ -21,12 +22,14 @@ public class StreamMapperTest
 
     private static StreamInfo Subtitle() => new() { CodecType = "subtitle" };
 
+    // never started, it only exists because TvStream requires one
     private static TvStream StreamOf(int audioStreamIndex, params StreamInfo[] streams) => new()
     {
         StreamId = "test",
         AudioStreamIndex = audioStreamIndex,
         StreamInfo = new FfprobeRoot { Streams = streams.ToList() },
-        Channel = new ChannelDto()
+        Channel = new ChannelDto(),
+        Ffmpeg = new Process()
     };
 
     [Test]

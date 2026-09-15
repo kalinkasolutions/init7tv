@@ -7,9 +7,9 @@ namespace Init7Tv.BusinessLogic;
 
 public sealed class TvStream
 {
-    public string StreamId { get; init; }
+    public required string StreamId { get; init; }
     public ConcurrentDictionary<string, byte[]> TsSegments { get; set; } = new();
-    public Process Ffmpeg { get; set; }
+    public required Process Ffmpeg { get; set; }
     public List<string> Playlist { get; set; } = [];
     public Lock PlaylistLock { get; } = new();
     public ulong SegmentIndex { get; set; }
@@ -19,8 +19,8 @@ public sealed class TvStream
     /// <summary>User name to the time they last fetched a playlist.</summary>
     public ConcurrentDictionary<string, DateTime> Viewers { get; } = new();
 
-    public FfprobeRoot StreamInfo { get; set; }
-    public ChannelDto Channel { get; set; }
+    public required FfprobeRoot StreamInfo { get; set; }
+    public required ChannelDto Channel { get; set; }
     public int AudioStreamIndex { get; set; }
     public string GetStreamedLanguage => StreamInfo.GetAudioLanguage(AudioStreamIndex) ?? "unknown";
 }
