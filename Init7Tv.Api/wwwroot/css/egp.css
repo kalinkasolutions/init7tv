@@ -58,6 +58,14 @@
     display: flex;
     flex-direction: row;
     align-items: baseline;
+    gap: 0.5em;
+}
+
+/* a title longer than the card is worth wrapping mid word; the card hides its
+   overflow, so the end of it would otherwise just be gone */
+#epg .title-wrapper h4 {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 #epg .title-wrapper h5 {
@@ -81,10 +89,16 @@
 @media (min-width: 1101px) {
     #epg {
         flex-wrap: nowrap;
+        /* Cards narrow to fit and then stop. Below that the row scrolls
+           sideways, which is what it already is: a strip of what comes next. */
+        overflow-x: auto;
+        /* room for that scrollbar where it is drawn inside the box, or it takes
+           its height from the cards and they gain a vertical scrollbar too */
+        min-height: calc(var(--card-height) + 0.75rem);
     }
 
     #epg .epg-data {
-        min-width: 0;
+        min-width: 15rem;
     }
 }
 
