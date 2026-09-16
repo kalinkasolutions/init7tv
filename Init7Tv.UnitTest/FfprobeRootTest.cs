@@ -50,45 +50,16 @@ public class FfprobeRootTest
     }
 
     [Test]
-    public void IsInterlaced_PrefersTheCodedFramesOverTheFrameRate()
+    public void IsInterlaced_IsNotDecidedByTheSampledContent()
     {
-        // a 50fps source whose frames say interlaced is interlaced
-        Assert.That(WithFrames("50/1", 1, 1, 1, 1).IsInterlaced, Is.True);
-        // and a 25fps source whose frames say progressive is not
-        Assert.That(WithFrames("25/1", 0, 0, 0, 0).IsInterlaced, Is.False);
-    }
-
-    [Test]
-    public void IsInterlaced_TakesTheMajorityWhenFramesDisagree()
-    {
+        // the probe sees about two seconds. SAT.1 sampled during an advert, which
+        // is shot progressive, must not make the whole stream run un-deinterlaced
+        // through the interlaced programme that follows
         Assert.Multiple(() =>
         {
-            Assert.That(WithFrames("25/1", 1, 1, 1, 0).IsInterlaced, Is.True);
-            Assert.That(WithFrames("25/1", 1, 0, 0, 0).IsInterlaced, Is.False);
-        });
-    }
-
-    [Test]
-    public void IsInterlaced_IgnoresAudioFrames()
-    {
-        var probe = Video("25/1");
-        probe.Frames =
-        [
-            new FrameInfo { MediaType = "audio", InterlacedFrame = 0 },
-            new FrameInfo { MediaType = "audio", InterlacedFrame = 0 },
-            new FrameInfo { MediaType = "video", InterlacedFrame = 1 }
-        ];
-
-        Assert.That(probe.IsInterlaced, Is.True);
-    }
-
-    [Test]
-    public void IsInterlaced_FallsBackToFrameRateWhenNoFramesWereRead()
-    {
-        Assert.Multiple(() =>
-        {
-            Assert.That(Video("25/1").IsInterlaced, Is.True);
-            Assert.That(Video("50/1").IsInterlaced, Is.False);
+            Assert.That(WithFrames("25/1", 0, 0, 0, 0).IsInterlaced, Is.True);
+            Assert.That(WithFrames("25/1", 1, 1, 1, 1).IsInterlaced, Is.True);
+            Assert.That(WithFrames("50/1", 1, 1, 1, 1).IsInterlaced, Is.False);
         });
     }
 

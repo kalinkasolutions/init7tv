@@ -102,10 +102,16 @@ public static class FfmpegArguments
 
         if (deinterlacer is not ("yadif" or "bwdif") || mode is not ("send_frame" or "send_field"))
         {
-            return $"yadif=mode=send_field:parity={parity}";
+            (deinterlacer, mode) = ("yadif", "send_field");
         }
 
-        return $"{deinterlacer}=mode={mode}:parity={parity}";
+        // send_frame emits one output per input, so restricting the filter to
+        // frames flagged interlaced leaves the rate constant and passes genuinely
+        // progressive material through untouched. send_field doubles, and doubling
+        // only some frames produced an output that alternated 25 and 50fps.
+        var deint = mode == "send_frame" ? ":deint=interlaced" : string.Empty;
+
+        return $"{deinterlacer}=mode={mode}:parity={parity}{deint}";
     }
 
     private static int KeyframeInterval(FfprobeRoot streamInfo, int segmentSeconds)

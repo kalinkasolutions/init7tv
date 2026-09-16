@@ -86,6 +86,21 @@ public class FfmpegArgumentsTest
     }
 
     [Test]
+    public void SendFrame_OnlyTouchesFramesThatAreActuallyInterlaced()
+    {
+        // one output per input either way, so the rate stays constant while
+        // genuinely progressive frames pass through unfiltered
+        Assert.That(ValueOf(BuildWith("yadif:send_frame"), "-vf"), Does.Contain("deint=interlaced"));
+    }
+
+    [Test]
+    public void SendField_DeinterlacesEveryFrame()
+    {
+        // doubling only some frames gave an output alternating 25 and 50fps
+        Assert.That(ValueOf(BuildWith("yadif:send_field"), "-vf"), Does.Not.Contain("deint="));
+    }
+
+    [Test]
     public void InterlacedSource_IsDeinterlaced()
     {
         var args = Build(interlaced: true);
@@ -94,16 +109,16 @@ public class FfmpegArgumentsTest
     }
 
     [TestCase("yadif:send_field", "yadif=mode=send_field:parity=0")]
-    [TestCase("yadif:send_frame", "yadif=mode=send_frame:parity=0")]
+    [TestCase("yadif:send_frame", "yadif=mode=send_frame:parity=0:deint=interlaced")]
     [TestCase("bwdif:send_field", "bwdif=mode=send_field:parity=0")]
-    [TestCase("bwdif:send_frame", "bwdif=mode=send_frame:parity=0")]
+    [TestCase("bwdif:send_frame", "bwdif=mode=send_frame:parity=0:deint=interlaced")]
     public void TheConfiguredDeinterlacerIsUsed(string setting, string expected)
     {
         Assert.That(ValueOf(BuildWith(setting), "-vf"), Is.EqualTo(expected));
     }
 
     [TestCase("send_field", "yadif=mode=send_field:parity=0")]
-    [TestCase("send_frame", "yadif=mode=send_frame:parity=0")]
+    [TestCase("send_frame", "yadif=mode=send_frame:parity=0:deint=interlaced")]
     public void SettingsWrittenBeforeTheDeinterlacerWasSelectableStillWork(string setting, string expected)
     {
         Assert.That(ValueOf(BuildWith(setting), "-vf"), Is.EqualTo(expected));

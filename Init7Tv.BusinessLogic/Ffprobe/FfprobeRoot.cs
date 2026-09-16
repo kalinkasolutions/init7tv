@@ -22,26 +22,22 @@ public sealed class FfprobeRoot
     public double GetFrameRate => ParseRate(GetVideoStream?.RFrameRate);
 
     /// <summary>
-    /// Whether to deinterlace, taken from the coded frames themselves.
+    /// Whether the source is a broadcast rate that can carry interlaced frames.
     ///
-    /// Not from the stream level field_order: the same multicast reports "tt" or
-    /// "progressive" depending only on how long ffprobe watches it. The per
-    /// frame flag is unanimous on the channels tested, 289 of 289 interlaced for
-    /// SAT.1 and 279 of 279 progressive for SRF zwei. Frame rate is only a
-    /// fallback for when no frames were read.
+    /// Deliberately not decided from the sampled frames. The probe only sees a
+    /// couple of seconds, and SAT.1 sampled during an advert, which is shot
+    /// progressive, reports progressive and would then run un-deinterlaced
+    /// through the interlaced programme that follows. Which individual frames
+    /// get deinterlaced is the filter's job, not this one's.
+    ///
+    /// Nor from field_order, which is not dependable: the same multicast
+    /// reports "tt" or "progressive" depending only on how long ffprobe watches.
     /// </summary>
     public bool IsInterlaced
     {
         get
         {
-            var videoFrames = Frames.Where(x => x.MediaType == "video").ToArray();
-
-            if (videoFrames.Length == 0)
-            {
-                return GetFrameRate is > 0 and <= 30;
-            }
-
-            return videoFrames.Count(x => x.InterlacedFrame == 1) * 2 > videoFrames.Length;
+            return GetFrameRate is > 0 and <= 30;
         }
     }
 
