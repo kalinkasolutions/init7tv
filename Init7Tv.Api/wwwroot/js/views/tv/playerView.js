@@ -124,9 +124,10 @@ export const playerView = () => ({
         // while the playlist carries no LL-HLS parts for it to use.
         this.hls = new Hls({
             lowLatencyMode: false,
-            // segments are short, so sit further back than the default 3 of them
-            liveSyncDurationCount: 4,
-            liveMaxLatencyDurationCount: 12,
+            // as far back as the server has ready when a channel opens, and no
+            // further: these are counts of segments, so they track their length
+            liveSyncDurationCount: 2,
+            liveMaxLatencyDurationCount: 6,
             maxBufferLength: 30
         });
 

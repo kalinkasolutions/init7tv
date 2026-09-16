@@ -32,18 +32,18 @@ public sealed class StreamManager : IStreamManager, IDisposable
     private readonly Timer m_cleanupTimer;
     // HLS segments have to start on a keyframe, so the encoder is told to emit
     // one exactly this often and the segmenter cuts on those keyframes
-    // Short segments: the viewer joins sooner and the player gets a cushion of
-    // several segments rather than riding the live edge with nothing in hand.
     // Starting waits for SegmentsBeforeStart of media, and that wait is real
-    // time bound, so it is the floor on how fast a channel can open. One second
-    // costs about 15% more bitrate in keyframes and halves the wait.
+    // time bound, so their product is the floor on how fast a channel can open.
+    // The segment length is also the playlist's target duration, which is how
+    // often a player reloads it, and shorter segments cost bitrate: one second
+    // measured 15% more than two.
     /// <summary>Public so tests cannot drift from the value actually used.</summary>
-    public const int SegmentSeconds = 1;
+    public const int SegmentSeconds = 2;
     private const int PlaylistLength = 20;
 
-    // hls.js starts three target durations back from the live edge, so it needs
-    // that many before it can buffer anything ahead of the playhead
-    private const int SegmentsBeforeStart = 3;
+    // Enough that the player has something to sit back into rather than riding
+    // the live edge with nothing in hand; hls.js is told to stay this far back.
+    private const int SegmentsBeforeStart = 2;
     private static readonly TimeSpan SegmentDuration = TimeSpan.FromSeconds(SegmentSeconds);
 
     private readonly TimeSpan m_streamIdleTimeout = TimeSpan.FromSeconds(30);
