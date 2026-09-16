@@ -1,3 +1,7 @@
+// crypto.randomUUID only exists in a secure context, and the app is reachable
+// over plain http behind a proxy; ids only need to be unique within this list
+let nextNotificationId = 0;
+
 export const notificationView = () => ({
     maxNotifications: 4,
     timeOutSeconds: 5,
@@ -9,7 +13,7 @@ export const notificationView = () => ({
             this.removeFirst();
         }
 
-        const id = crypto.randomUUID();
+        const id = ++nextNotificationId;
         this.notifications.push({
             id: id,
             isSuccess: payload.type !== "error",
