@@ -30,8 +30,15 @@ public sealed class StreamManager : IStreamManager, IDisposable
     private readonly Timer m_cleanupTimer;
     // HLS segments have to start on a keyframe, so the encoder is told to emit
     // one exactly this often and the segmenter cuts on those keyframes
-    private const int SegmentSeconds = 6;
-    private const int PlaylistLength = 5;
+    // Short segments: the viewer joins sooner and the player gets a cushion of
+    // several segments rather than riding the live edge with nothing in hand.
+    /// <summary>Public so tests cannot drift from the value actually used.</summary>
+    public const int SegmentSeconds = 2;
+    private const int PlaylistLength = 12;
+
+    // hls.js starts three target durations back from the live edge, so it needs
+    // that many before it can buffer anything ahead of the playhead
+    private const int SegmentsBeforeStart = 3;
     private static readonly TimeSpan SegmentDuration = TimeSpan.FromSeconds(SegmentSeconds);
 
     // the encoder emits a keyframe every SegmentDuration, but it is measured in
@@ -41,6 +48,10 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
     private readonly TimeSpan m_streamIdleTimeout = TimeSpan.FromSeconds(30);
     private readonly TimeSpan m_ffprobeTimeout = TimeSpan.FromSeconds(20);
+
+    // a player handed a playlist with no segments retries a couple of times and
+    // then gives up, so starting waits until there is something to play
+    private readonly TimeSpan m_firstSegmentTimeout = TimeSpan.FromSeconds(30);
     private readonly TimeSpan m_timerDueTime = TimeSpan.FromSeconds(10);
     private readonly TimeSpan m_timerPeriod = TimeSpan.FromSeconds(10);
 
@@ -144,8 +155,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 return OperationResult<StreamDto>.Error("Failed to start stream");
             }
 
-            m_streamEventBus.Publish(GetCurrentStreams());
-
             _ = Task.Run(async () =>
             {
                 try
@@ -166,6 +175,15 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 }
             });
 
+
+            if (!await WaitForInitialSegments(stream))
+            {
+                m_logger.LogError("No segment was produced for stream: {StreamId}", streamId);
+                StopStream(streamId);
+                return OperationResult<StreamDto>.Error("The channel did not start streaming");
+            }
+
+            m_streamEventBus.Publish(GetCurrentStreams());
 
             return OperationResult<StreamDto>.Success(stream.ToDto());
         }
@@ -254,6 +272,32 @@ public sealed class StreamManager : IStreamManager, IDisposable
         {
             StopStream(stream.StreamId);
         }
+    }
+
+    /// <summary>False if ffmpeg died or produced too little in time.</summary>
+    private async Task<bool> WaitForInitialSegments(TvStream stream)
+    {
+        var deadline = DateTime.UtcNow + m_firstSegmentTimeout;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (stream.PlaylistLock)
+            {
+                if (stream.Playlist.Count >= SegmentsBeforeStart)
+                {
+                    return true;
+                }
+            }
+
+            if (stream.Ffmpeg.HasExited)
+            {
+                return false;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+
+        return false;
     }
 
     private async Task StreamLoopAsync(TvStream stream, CancellationToken cancellationToken)
