@@ -42,6 +42,9 @@ export const playerView = () => ({
         this.streamId = null;
         this.subtitles = [];
         this.selectedSubtitle = -1;
+        // they describe the channel being left, and showing them against the one
+        // arriving is worse than showing nothing for the moment it takes
+        this.languages = [];
 
         if (this.hls) {
             this.hls.destroy();

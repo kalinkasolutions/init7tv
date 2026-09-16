@@ -13,16 +13,40 @@ public class WebVttSegmentTest
     };
 
     private static string Build(IEnumerable<WebVttCue> cues, double start, double end) =>
-        WebVttSegment.Build(cues, TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end));
+        WebVttSegment.Build(cues, TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end),
+            (ulong)(start * 90_000));
 
     [Test]
     public void EverySegmentSaysWhereItsTimingsSit()
     {
-        // a player reads each segment on its own and has nothing else to go on
-        var body = Build([], 0, 2);
+        // a player reads each segment on its own and has nothing else to go on.
+        // The map has to name this segment's own presentation time: a zero there
+        // makes every caption arrive as early as the viewer joined the stream,
+        // because the player counts from the first picture it saw.
+        var body = Build([], 40, 42);
 
         Assert.That(body, Does.StartWith("WEBVTT\n"));
-        Assert.That(body, Does.Contain("X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:0"));
+        Assert.That(body, Does.Contain("X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:3600000"));
+    }
+
+    [Test]
+    public void CueTimesAreCountedFromTheSegment()
+    {
+        // they pair with the map above: the map says where zero is and the cue
+        // says how far past it the words belong
+        var body = Build([Cue(41.5, 42.25, "words")], 40, 44);
+
+        Assert.That(body, Does.Contain("00:00:01.500 --> 00:00:02.250"));
+    }
+
+    [Test]
+    public void ACaptionAlreadyOnScreenStartsWithTheSegment()
+    {
+        // its real start is before this segment, and a negative time cannot be
+        // written; it is on screen either way
+        var body = Build([Cue(39, 41, "carried over")], 40, 42);
+
+        Assert.That(body, Does.Contain("00:00:00.000 --> 00:00:01.000"));
     }
 
     [Test]
@@ -78,7 +102,7 @@ public class WebVttSegmentTest
     [Test]
     public void TimesAreWrittenAsTheFormatRequires()
     {
-        var body = Build([Cue(3661.5, 3662.25)], 3600, 3700);
+        var body = Build([Cue(3661.5, 3662.25)], 0, 3700);
 
         Assert.That(body, Does.Contain("01:01:01.500 --> 01:01:02.250"));
     }
@@ -108,5 +132,18 @@ public class WebVttSegmentTest
 
         Assert.That(body, Does.Contain("MPEGTS:0\n\n00:00:01.000"));
         Assert.That(body, Does.Contain("one\n\n00:00:03.000"));
+    }
+
+    [Test]
+    public void TheSameCaptionIsPlacedForEachSegmentItIsIn()
+    {
+        // it spans the boundary, so each segment counts it from its own start
+        var cue = Cue(41.5, 43.5, "spanning");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Build([cue], 40, 42), Does.Contain("00:00:01.500 --> 00:00:03.500"));
+            Assert.That(Build([cue], 42, 44), Does.Contain("00:00:00.000 --> 00:00:01.500"));
+        });
     }
 }

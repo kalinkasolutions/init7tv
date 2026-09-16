@@ -294,6 +294,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
         foreach (var segment in segments)
         {
+            sb.AppendLine($"#EXT-X-PROGRAM-DATE-TIME:{DateOf(stream, segment)}");
             sb.AppendLine($"#EXTINF:{segment.Duration.TotalSeconds.ToString("0.000", CultureInfo.InvariantCulture)},");
             sb.AppendLine($"/api/streaming/segment/{stream.StreamId}/{segment.Name}");
         }
@@ -336,6 +337,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
         foreach (var segment in segments)
         {
+            sb.AppendLine($"#EXT-X-PROGRAM-DATE-TIME:{DateOf(stream, segment)}");
             sb.AppendLine($"#EXTINF:{segment.Duration.TotalSeconds.ToString("0.000", CultureInfo.InvariantCulture)},");
             sb.AppendLine($"/api/streaming/subtitle/{stream.StreamId}/{Path.ChangeExtension(segment.Name, "vtt")}");
         }
@@ -373,7 +375,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
 
         return OperationResult<string>.Text(
-            WebVttSegment.Build(cues, start, start + segment.Duration), "text/vtt");
+            WebVttSegment.Build(cues, start, start + segment.Duration, segment.StartPts), "text/vtt");
     }
 
     public OperationResult<byte[]> GetSegment(string streamId, string name)
@@ -697,6 +699,15 @@ public sealed class StreamManager : IStreamManager, IDisposable
             }
         }
     }
+
+    /// <summary>
+    /// When a segment happened, as a date. The captions are a separate playlist,
+    /// and without this a player has no way of knowing which of its segments goes
+    /// with which picture: it numbers each list from wherever it joined.
+    /// </summary>
+    private static string DateOf(TvStream stream, TvSegment segment) =>
+        (stream.Epoch + PtsToTime(segment.StartPts)).ToString("yyyy-MM-ddTHH:mm:ss.fffZ",
+            CultureInfo.InvariantCulture);
 
     /// <summary>The 90 kHz clock the transport stream and the captions share.</summary>
     private static TimeSpan PtsToTime(ulong pts) =>

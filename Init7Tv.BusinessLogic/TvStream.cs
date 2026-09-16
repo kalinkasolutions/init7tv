@@ -31,6 +31,13 @@ public sealed class TvStream
     public int AudioStreamIndex { get; set; }
     public string GetStreamedLanguage => StreamInfo.GetAudioLanguage(AudioStreamIndex) ?? "unknown";
 
+    /// <summary>
+    /// Wall clock the stream's timeline is pinned to. Both playlists date their
+    /// segments from it, which is the only thing that tells a player the captions
+    /// and the pictures belong to the same moment.
+    /// </summary>
+    public DateTimeOffset Epoch { get; } = DateTimeOffset.UtcNow;
+
     /// <summary>The subtitle track being extracted, if the channel carries one.</summary>
     public SubtitleTrack? Subtitle { get; set; }
 

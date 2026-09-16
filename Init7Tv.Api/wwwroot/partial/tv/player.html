@@ -9,7 +9,7 @@
             <img :src="currentLogo" :alt="currentTitle"/>
         </template>
         <h2 x-text="currentTitle"></h2>
-        <div class="lang-select-wrapper" x-show="subtitles.length > 0" x-cloak>
+        <div class="lang-select-wrapper" x-show="!loading && subtitles.length > 0" x-cloak>
             <label for="sub-select">Subtitles</label>
             <select id="sub-select"
                     x-model.number="selectedSubtitle"
@@ -20,7 +20,7 @@
                 </template>
             </select>
         </div>
-        <div class="lang-select-wrapper" x-show="languages.length > 0">
+        <div class="lang-select-wrapper" x-show="!loading && languages.length > 0" x-cloak>
             <label for="lang-select">Language</label>
             <select id="lang-select"
                     x-model="selectedLanguage"
