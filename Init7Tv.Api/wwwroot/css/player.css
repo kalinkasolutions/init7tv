@@ -42,35 +42,30 @@
     margin-right: 0.3em;
 }
 
+/* Out of flow, so a loaded element cannot report the picture's own size as the
+   minimum height of everything around it and push the guide off the screen.
+   The wrapper is the player's box; this just fills it. */
 #player-container .player-wrapper video {
-    /* A definite width, not 100% capped afterwards: the percentage made it fill
-       the row first and snap back once the cap applied. */
-    width: 900px;
-    max-width: 100%;
-    /* Height is whatever the guide leaves, capped at the size it should be on a
-       roomy window. Every guessed reserve was wrong for some window height, so
-       the space decides rather than arithmetic, and the picture letterboxes
-       inside whatever box that gives. */
+    position: absolute;
+    inset: 0;
+    width: 100%;
     height: 100%;
-    max-height: 506px;
-    /* never squeezed to nothing: on a window where the cards wrap to two rows
-       the guide gives way and scrolls instead */
-    min-height: 200px;
     object-fit: contain;
     background-color: #000000;
 }
 
+/* The player's box, and the only thing that decides its size. A definite width
+   rather than 100%: the percentage made it fill the row first and snap back once
+   the cap applied, which read as a huge player. The height is whatever the guide
+   leaves between these two bounds, because every guessed reserve was wrong for
+   some window height. */
 #player-container .video-wrapper {
     position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     flex: 1 1 auto;
-    /* Sized to the video, not the row. At full width the loading overlay, which
-       is absolutely positioned against this, covered the whole width of the page
-       and read as a huge player before the picture appeared. */
-    width: auto;
+    width: 900px;
     max-width: 100%;
+    min-height: 200px;
+    max-height: 506px;
 }
 
 #player-container .player-loading {
@@ -111,7 +106,7 @@
         height: 44px;
     }
 
-    #player-container .player-wrapper video {
+    #player-container .video-wrapper {
         max-height: 40vh;
     }
 
