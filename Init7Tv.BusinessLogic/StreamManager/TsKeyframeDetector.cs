@@ -23,13 +23,6 @@ public sealed class TsKeyframeDetector
     private byte[]? m_pmt;
 
     /// <summary>
-    /// Presentation time of the most recent keyframe, on the 90 kHz clock of the
-    /// stream ffmpeg is writing. Subtitles are timed against the same clock, so
-    /// this is what lines a caption up with the segment it belongs in.
-    /// </summary>
-    public ulong? LastKeyframePts { get; private set; }
-
-    /// <summary>
     /// The most recent program tables. A segment has to carry them before any
     /// media or a demuxer that reads segments independently, as hls.js does,
     /// cannot tell what the streams are and drops everything until the next set.
@@ -67,48 +60,7 @@ public sealed class TsKeyframeDetector
             return false;
         }
 
-        if (pid != m_videoPid || !payloadStart || !HasRandomAccessIndicator(packet))
-        {
-            return false;
-        }
-
-        if (ReadPresentationTime(packet) is { } pts)
-        {
-            LastKeyframePts = pts;
-        }
-
-        return true;
-    }
-
-    /// <summary>PTS out of the PES header this packet starts, if it carries one.</summary>
-    private static ulong? ReadPresentationTime(ReadOnlySpan<byte> packet)
-    {
-        var adaptationFieldControl = (packet[3] >> 4) & 0x3;
-        var offset = 4;
-        if (adaptationFieldControl == 3)
-        {
-            offset += 1 + packet[4];
-        }
-
-        var payload = offset >= packet.Length ? [] : packet[offset..];
-
-        // start code, then stream id, then the two length bytes and two flag bytes
-        if (payload.Length < 14 || payload[0] != 0x00 || payload[1] != 0x00 || payload[2] != 0x01)
-        {
-            return null;
-        }
-
-        // PTS_DTS_flags: the high bit says a PTS follows the header length
-        if ((payload[7] & 0x80) == 0)
-        {
-            return null;
-        }
-
-        return (((ulong)(payload[9] >> 1) & 0x07) << 30)
-               | ((ulong)payload[10] << 22)
-               | ((ulong)(payload[11] >> 1) << 15)
-               | ((ulong)payload[12] << 7)
-               | ((ulong)payload[13] >> 1);
+        return pid == m_videoPid && payloadStart && HasRandomAccessIndicator(packet);
     }
 
     private static bool HasRandomAccessIndicator(ReadOnlySpan<byte> packet)

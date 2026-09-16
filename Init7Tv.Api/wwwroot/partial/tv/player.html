@@ -9,17 +9,6 @@
             <img :src="currentLogo" :alt="currentTitle"/>
         </template>
         <h2 x-text="currentTitle"></h2>
-        <div class="lang-select-wrapper" x-show="!loading && subtitles.length > 0" x-cloak>
-            <label for="sub-select">Subtitles</label>
-            <select id="sub-select"
-                    x-model.number="selectedSubtitle"
-                    @change="onSubtitleChange(selectedSubtitle)">
-                <option :value="-1">off</option>
-                <template x-for="s in subtitles" :key="s.index">
-                    <option :value="s.index" x-text="s.label"></option>
-                </template>
-            </select>
-        </div>
         <div class="lang-select-wrapper" x-show="!loading && languages.length > 0" x-cloak>
             <label for="lang-select">Language</label>
             <select id="lang-select"

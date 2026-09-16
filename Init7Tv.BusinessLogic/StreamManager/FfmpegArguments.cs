@@ -1,6 +1,5 @@
 using System.Globalization;
 using Init7Tv.BusinessLogic.Ffprobe;
-using Init7Tv.BusinessLogic.Subtitles;
 using Init7Tv.Dto;
 using Init7Tv.Dto.Settings;
 
@@ -19,31 +18,10 @@ public static class FfmpegArguments
         GeneralAppSettingsDto appSettings,
         FfprobeRoot streamInfo,
         bool useMultiCast,
-        int segmentSeconds,
-        SubtitleTrack? subtitle = null,
-        string? subtitleOutput = null
+        int segmentSeconds
     )
     {
         var args = new List<string> { "-loglevel", appSettings.FfmpegLogLevel };
-
-        var withSubtitles = subtitle != null && !string.IsNullOrWhiteSpace(subtitleOutput);
-        if (withSubtitles)
-        {
-            // the subtitle output is a named pipe that already exists, and without
-            // this ffmpeg refuses to write to anything already there
-            args.Add("-y");
-
-            // Teletext carries the whole service, pages of football tables and all.
-            // The page is named rather than asking for every subtitle page,
-            // because one stream carries several: arte D has German on 150 and
-            // French on 888, and asking for both returns them interleaved.
-            args.AddRange(["-txt_format", "text"]);
-            args.AddRange(["-txt_page", subtitle!.Page.ToString(CultureInfo.InvariantCulture)]);
-
-            // without this every caption is given an end hours away, so none of
-            // them ever clears and they pile up on top of each other
-            args.Add("-fix_sub_duration");
-        }
 
         if (useMultiCast)
         {
@@ -101,25 +79,8 @@ public static class FfmpegArguments
         args.AddRange(["-b:a", "128k"]);
         args.AddRange(["-ac", "2"]);
         args.AddRange(["-ar", "48000"]);
-        // The muxer holds output back by 1.4s by default and counts its timestamps
-        // from there, which puts the pictures on a different clock from the
-        // captions and shows them a beat early.
-        args.AddRange(["-muxdelay", "0"]);
-        args.AddRange(["-muxpreload", "0"]);
         args.AddRange(["-f", "mpegts"]);
         args.Add("pipe:1");
-
-        // A second output of the same process rather than a second ffmpeg, so the
-        // captions and the pictures are timed from one reading of the input. Two
-        // processes start at different moments and their timelines would have to
-        // be reconciled with nothing to reconcile them by.
-        if (withSubtitles)
-        {
-            args.AddRange(["-map", $"0:s:{subtitle!.SubtitleStreamIndex}"]);
-            args.AddRange(["-c:s", "webvtt"]);
-            args.AddRange(["-f", "webvtt"]);
-            args.Add(subtitleOutput!);
-        }
 
         return args.ToArray();
     }

@@ -10,8 +10,6 @@ export const playerView = () => ({
     events: null,
     loading: false,
     pendingStart: null,
-    subtitles: [],
-    selectedSubtitle: -1,
 
     init() {
         // the server tears a stream down when ffmpeg exits; without this the
@@ -40,8 +38,7 @@ export const playerView = () => ({
 
     stopPlayback() {
         this.streamId = null;
-        this.subtitles = [];
-        this.selectedSubtitle = -1;
+
         // they describe the channel being left, and showing them against the one
         // arriving is worse than showing nothing for the moment it takes
         this.languages = [];
@@ -105,17 +102,6 @@ export const playerView = () => ({
         localStorage.setItem("audio-stream-index", JSON.stringify(audioStreamIndex));
     },
 
-    /// -1 turns them off, which hls.js understands directly, so switching costs
-    /// nothing and does not restart the stream the way a language change does.
-    onSubtitleChange(index) {
-        if (!this.hls) {
-            return;
-        }
-
-        this.hls.subtitleTrack = index;
-        this.hls.subtitleDisplay = index >= 0;
-    },
-
     async onLanguageChange(audioStreamIndex) {
         if (!this.currentChannel) {
             return;
@@ -147,15 +133,6 @@ export const playerView = () => ({
             liveSyncDurationCount: 2,
             liveMaxLatencyDurationCount: 6,
             maxBufferLength: 30
-        });
-
-        // the channel only offers subtitles when it carries teletext, so the
-        // control appears once the manifest says there is a track to pick
-        this.hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (_, data) => {
-            this.subtitles = (data.subtitleTracks ?? []).map((t, index) => ({
-                index,
-                label: t.name || t.lang || `track ${index + 1}`
-            }));
         });
 
         this.hls.on(Hls.Events.MANIFEST_PARSED, () => {

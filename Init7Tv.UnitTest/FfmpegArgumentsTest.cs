@@ -1,6 +1,5 @@
 using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.StreamManager;
-using Init7Tv.BusinessLogic.Subtitles;
 using Init7Tv.Dto;
 using Init7Tv.Dto.Settings;
 
@@ -176,130 +175,6 @@ public class FfmpegArgumentsTest
         Assert.That(args, Does.Contain($"0:a:{audioStreamIndex}"));
     }
 
-    private static readonly SubtitleTrack Teletext =
-        new() { SubtitleStreamIndex = 1, Language = "deu", Page = 777 };
-
-    [Test]
-    public void WithNoSubtitleChosen_NothingAboutSubtitlesIsPassed()
-    {
-        var args = Build();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(args, Does.Not.Contain("-txt_page"));
-            Assert.That(args, Does.Not.Contain("-fix_sub_duration"));
-            Assert.That(args, Does.Not.Contain("-c:s"));
-            Assert.That(args[^1], Is.EqualTo("pipe:1"), "the transport stream is the only output");
-        });
-    }
-
-    [Test]
-    public void AChosenSubtitle_IsWrittenAsWebvttBesideTheStream()
-    {
-        var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
-            Teletext, "/tmp/subs.vtt");
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(ValueOf(args, "-c:s"), Is.EqualTo("webvtt"));
-            Assert.That(args, Does.Contain("0:s:1"), "the track is picked by its position among subtitles");
-            Assert.That(args[^1], Is.EqualTo("/tmp/subs.vtt"));
-            Assert.That(args.Count(x => x == "-f"), Is.EqualTo(2), "one format for each output");
-        });
-    }
-
-    [Test]
-    public void TheTransportStreamIsStillTheFirstOutput()
-    {
-        // the segmenter reads stdout, and a second output must not displace it
-        var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
-            Teletext, "/tmp/subs.vtt");
-
-        Assert.That(Array.IndexOf(args, "pipe:1"),
-            Is.LessThan(Array.IndexOf(args, "/tmp/subs.vtt")));
-    }
-
-    [Test]
-    public void OnlyTheChosenPageIsDecoded_AsText()
-    {
-        // teletext carries the whole service, and one stream carries several
-        // subtitle pages: asking for all of them mixes the languages together
-        var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
-            Teletext, "/tmp/subs.vtt");
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(ValueOf(args, "-txt_page"), Is.EqualTo("777"));
-            Assert.That(ValueOf(args, "-txt_format"), Is.EqualTo("text"));
-        });
-    }
-
-    [Test]
-    public void ADifferentPageIsAskedForByNumber()
-    {
-        var french = new SubtitleTrack { SubtitleStreamIndex = 0, Language = "fra", Page = 888 };
-
-        var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
-            french, "/tmp/subs.vtt");
-
-        Assert.That(ValueOf(args, "-txt_page"), Is.EqualTo("888"));
-    }
-
-    [Test]
-    public void TheSubtitlePipeIsWrittenToEvenThoughItExists()
-    {
-        // it is created before ffmpeg starts, and ffmpeg will not write over
-        // something already there unless told to
-        var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
-            Teletext, "/tmp/subs.vtt");
-
-        Assert.That(args, Does.Contain("-y"));
-    }
-
-    [Test]
-    public void WithoutSubtitles_NothingIsOverwritten()
-    {
-        // stdout is the only output then, and -y would be a licence to clobber
-        Assert.That(Build(), Does.Not.Contain("-y"));
-    }
-
-    [Test]
-    public void CaptionsAreGivenAnEnd()
-    {
-        // without this ffmpeg ends every caption hours later and they never clear
-        var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
-            Teletext, "/tmp/subs.vtt");
-
-        Assert.That(args, Does.Contain("-fix_sub_duration"));
-    }
-
-    [Test]
-    public void TheTeletextOptionsComeBeforeTheInput()
-    {
-        // they configure the decoder, which is chosen when the input is opened
-        var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
-            Teletext, "/tmp/subs.vtt");
-        var input = Array.IndexOf(args, "-i");
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(Array.IndexOf(args, "-txt_page"), Is.LessThan(input));
-            Assert.That(Array.IndexOf(args, "-txt_format"), Is.LessThan(input));
-            Assert.That(Array.IndexOf(args, "-fix_sub_duration"), Is.LessThan(input));
-        });
-    }
-
-    [Test]
-    public void ASubtitleWithNowhereToGo_IsNotMapped()
-    {
-        // the path is what ffmpeg writes to, and without one the output is invalid
-        var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
-            Teletext, null);
-
-        Assert.That(args, Does.Not.Contain("-c:s"));
-        Assert.That(args[^1], Is.EqualTo("pipe:1"));
-    }
-
     [Test]
     public void OutputIsAlwaysMpegtsOnStdout()
     {
@@ -308,26 +183,11 @@ public class FfmpegArgumentsTest
             Assert.Multiple(() =>
             {
                 Assert.That(ValueOf(args, "-f"), Is.EqualTo("mpegts"));
-                Assert.That(args[^1], Is.EqualTo("pipe:1"));   // no subtitle chosen here
+                Assert.That(args[^1], Is.EqualTo("pipe:1"));
                 Assert.That(ValueOf(args, "-c:v"), Is.EqualTo("libx264"));
                 Assert.That(ValueOf(args, "-pix_fmt"), Is.EqualTo("yuv420p"));
             });
         }
-    }
-
-    [Test]
-    public void TheMuxerCountsFromTheInput()
-    {
-        // it holds output back by 1.4s by default and starts its timestamps there.
-        // The captions are timed from the input, so the two would disagree by that
-        // much and every caption would arrive a beat before its picture.
-        var args = Build();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(ValueOf(args, "-muxdelay"), Is.EqualTo("0"));
-            Assert.That(ValueOf(args, "-muxpreload"), Is.EqualTo("0"));
-        });
     }
 
     [Test]

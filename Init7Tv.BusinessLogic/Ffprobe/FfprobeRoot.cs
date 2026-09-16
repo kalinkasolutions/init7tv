@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
-using Init7Tv.BusinessLogic.Subtitles;
 
 namespace Init7Tv.BusinessLogic.Ffprobe;
 
@@ -85,30 +84,6 @@ public sealed class FfprobeRoot
             .ToArray();
 
     private StreamInfo[] GetAudioStreams => Streams.Where(x => x.CodecType == "audio").ToArray();
-
-    /// <summary>
-    /// Subtitle tracks that can be turned into words, one for each teletext page
-    /// that carries captions. DVB subtitles are pictures of text and would need
-    /// recognising, so they are left out rather than offered and found empty.
-    /// </summary>
-    public SubtitleTrack[] GetSubtitleTracks =>
-        Streams
-            .Where(x => x.CodecType == "subtitle")
-            .Select((stream, index) => (stream, index))
-            .Where(x => x.stream.CodecName == TeletextCodec)
-            .SelectMany(x => TeletextDescriptor
-                .FromProbe(x.stream.Tags?.GetValueOrDefault("language"), x.stream.ExtraData)
-                .Where(component => component.IsSubtitle)
-                .Select(component => new SubtitleTrack
-                {
-                    SubtitleStreamIndex = x.index,
-                    Language = component.Language,
-                    Page = component.Page,
-                    HearingImpaired = component.HearingImpaired
-                }))
-            .ToArray();
-
-    private const string TeletextCodec = "dvb_teletext";
 
     /// <summary>Language of the nth audio stream, using ffmpeg's <c>-map 0:a:N</c> numbering.</summary>
     public string? GetAudioLanguage(int audioStreamIndex)

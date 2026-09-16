@@ -1,16 +1,12 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Init7Tv.BusinessLogic.Ffprobe;
-using Init7Tv.BusinessLogic.Subtitles;
 using Init7Tv.Dto;
 
 namespace Init7Tv.BusinessLogic;
 
-/// <summary>
-/// A published segment, how much media it holds, and where it sits on the 90 kHz
-/// clock of the stream. The last is what a caption is matched against.
-/// </summary>
-public readonly record struct TvSegment(string Name, TimeSpan Duration, ulong StartPts);
+/// <summary>A published segment and how much media it actually holds.</summary>
+public readonly record struct TvSegment(string Name, TimeSpan Duration);
 
 public sealed class TvStream
 {
@@ -30,22 +26,4 @@ public sealed class TvStream
     public required ChannelDto Channel { get; set; }
     public int AudioStreamIndex { get; set; }
     public string GetStreamedLanguage => StreamInfo.GetAudioLanguage(AudioStreamIndex) ?? "unknown";
-
-    /// <summary>
-    /// Wall clock the stream's timeline is pinned to. Both playlists date their
-    /// segments from it, which is the only thing that tells a player the captions
-    /// and the pictures belong to the same moment.
-    /// </summary>
-    public DateTimeOffset Epoch { get; } = DateTimeOffset.UtcNow;
-
-    /// <summary>The subtitle track being extracted, if the channel carries one.</summary>
-    public SubtitleTrack? Subtitle { get; set; }
-
-    /// <summary>The named pipe ffmpeg writes its WebVTT into.</summary>
-    public string? SubtitlePipe { get; set; }
-
-    /// <summary>Captions seen so far, trimmed with the playlist they belong to.</summary>
-    public List<WebVttCue> Cues { get; } = [];
-
-    public Lock CuesLock { get; } = new();
 }
