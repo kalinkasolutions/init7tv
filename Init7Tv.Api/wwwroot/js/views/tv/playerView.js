@@ -108,7 +108,16 @@ export const playerView = () => ({
             return;
         }
 
-        this.hls = new Hls();
+        // Defaults are tuned for adaptive VOD. This is a single rendition live
+        // stream with short segments, and low latency mode is on by default
+        // while the playlist carries no LL-HLS parts for it to use.
+        this.hls = new Hls({
+            lowLatencyMode: false,
+            // segments are short, so sit further back than the default 3 of them
+            liveSyncDurationCount: 4,
+            liveMaxLatencyDurationCount: 12,
+            maxBufferLength: 30
+        });
 
         this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
             player.play().catch(err => {

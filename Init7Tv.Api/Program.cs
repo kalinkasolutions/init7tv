@@ -16,6 +16,7 @@ using Init7Tv.Services;
 using Init7Tv.Shared;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -111,8 +112,15 @@ app.Use(async (context, next) =>
 
 app.UseDefaultFiles();
 
+// the static file middleware refuses to serve extensions it has no mime type
+// for, which silently 404s hls playlists and fragmented mp4 segments
+var contentTypes = new FileExtensionContentTypeProvider();
+contentTypes.Mappings[".m3u8"] = "application/vnd.apple.mpegurl";
+contentTypes.Mappings[".m4s"] = "video/iso.segment";
+
 app.UseStaticFiles(new StaticFileOptions
 {
+    ContentTypeProvider = contentTypes,
     // the frontend carries no version in its urls, so without this a browser
     // keeps serving the bundle it cached before an upgrade. no-cache still
     // allows caching, it just forces a revalidation that answers 304.
