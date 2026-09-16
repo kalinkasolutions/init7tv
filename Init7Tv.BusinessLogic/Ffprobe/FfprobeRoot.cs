@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Serialization;
 
 namespace Init7Tv.BusinessLogic.Ffprobe;
@@ -14,6 +15,36 @@ public sealed class FfprobeRoot
     public string? GetVideoCodec => GetVideoStream?.CodecName;
 
     public StreamInfo? GetVideoStream => Streams.FirstOrDefault(x => x.CodecType == "video");
+
+    public double GetFrameRate => ParseRate(GetVideoStream?.RFrameRate);
+
+    /// <summary>
+    /// Whether to deinterlace. Decided on frame rate rather than field_order,
+    /// because field_order is not dependable: the same multicast reports "tt"
+    /// or "progressive" purely depending on how long ffprobe watches it.
+    /// Broadcast frame rate does not wobble, and in DVB 50fps is progressive
+    /// while 25fps carries 50 interlaced fields.
+    /// </summary>
+    public bool IsInterlaced => GetFrameRate is > 0 and <= 30;
+
+    private static double ParseRate(string? rate)
+    {
+        if (string.IsNullOrWhiteSpace(rate))
+        {
+            return 0;
+        }
+
+        var parts = rate.Split('/');
+        if (parts.Length != 2
+            || !double.TryParse(parts[0], NumberStyles.Any, CultureInfo.InvariantCulture, out var numerator)
+            || !double.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out var denominator)
+            || denominator == 0)
+        {
+            return 0;
+        }
+
+        return numerator / denominator;
+    }
 
     public string[] GetLanguages =>
         GetAudioStreams

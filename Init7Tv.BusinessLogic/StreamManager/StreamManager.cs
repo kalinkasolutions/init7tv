@@ -107,7 +107,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 return OperationResult<StreamDto>.Success(existingStream.ToDto());
             }
 
-            var streamInfo = await GetFfprobeInfo(channelResult.Value.HlsSource);
+            var streamInfo = await GetFfprobeInfo(SourceUrl(channelResult.Value));
 
             if (streamInfo.HasError)
             {
@@ -123,7 +123,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
             {
                 StreamId = streamId,
                 AudioStreamIndex = audioStreamIndex,
-                Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex, appSettings),
+                Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex, appSettings, streamInfo.Value),
                 StreamInfo = streamInfo.Value,
                 Channel = channelResult.Value
             };
@@ -420,9 +420,18 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
     }
 
-    private Process GetFfmpegProcess(ChannelDto channel, int audioStreamIndex, GeneralAppSettingsDto appSettings)
+    /// <summary>The transport ffmpeg reads, which is also the one worth probing.</summary>
+    private string SourceUrl(ChannelDto channel) =>
+        m_options.UseMultiCast ? channel.UdpSource : channel.HlsSource;
+
+    private Process GetFfmpegProcess(
+        ChannelDto channel,
+        int audioStreamIndex,
+        GeneralAppSettingsDto appSettings,
+        FfprobeRoot streamInfo
+    )
     {
-        var ffmpegArgs = GetFfmpegArgs(channel, audioStreamIndex, appSettings);
+        var ffmpegArgs = GetFfmpegArgs(channel, audioStreamIndex, appSettings, streamInfo);
 
         m_logger.LogInformation("starting ffmpeg with args: {FfmpegArgs}", string.Join(' ', ffmpegArgs));
 
@@ -456,7 +465,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
         return process;
     }
 
-    private string[] GetFfmpegArgs(ChannelDto channel, int audioStreamIndex, GeneralAppSettingsDto appSettings)
+    private string[] GetFfmpegArgs(
+        ChannelDto channel,
+        int audioStreamIndex,
+        GeneralAppSettingsDto appSettings,
+        FfprobeRoot streamInfo
+    )
     {
         var args = new List<string> { "-loglevel", appSettings.FfmpegLogLevel };
 
@@ -484,11 +498,15 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
         args.AddRange(["-c:v", "libx264"]);
         args.AddRange(["-preset", appSettings.FfmpegPreset]);
-        // send_field keeps all 50 fields a second as 50 frames: send_frame emitted
-        // one frame per field pair and halved broadcast motion to 25fps, which
-        // reads as judder on pans. deint=interlaced leaves progressive channels
-        // alone rather than filtering and doubling them.
-        args.AddRange(["-vf", "yadif=mode=send_field:parity=auto:deint=interlaced"]);
+        if (streamInfo.IsInterlaced)
+        {
+            // send_field keeps all 50 fields a second as 50 frames; send_frame
+            // emitted one per field pair and halved broadcast motion to 25fps.
+            // deint stays at the default all: restricting it to frames flagged
+            // interlaced left the odd frame undoubled, and an output that
+            // alternates between 25 and 50fps stutters.
+            args.AddRange(["-vf", "yadif=mode=send_field:parity=auto"]);
+        }
         args.AddRange(["-pix_fmt", "yuv420p"]);
         args.AddRange(["-map", $"0:a:{audioStreamIndex}"]);
         args.AddRange(["-c:a", "aac"]);
@@ -506,7 +524,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
         var startInfo = new ProcessStartInfo
         {
             FileName = "ffprobe",
-            ArgumentList = { "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", streamUrl },
+            ArgumentList =
+            {
+                "-v", "quiet",
+                // a live multicast only yields data as it arrives, so bound the probe
+                "-analyzeduration", "3000000",
+                "-probesize", "5000000",
+                "-print_format", "json", "-show_format", "-show_streams", streamUrl
+            },
             RedirectStandardOutput = true,
             UseShellExecute = false,
             CreateNoWindow = true

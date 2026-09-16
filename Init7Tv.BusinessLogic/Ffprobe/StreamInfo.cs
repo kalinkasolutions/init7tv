@@ -31,6 +31,9 @@ public sealed class StreamInfo
     [JsonPropertyName("avg_frame_rate")]
     public string AvgFrameRate { get; set; } = string.Empty;
     
+    [JsonPropertyName("field_order")]
+    public string? FieldOrder { get; set; }
+
     [JsonPropertyName("pix_fmt")]
     public string PixelFormat { get; set; } = string.Empty;
 
