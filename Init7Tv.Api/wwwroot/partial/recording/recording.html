@@ -23,7 +23,7 @@
             <template x-for="programme in epg" :key="programme.id">
                 <div class="programme" :data-programme="programme.id"
                      :class="{ 'ended': hasEnded(programme), 'on-now': isOnNow(programme),
-                               'picked': isPlanned(programme) }">
+                               'picked': isPlanned(programme), 'found': foundId === programme.id }">
                     <div class="when">
                         <span class="span" x-text="span(programme)"></span>
                         <span class="length" x-text="`${minutes(programme)} min`"></span>

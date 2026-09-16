@@ -14,6 +14,9 @@ export const recordingView = () => ({
     /// Set while jumping to a pick, so the guide knows which day to open on and
     /// what to scroll to once it has loaded.
     goingTo: null,
+    /// The row just jumped to. Held as state rather than written onto the element,
+    /// because the guide owns that element's classes and a redraw wiped it.
+    foundId: null,
     highlightTimer: null,
 
     /// The source carries full days out to six and part of a seventh.
@@ -79,9 +82,10 @@ export const recordingView = () => ({
     },
 
     /// The row only exists once the day has been drawn, which is a frame or two
-    /// after the guide arrives rather than on the next tick.
-    scrollTo(id, attemptsLeft = 20) {
-        const row = this.$el.querySelector(`[data-programme="${id}"]`);
+    /// after the guide arrives rather than on the next tick. $root, not $el: this
+    /// runs from the pick's own click handler, where $el is that button.
+    scrollTo(id, attemptsLeft = 60) {
+        const row = this.$root.querySelector(`[data-programme="${id}"]`);
 
         if (!row) {
             if (attemptsLeft > 0) {
@@ -93,15 +97,10 @@ export const recordingView = () => ({
 
         row.scrollIntoView({block: 'center', behavior: 'smooth'});
 
-        // it is one row among forty, so say which one was meant. The timer from a
-        // previous jump would otherwise clear this one part way through.
+        // it is one row among forty, so say which one was meant
         clearTimeout(this.highlightTimer);
-        this.$el.querySelectorAll('.programme.found').forEach(x => x.classList.remove('found'));
-
-        row.classList.add('found');
-        this.highlightTimer = setTimeout(
-            () => this.$el.querySelectorAll('.programme.found').forEach(x => x.classList.remove('found')),
-            2500);
+        this.foundId = id;
+        this.highlightTimer = setTimeout(() => (this.foundId = null), 2500);
     },
 
     async showDay(offset) {

@@ -67,6 +67,8 @@
     align-items: flex-start;
     padding: 0.7em 1em;
     border-bottom: 1px solid #ffffff30;
+    /* held even when unmarked, so a row taking a marker does not shift sideways */
+    border-left: 3px solid transparent;
 }
 
 #recording .programme:hover {
@@ -205,8 +207,7 @@
 
 /* one row among forty, so it says which one was meant */
 #recording .programme.found {
-    outline: 2px solid #2fb12f;
-    outline-offset: -2px;
+    border-left: 6px solid #2fb12f;
 }
 
 #recording .planned-when {
