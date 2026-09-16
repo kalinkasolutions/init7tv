@@ -316,6 +316,21 @@ public class FfmpegArgumentsTest
     }
 
     [Test]
+    public void TheMuxerCountsFromTheInput()
+    {
+        // it holds output back by 1.4s by default and starts its timestamps there.
+        // The captions are timed from the input, so the two would disagree by that
+        // much and every caption would arrive a beat before its picture.
+        var args = Build();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ValueOf(args, "-muxdelay"), Is.EqualTo("0"));
+            Assert.That(ValueOf(args, "-muxpreload"), Is.EqualTo("0"));
+        });
+    }
+
+    [Test]
     public void AudioIsAlwaysNormalisedToStereoAac()
     {
         var args = Build();

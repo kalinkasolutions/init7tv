@@ -674,6 +674,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 {
                     stream.Cues.AddRange(cues);
                 }
+
             }
         }
         catch (OperationCanceledException)

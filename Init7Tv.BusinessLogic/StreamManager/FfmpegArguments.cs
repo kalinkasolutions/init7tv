@@ -101,6 +101,11 @@ public static class FfmpegArguments
         args.AddRange(["-b:a", "128k"]);
         args.AddRange(["-ac", "2"]);
         args.AddRange(["-ar", "48000"]);
+        // The muxer holds output back by 1.4s by default and counts its timestamps
+        // from there, which puts the pictures on a different clock from the
+        // captions and shows them a beat early.
+        args.AddRange(["-muxdelay", "0"]);
+        args.AddRange(["-muxpreload", "0"]);
         args.AddRange(["-f", "mpegts"]);
         args.Add("pipe:1");
 
