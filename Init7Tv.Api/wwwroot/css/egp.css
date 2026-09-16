@@ -21,10 +21,17 @@
 #epg .epg-progress {
     position: absolute;
     inset: 0;
-    z-index: -1;
     background: rgba(81, 81, 138, 0.58);
     transform: scaleX(0);
     transform-origin: left;
+}
+
+/* the fill is absolutely positioned, so the text needs to be positioned too or
+   it paints underneath. z-index -1 is not an option here: .epg-data is
+   transparent and creates no stacking context, so it hid the fill behind the
+   page background instead. */
+#epg .epg-data > *:not(.epg-progress) {
+    position: relative;
 }
 
 #epg .description {
