@@ -43,8 +43,10 @@
 }
 
 #player-container .player-wrapper video {
-    width: 100%;
-    max-width: 900px;
+    /* A definite width, not 100% capped afterwards: the percentage made it fill
+       the row first and snap back once the cap applied. */
+    width: 900px;
+    max-width: 100%;
     height: auto;
     /* the picture letterboxes inside this, so 4:3 and 16:9 both fit */
     aspect-ratio: 16 / 9;

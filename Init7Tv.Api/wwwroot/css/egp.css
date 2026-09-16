@@ -7,13 +7,11 @@
     align-items: flex-start;
     align-content: flex-start;
     flex-wrap: wrap;
-    /* whatever the player leaves, and scrolled here rather than by the page */
-    flex: 1 1 auto;
-    /* always worth showing something, the player gives way instead */
-    min-height: 8rem;
-    overflow-y: auto;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-    scrollbar-width: thin;
+    /* Sized by its content here: there is room for the cards in full, and a
+       scrollbar inside them reads as broken. Narrow screens take what is left
+       and scroll instead, see below.
+    */
+    flex: 0 0 auto;
 }
 
 #epg .epg-data {
@@ -73,4 +71,16 @@
 #epg .ends-at,
 #epg .starts-at {
     white-space: nowrap;
+}
+/* Short and narrow: the player has already given up what it can, so the guide
+   takes the remaining height and scrolls inside itself rather than pushing the
+   player off the screen. */
+@media (max-width: 1100px) {
+    #epg {
+        flex: 1 1 auto;
+        min-height: 6rem;
+        overflow-y: auto;
+        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+        scrollbar-width: thin;
+    }
 }
