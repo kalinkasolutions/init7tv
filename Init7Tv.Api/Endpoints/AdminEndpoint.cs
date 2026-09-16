@@ -1,5 +1,6 @@
 using Init7Tv.BusinessLogic.AppSettingsService;
 using Init7Tv.BusinessLogic.Email;
+using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.BusinessLogic.User;
 using Init7Tv.Dto.Admin;
 using Init7Tv.Dto.Settings;
@@ -85,9 +86,23 @@ public static class AdminEndpoint
         return (await appSettingsService.GetGeneralSettingsAsync()).ToHttpResult();
     }
 
-    private static async Task<IResult> UpdateGeneralAppSettingsAsync(GeneralAppSettingsDto appSettingsDto, IAppSettingsService appSettingsService)
+    private static async Task<IResult> UpdateGeneralAppSettingsAsync(
+        GeneralAppSettingsDto appSettingsDto,
+        IAppSettingsService appSettingsService,
+        IStreamManager streamManager
+    )
     {
-        return (await appSettingsService.UpdateGeneralSettingsAsync(appSettingsDto)).ToHttpResult();
+        var result = await appSettingsService.UpdateGeneralSettingsAsync(appSettingsDto);
+
+        if (result.IsSuccess)
+        {
+            // a running stream keeps the ffmpeg it was started with, and starting
+            // one again reuses it by id, so these would not apply until every
+            // viewer had left the channel
+            streamManager.StopAllStreams();
+        }
+
+        return result.ToHttpResult();
     }
 
     private static async Task<IResult> SendTestMail(IEmailService emailService)

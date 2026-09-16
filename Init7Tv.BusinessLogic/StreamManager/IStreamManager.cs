@@ -10,4 +10,7 @@ public interface IStreamManager
     OperationResult<string> GetPlaylist(string streamId, string userName);
     OperationResult<byte[]> GetSegment(string streamId, string name);
     CurrentStreamDto[] GetCurrentStreams();
+
+    /// <summary>Drops every running stream so the next start picks up new settings.</summary>
+    void StopAllStreams();
 }

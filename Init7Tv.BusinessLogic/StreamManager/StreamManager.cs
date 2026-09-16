@@ -253,6 +253,16 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }).ToArray();
     }
 
+    public void StopAllStreams()
+    {
+        foreach (var streamId in m_streams.Keys.ToArray())
+        {
+            StopStream(streamId);
+        }
+
+        m_streamEventBus.Publish(GetCurrentStreams());
+    }
+
     public void Dispose()
     {
         if (m_disposed)
