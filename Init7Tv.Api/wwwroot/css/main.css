@@ -137,6 +137,9 @@ i {
 main.admin {
     flex-direction: column;
     flex: unset;
+    /* a row of a name, an address and two roles reads badly when it is stretched
+       the width of a large monitor */
+    max-width: 75rem;
 }
 
 main input {

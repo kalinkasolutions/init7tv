@@ -9,9 +9,21 @@
 
 
 .box {
+    --box-inset: 1rem;
     border: 1px solid #ffffff80;
     margin: 1em 1em 0 1em;
-    padding: 0.5em;
+    /* Nothing at the sides: what is inside carries that, so a striped row can run
+       the full width of the box and still line its text up with the heading. */
+    padding: 0 0 0.5em;
+}
+
+.box > h2 {
+    padding: 0.5em var(--box-inset, 1rem);
+}
+
+/* they exist for the inputs that follow them and have nothing to say */
+.box label:empty {
+    display: none;
 }
 
 .flex-row .box {
