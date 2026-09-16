@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
+using Init7Tv.BusinessLogic.Subtitles;
 
 namespace Init7Tv.BusinessLogic.Ffprobe;
 
@@ -84,6 +85,25 @@ public sealed class FfprobeRoot
             .ToArray();
 
     private StreamInfo[] GetAudioStreams => Streams.Where(x => x.CodecType == "audio").ToArray();
+
+    /// <summary>
+    /// Subtitle tracks that can be turned into words. Teletext decodes to text;
+    /// DVB subtitles are pictures of text and would need recognising, so they are
+    /// left out rather than offered and then found empty.
+    /// </summary>
+    public SubtitleTrack[] GetSubtitleTracks =>
+        Streams
+            .Where(x => x.CodecType == "subtitle")
+            .Select((stream, index) => (stream, index))
+            .Where(x => x.stream.CodecName == TeletextCodec)
+            .Select(x => new SubtitleTrack
+            {
+                SubtitleStreamIndex = x.index,
+                Language = x.stream.Tags?.GetValueOrDefault("language") ?? "und"
+            })
+            .ToArray();
+
+    private const string TeletextCodec = "dvb_teletext";
 
     /// <summary>Language of the nth audio stream, using ffmpeg's <c>-map 0:a:N</c> numbering.</summary>
     public string? GetAudioLanguage(int audioStreamIndex)
