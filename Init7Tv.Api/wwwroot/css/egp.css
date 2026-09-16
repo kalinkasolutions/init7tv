@@ -4,8 +4,16 @@
     flex-direction: row;
     gap: 1em;
     justify-content: center;
-    align-items: stretch;
+    align-items: flex-start;
+    align-content: flex-start;
     flex-wrap: wrap;
+    /* whatever the player leaves, and scrolled here rather than by the page */
+    flex: 1 1 auto;
+    /* always worth showing something, the player gives way instead */
+    min-height: 8rem;
+    overflow-y: auto;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    scrollbar-width: thin;
 }
 
 #epg .epg-data {
@@ -65,21 +73,4 @@
 #epg .ends-at,
 #epg .starts-at {
     white-space: nowrap;
-}
-/* Sits above the guide rather than inside it, so it is still there to press
-   once the guide is hidden. */
-.epg-controls {
-    display: flex;
-    justify-content: flex-end;
-    padding: 0 1em;
-}
-
-.epg-toggle {
-    font-size: 0.8rem;
-    opacity: 0.75;
-    padding: 0.4em 0.2em;
-}
-
-.epg-toggle:hover {
-    opacity: 1;
 }

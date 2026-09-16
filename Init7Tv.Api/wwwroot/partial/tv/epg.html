@@ -1,10 +1,4 @@
-<div class="epg-controls">
-    <button class="epg-toggle link-button" @click="$store.ui.toggleEpg()"
-            :aria-expanded="$store.ui.epgVisible"
-            x-text="$store.ui.epgVisible ? 'hide guide' : 'show guide'"></button>
-</div>
-
-<div id="epg" x-data="epgView()" x-show="$store.ui.epgVisible" x-cloak
+<div id="epg" x-data="epgView()"
      @channel-selected.window="await getEpg($event.detail.channel)">
     <template x-if="current">
         <div class="epg-data">

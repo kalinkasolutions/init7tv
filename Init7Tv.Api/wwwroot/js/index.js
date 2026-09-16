@@ -11,8 +11,6 @@ import {epgView} from "./views/tv/epgView.js";
 // shared between the header, the sidebar and the guide
 Alpine.store('ui', {
     menuOpen: false,
-    // remembered, so hiding the guide sticks between visits
-    epgVisible: localStorage.getItem('epg-visible') !== 'false',
 
     toggleMenu() {
         this.menuOpen = !this.menuOpen;
@@ -20,11 +18,6 @@ Alpine.store('ui', {
 
     closeMenu() {
         this.menuOpen = false;
-    },
-
-    toggleEpg() {
-        this.epgVisible = !this.epgVisible;
-        localStorage.setItem('epg-visible', String(this.epgVisible));
     }
 });
 

@@ -7,6 +7,9 @@
     display: flex;
     flex-direction: column;
     margin-bottom: 1em;
+    /* may shrink, so a miscalculated reserve cannot push the guide off screen */
+    flex: 0 1 auto;
+    min-height: 0;
 }
 
 #player-container .player-wrapper {
@@ -43,7 +46,11 @@
     height: auto;
     /* the picture letterboxes inside this, so 4:3 and 16:9 both fit */
     aspect-ratio: 16 / 9;
-    max-height: 60vh;
+    /* Shrinks rather than pushing the guide off the page. The reserve covers the
+       header, the channel title bar above the video, the margins and enough of
+       the guide to be worth having, so the view never needs to scroll however
+       short the window is. */
+    max-height: calc(100vh - 24rem);
     background-color: #000000;
 }
 
@@ -91,7 +98,8 @@
     }
 
     #player-container .player-wrapper video {
-        max-height: 45vh;
+        /* the header and the title bar are both shorter here */
+        max-height: calc(100vh - 19rem);
     }
 
     #player-container .lang-select-wrapper {
