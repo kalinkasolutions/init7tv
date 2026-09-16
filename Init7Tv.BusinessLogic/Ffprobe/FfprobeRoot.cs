@@ -8,6 +8,9 @@ public sealed class FfprobeRoot
     [JsonPropertyName("streams")]
     public List<StreamInfo> Streams { get; set; } = [];
 
+    [JsonPropertyName("frames")]
+    public List<FrameInfo> Frames { get; set; } = [];
+
     [JsonPropertyName("format")]
     public FormatInfo Format { get; set; } = new();
 
@@ -19,13 +22,44 @@ public sealed class FfprobeRoot
     public double GetFrameRate => ParseRate(GetVideoStream?.RFrameRate);
 
     /// <summary>
-    /// Whether to deinterlace. Decided on frame rate rather than field_order,
-    /// because field_order is not dependable: the same multicast reports "tt"
-    /// or "progressive" purely depending on how long ffprobe watches it.
-    /// Broadcast frame rate does not wobble, and in DVB 50fps is progressive
-    /// while 25fps carries 50 interlaced fields.
+    /// Whether to deinterlace, taken from the coded frames themselves.
+    ///
+    /// Not from the stream level field_order: the same multicast reports "tt" or
+    /// "progressive" depending only on how long ffprobe watches it. The per
+    /// frame flag is unanimous on the channels tested, 289 of 289 interlaced for
+    /// SAT.1 and 279 of 279 progressive for SRF zwei. Frame rate is only a
+    /// fallback for when no frames were read.
     /// </summary>
-    public bool IsInterlaced => GetFrameRate is > 0 and <= 30;
+    public bool IsInterlaced
+    {
+        get
+        {
+            var videoFrames = Frames.Where(x => x.MediaType == "video").ToArray();
+
+            if (videoFrames.Length == 0)
+            {
+                return GetFrameRate is > 0 and <= 30;
+            }
+
+            return videoFrames.Count(x => x.InterlacedFrame == 1) * 2 > videoFrames.Length;
+        }
+    }
+
+    /// <summary>
+    /// Field order of the interlaced frames. yadif's parity=auto reads the
+    /// stream level metadata, which on these multicasts is not dependable, so
+    /// it is told explicitly.
+    /// </summary>
+    public bool IsTopFieldFirst
+    {
+        get
+        {
+            var interlaced = Frames.Where(x => x.MediaType == "video" && x.InterlacedFrame == 1).ToArray();
+
+            // tff is the broadcast norm, and the right guess when nothing was read
+            return interlaced.Length == 0 || interlaced.Count(x => x.TopFieldFirst == 1) * 2 >= interlaced.Length;
+        }
+    }
 
     private static double ParseRate(string? rate)
     {

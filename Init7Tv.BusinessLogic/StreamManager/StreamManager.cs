@@ -431,7 +431,8 @@ public sealed class StreamManager : IStreamManager, IDisposable
         FfprobeRoot streamInfo
     )
     {
-        var ffmpegArgs = GetFfmpegArgs(channel, audioStreamIndex, appSettings, streamInfo);
+        var ffmpegArgs = FfmpegArguments.Build(
+            channel, audioStreamIndex, appSettings, streamInfo, m_options.UseMultiCast, SegmentSeconds);
 
         m_logger.LogInformation("starting ffmpeg with args: {FfmpegArgs}", string.Join(' ', ffmpegArgs));
 
@@ -465,62 +466,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
         return process;
     }
 
-    private string[] GetFfmpegArgs(
-        ChannelDto channel,
-        int audioStreamIndex,
-        GeneralAppSettingsDto appSettings,
-        FfprobeRoot streamInfo
-    )
-    {
-        var args = new List<string> { "-loglevel", appSettings.FfmpegLogLevel };
-
-        if (m_options.UseMultiCast)
-        {
-            args.AddRange(["-fflags", "+genpts+discardcorrupt"]);
-            args.AddRange(["-flags", "low_delay"]);
-            args.AddRange(["-analyzeduration", "5000000"]);
-            args.AddRange(["-probesize", "10000000"]);
-            args.AddRange(["-i", $"{channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1"]);
-        }
-        else
-        {
-            args.AddRange(["-i", channel.HlsSource]);
-        }
-
-        args.AddRange(["-map", "0:v:0"]);
-
-        // a keyframe exactly every segment, and nothing else: -g is a frame count
-        // so libx264's default 250 lands between the forced ones at 50fps, and
-        // scene cuts would add more. Both make segments span uneven media.
-        args.AddRange(["-force_key_frames", $"expr:gte(t,n_forced*{SegmentSeconds})"]);
-        args.AddRange(["-g", "600"]);
-        args.AddRange(["-x264-params", "scenecut=0"]);
-
-        args.AddRange(["-c:v", "libx264"]);
-        args.AddRange(["-preset", appSettings.FfmpegPreset]);
-        if (streamInfo.IsInterlaced)
-        {
-            // send_frame, one output per input frame. send_field was tried, on the
-            // assumption that 25fps interlaced carries 50 distinct moments, but
-            // this material is 25p in an interlaced container: both fields are the
-            // same instant, so field doubling reconstructed that instant twice and
-            // added a wobble without adding any motion. Measured on SAT.1, the
-            // difference between consecutive frames was uniform with send_frame
-            // (ratio 1.01) and alternated 3.6x with send_field.
-            args.AddRange(["-vf", "yadif=mode=send_frame:parity=auto"]);
-        }
-        args.AddRange(["-pix_fmt", "yuv420p"]);
-        args.AddRange(["-map", $"0:a:{audioStreamIndex}"]);
-        args.AddRange(["-c:a", "aac"]);
-        args.AddRange(["-b:a", "128k"]);
-        args.AddRange(["-ac", "2"]);
-        args.AddRange(["-ar", "48000"]);
-        args.AddRange(["-f", "mpegts"]);
-        args.Add("pipe:1");
-
-        return args.ToArray();
-    }
-
     private async Task<OperationResult<FfprobeRoot>> GetFfprobeInfo(string streamUrl)
     {
         var startInfo = new ProcessStartInfo
@@ -532,7 +477,11 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 // a live multicast only yields data as it arrives, so bound the probe
                 "-analyzeduration", "3000000",
                 "-probesize", "5000000",
-                "-print_format", "json", "-show_format", "-show_streams", streamUrl
+                "-print_format", "json",
+                // a couple of seconds of frames, to read interlaced_frame
+                "-read_intervals", "%+2",
+                "-show_entries", "stream:format:frame=media_type,interlaced_frame,top_field_first",
+                streamUrl
             },
             RedirectStandardOutput = true,
             UseShellExecute = false,
