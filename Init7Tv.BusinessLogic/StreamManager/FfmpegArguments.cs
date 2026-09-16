@@ -1,5 +1,6 @@
 using System.Globalization;
 using Init7Tv.BusinessLogic.Ffprobe;
+using Init7Tv.BusinessLogic.Subtitles;
 using Init7Tv.Dto;
 using Init7Tv.Dto.Settings;
 
@@ -18,10 +19,26 @@ public static class FfmpegArguments
         GeneralAppSettingsDto appSettings,
         FfprobeRoot streamInfo,
         bool useMultiCast,
-        int segmentSeconds
+        int segmentSeconds,
+        SubtitleTrack? subtitle = null,
+        string? subtitleOutput = null
     )
     {
         var args = new List<string> { "-loglevel", appSettings.FfmpegLogLevel };
+
+        var withSubtitles = subtitle != null && !string.IsNullOrWhiteSpace(subtitleOutput);
+        if (withSubtitles)
+        {
+            // Teletext carries the whole service, pages of football tables and all,
+            // and the default is to decode every one of them. Only the subtitle
+            // pages are wanted, as text rather than as pictures of text.
+            args.AddRange(["-txt_format", "text"]);
+            args.AddRange(["-txt_page", "subtitle"]);
+
+            // without this every caption is given an end hours away, so none of
+            // them ever clears and they pile up on top of each other
+            args.Add("-fix_sub_duration");
+        }
 
         if (useMultiCast)
         {
@@ -81,6 +98,18 @@ public static class FfmpegArguments
         args.AddRange(["-ar", "48000"]);
         args.AddRange(["-f", "mpegts"]);
         args.Add("pipe:1");
+
+        // A second output of the same process rather than a second ffmpeg, so the
+        // captions and the pictures are timed from one reading of the input. Two
+        // processes start at different moments and their timelines would have to
+        // be reconciled with nothing to reconcile them by.
+        if (withSubtitles)
+        {
+            args.AddRange(["-map", $"0:s:{subtitle!.SubtitleStreamIndex}"]);
+            args.AddRange(["-c:s", "webvtt"]);
+            args.AddRange(["-f", "webvtt"]);
+            args.Add(subtitleOutput!);
+        }
 
         return args.ToArray();
     }
