@@ -15,6 +15,11 @@ async function request(url, options = {}) {
 
         notify("Error", await errorMessage(res, url), "error");
     } catch (e) {
+        // the caller gave up on this request on purpose
+        if (e.name === "AbortError") {
+            return null;
+        }
+
         notify("Error", e.message, "error");
     }
 
@@ -37,8 +42,8 @@ async function errorMessage(res, url) {
     return body.title ?? body.error ?? `Request failed with status ${res.status}.`;
 }
 
-export function get(url) {
-    return request(url);
+export function get(url, options) {
+    return request(url, options);
 }
 
 export function postJson(url, body) {

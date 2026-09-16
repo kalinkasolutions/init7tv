@@ -9,6 +9,7 @@ export const playerView = () => ({
     streamId: null,
     events: null,
     loading: false,
+    pendingStart: null,
 
     init() {
         // the server tears a stream down when ffmpeg exits; without this the
@@ -67,10 +68,16 @@ export const playerView = () => ({
         // the server stops the previous stream as soon as this one is asked for,
         // so keep the old player from polling a playlist that is already gone
         this.stopPlayback();
+
+        // A start still waiting for its first segments is about to be stopped by
+        // this one, and would report that as a failure over the channel now
+        // playing. The viewer has moved on, so drop it.
+        this.pendingStart?.abort();
+        const start = this.pendingStart = new AbortController();
         this.loading = true;
 
         try {
-            const streamId = await this.startStream(channel.channelId, audioStreamIndex);
+            const streamId = await this.startStream(channel.channelId, audioStreamIndex, start.signal);
             if (streamId) {
                 this.selectedLanguage = audioStreamIndex;
                 this.startHls(streamId);
@@ -78,7 +85,11 @@ export const playerView = () => ({
                 this.saveLastChannelInfo(audioStreamIndex);
             }
         } finally {
-            this.loading = false;
+            // a superseded start must not clear the spinner the newer one put up
+            if (this.pendingStart === start) {
+                this.pendingStart = null;
+                this.loading = false;
+            }
         }
     },
 
@@ -147,14 +158,14 @@ export const playerView = () => ({
         player.addEventListener("play", () => this.hls?.startLoad(), {once: true});
     },
 
-    async startStream(channelId, audioStreamIndex = null) {
+    async startStream(channelId, audioStreamIndex = null, signal = null) {
         const params = new URLSearchParams({channelId});
 
         if (audioStreamIndex !== null) {
             params.set("audioStreamIndex", audioStreamIndex);
         }
 
-        const stream = await get(`/api/streaming/start-stream?${params}`);
+        const stream = await get(`/api/streaming/start-stream?${params}`, {signal});
         if (!stream) {
             return null;
         }

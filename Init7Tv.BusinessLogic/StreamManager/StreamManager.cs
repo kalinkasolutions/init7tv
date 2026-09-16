@@ -189,6 +189,15 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
             if (!await WaitForInitialSegments(stream))
             {
+                // Someone stopped it while it was starting, which happens when the
+                // viewer picks another channel before this one is up. Not a
+                // failure, and it is already gone, so leave it alone.
+                if (stream.CancellationToken.IsCancellationRequested)
+                {
+                    m_logger.LogInformation("Stream was stopped while starting: {StreamId}", streamId);
+                    return OperationResult<StreamDto>.Error("The channel was closed before it started");
+                }
+
                 m_logger.LogError("No segment was produced for stream: {StreamId}", streamId);
                 StopStream(streamId);
                 return OperationResult<StreamDto>.Error("The channel did not start streaming");
