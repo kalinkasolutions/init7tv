@@ -21,7 +21,7 @@
             </p>
 
             <template x-for="programme in epg" :key="programme.id">
-                <div class="programme"
+                <div class="programme" :data-programme="programme.id"
                      :class="{ 'ended': hasEnded(programme), 'on-now': isOnNow(programme),
                                'picked': isPlanned(programme) }">
                     <div class="when">
@@ -63,7 +63,10 @@
 
             <template x-for="entry in plannedInOrder" :key="entry.id">
                 <div class="planned-item">
-                    <div>
+                    <div class="planned-open" role="button" tabindex="0"
+                         :title="`Show ${entry.title} in the guide`"
+                         @click="await openPlanned(entry)"
+                         @keydown.enter="await openPlanned(entry)">
                         <span class="planned-when" x-text="plannedOn(entry)"></span>
                         <span class="planned-channel" x-text="entry.channelName"></span>
                         <span class="planned-title" x-text="entry.title"></span>

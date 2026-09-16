@@ -11,6 +11,9 @@ export const recordingView = () => ({
     day: 0,
     loading: false,
     planned: [],
+    /// Set while jumping to a pick, so the guide knows which day to open on and
+    /// what to scroll to once it has loaded.
+    goingTo: null,
 
     /// The source carries full days out to six and part of a seventh.
     days: Array.from({length: 7}, (_, offset) => {
@@ -40,8 +43,57 @@ export const recordingView = () => ({
 
     async selectChannel(channel) {
         this.channel = channel;
-        this.day = 0;
+        this.day = this.goingTo ? this.goingTo.day : 0;
         await this.load();
+
+        if (this.goingTo) {
+            const id = this.goingTo.id;
+            this.goingTo = null;
+            this.scrollTo(id);
+        }
+    },
+
+    /// Opens the guide where a pick sits: its channel, its day, scrolled to it.
+    openPlanned(entry) {
+        this.goingTo = {id: entry.id, day: this.dayOffsetOf(entry.lower)};
+
+        if (this.channel?.channelId === entry.channelId) {
+            // already here, so nothing will announce a change
+            this.selectChannel(this.channel);
+            return;
+        }
+
+        window.dispatchEvent(new CustomEvent('select-channel', {
+            detail: {channelId: entry.channelId}
+        }));
+    },
+
+    /// Whole days between today and the one a programme starts on, counted
+    /// locally so a programme late tonight does not read as tomorrow.
+    dayOffsetOf(when) {
+        const midnight = date => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const days = Math.round((midnight(new Date(when)) - midnight(new Date())) / 86_400_000);
+        return Math.min(Math.max(days, 0), this.days.length - 1);
+    },
+
+    /// The row only exists once the day has been drawn, which is a frame or two
+    /// after the guide arrives rather than on the next tick.
+    scrollTo(id, attemptsLeft = 20) {
+        const row = this.$el.querySelector(`[data-programme="${id}"]`);
+
+        if (!row) {
+            if (attemptsLeft > 0) {
+                requestAnimationFrame(() => this.scrollTo(id, attemptsLeft - 1));
+            }
+
+            return;
+        }
+
+        row.scrollIntoView({block: 'center', behavior: 'smooth'});
+
+        // it is one row among forty, so say which one was meant
+        row.classList.add('found');
+        setTimeout(() => row.classList.remove('found'), 2500);
     },
 
     async showDay(offset) {

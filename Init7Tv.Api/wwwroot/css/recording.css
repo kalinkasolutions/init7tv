@@ -193,6 +193,22 @@
     min-width: 0;
 }
 
+#recording .planned-open {
+    cursor: pointer;
+    flex: 1 1 auto;
+}
+
+#recording .planned-open:hover .planned-title,
+#recording .planned-open:focus-visible .planned-title {
+    color: #2fb12f;
+}
+
+/* one row among forty, so it says which one was meant */
+#recording .programme.found {
+    outline: 2px solid #2fb12f;
+    outline-offset: -2px;
+}
+
 #recording .planned-when {
     font-size: 0.8em;
     color: #2fb12f;

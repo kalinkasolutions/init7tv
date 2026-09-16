@@ -16,6 +16,20 @@ export const sidebarView = () => ({
         if (this.$store.ui.restoreLastChannel) {
             this.dispatchLastWatchedChannel();
         }
+
+        // anything that knows a channel only by its id can ask for it, and the
+        // list stays the one place that decides what is selected
+        this.onSelectChannel = event => {
+            const channel = this.allChannels.find(c => c.channelId === event.detail.channelId);
+            if (channel) {
+                this.channelSelected(channel);
+            }
+        };
+        window.addEventListener('select-channel', this.onSelectChannel);
+    },
+
+    destroy() {
+        window.removeEventListener('select-channel', this.onSelectChannel);
     },
 
     searchChannel(event) {
