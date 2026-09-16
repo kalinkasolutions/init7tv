@@ -11,6 +11,7 @@ import {epgView} from "./views/tv/epgView.js";
 // shared between the header, the sidebar and the guide
 Alpine.store('ui', {
     menuOpen: false,
+    restoreLastChannel: true,
 
     toggleMenu() {
         this.menuOpen = !this.menuOpen;

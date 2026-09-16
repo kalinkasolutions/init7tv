@@ -1,0 +1,80 @@
+<div id="recording" x-data="recordingView()">
+    <div class="recording-header">
+        <button class="menu-button" @click="$store.ui.toggleMenu()"
+                :aria-expanded="$store.ui.menuOpen" aria-label="Channels" title="Channels">&#9776;</button>
+        <h2 x-text="channel ? channel.displayName : 'Pick a channel'"></h2>
+
+        <div class="day-picker" x-show="channel" x-cloak>
+            <button :class="{ 'chosen': day === 'today' }" @click="await showDay('today')">today</button>
+            <button :class="{ 'chosen': day === 'tomorrow' }" @click="await showDay('tomorrow')">tomorrow</button>
+        </div>
+    </div>
+
+    <div class="recording-body">
+        <div class="schedule">
+            <p class="empty" x-show="!channel" x-cloak>Choose a channel to see what is on.</p>
+            <p class="empty" x-show="channel && loading" x-cloak>Loading the guide...</p>
+            <p class="empty" x-show="channel && !loading && epg.length === 0" x-cloak>
+                No guide for this channel.
+            </p>
+
+            <template x-for="programme in epg" :key="programme.id">
+                <div class="programme"
+                     :class="{ 'ended': hasEnded(programme), 'on-now': isOnNow(programme),
+                               'planned': isPlanned(programme) }">
+                    <div class="when">
+                        <span class="span" x-text="span(programme)"></span>
+                        <span class="length" x-text="`${minutes(programme)} min`"></span>
+                        <span class="now" x-show="isOnNow(programme)" x-cloak>on now</span>
+                    </div>
+
+                    <div class="what">
+                        <h4 x-text="programme.title"></h4>
+                        <h5 x-show="programme.subTitle" x-text="programme.subTitle"></h5>
+                        <p class="categories" x-show="programme.categories.length"
+                           x-text="programme.categories.join(', ')"></p>
+                        <p class="description" x-text="programme.description"></p>
+                    </div>
+
+                    <div class="pick">
+                        <button class="record-button"
+                                :disabled="hasEnded(programme)"
+                                :title="hasEnded(programme) ? 'Already over'
+                                        : (isPlanned(programme) ? 'Do not record' : 'Record this')"
+                                @click="toggle(programme)">
+                            <span x-show="!isPlanned(programme)">record</span>
+                            <span x-show="isPlanned(programme)" x-cloak>&#10003; recording</span>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <aside class="planned">
+            <div class="planned-header">
+                <h3>Planned</h3>
+                <button class="link-button" x-show="planned.length" x-cloak
+                        @click="forgetEverything()">clear</button>
+            </div>
+
+            <p class="empty" x-show="!planned.length" x-cloak>Nothing picked yet.</p>
+
+            <template x-for="entry in plannedInOrder" :key="entry.id">
+                <div class="planned-item">
+                    <div>
+                        <span class="planned-when" x-text="plannedOn(entry)"></span>
+                        <span class="planned-channel" x-text="entry.channelName"></span>
+                        <span class="planned-title" x-text="entry.title"></span>
+                    </div>
+                    <button class="icon-button danger-icon" title="Remove" @click="forget(entry.id)">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                </div>
+            </template>
+
+            <p class="note" x-show="planned.length" x-cloak>
+                Kept in this browser. Nothing records yet.
+            </p>
+        </aside>
+    </div>
+</div>

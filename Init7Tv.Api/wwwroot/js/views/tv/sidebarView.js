@@ -9,7 +9,13 @@ export const sidebarView = () => ({
     async init() {
         this.allChannels = await get("/api/streaming/channels") ?? [];
         this.showChannels();
-        this.dispatchLastWatchedChannel();
+
+        // the tv page picks up where it left off; choosing what to record is a
+        // decision, and starting on whatever was last watched makes it look like
+        // one has already been made
+        if (this.$store.ui.restoreLastChannel) {
+            this.dispatchLastWatchedChannel();
+        }
     },
 
     searchChannel(event) {

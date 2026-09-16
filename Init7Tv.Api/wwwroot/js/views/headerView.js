@@ -6,6 +6,12 @@ export const headerView = () => {
 
         async init() {
             this.userInfo = await get("api/user/user-info");
+        },
+
+        /// Admins are not given the role, they simply outrank it.
+        get canRecord() {
+            return this.userInfo?.isAdmin === true
+                || this.userInfo?.userRoles?.includes("Recording") === true;
         }
     }
 }
