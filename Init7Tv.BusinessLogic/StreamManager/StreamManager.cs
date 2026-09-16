@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -27,6 +28,17 @@ public sealed class StreamManager : IStreamManager, IDisposable
     private readonly ConcurrentDictionary<string, SemaphoreSlim> m_streamLocks = new();
 
     private readonly Timer m_cleanupTimer;
+    // HLS segments have to start on a keyframe, so the encoder is told to emit
+    // one exactly this often and the segmenter cuts on those keyframes
+    private const int SegmentSeconds = 6;
+    private const int PlaylistLength = 5;
+    private static readonly TimeSpan SegmentDuration = TimeSpan.FromSeconds(SegmentSeconds);
+
+    // the encoder emits a keyframe every SegmentDuration, but it is measured in
+    // media time and this in wall clock: requiring the full duration rejects the
+    // keyframe that lands a few ms early and doubles the segment length
+    private static readonly TimeSpan MinSegmentDuration = SegmentDuration / 2;
+
     private readonly TimeSpan m_streamIdleTimeout = TimeSpan.FromSeconds(30);
     private readonly TimeSpan m_ffprobeTimeout = TimeSpan.FromSeconds(20);
     private readonly TimeSpan m_timerDueTime = TimeSpan.FromSeconds(10);
@@ -117,6 +129,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
             try
             {
                 stream.Ffmpeg.Start();
+                stream.Ffmpeg.BeginErrorReadLine();
             }
             catch (Exception ex)
             {
@@ -171,12 +184,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
         stream.Viewers[userName] = DateTime.UtcNow;
 
-        var sb = new StringBuilder();
-        sb.AppendLine("#EXTM3U");
-        sb.AppendLine("#EXT-X-VERSION:6");
-        sb.AppendLine("#EXT-X-TARGETDURATION:6");
-
-        string[] segments;
+        TvSegment[] segments;
         int mediaSequenceId;
         lock (stream.PlaylistLock)
         {
@@ -184,12 +192,20 @@ public sealed class StreamManager : IStreamManager, IDisposable
             mediaSequenceId = stream.MediaSequenceId;
         }
 
+        var targetDuration = segments.Length == 0
+            ? SegmentSeconds
+            : (int)Math.Ceiling(segments.Max(x => x.Duration.TotalSeconds));
+
+        var sb = new StringBuilder();
+        sb.AppendLine("#EXTM3U");
+        sb.AppendLine("#EXT-X-VERSION:6");
+        sb.AppendLine($"#EXT-X-TARGETDURATION:{targetDuration}");
         sb.AppendLine($"#EXT-X-MEDIA-SEQUENCE:{mediaSequenceId}");
 
-        foreach (var segmentName in segments)
+        foreach (var segment in segments)
         {
-            sb.AppendLine("#EXTINF:6.0,");
-            sb.AppendLine($"/api/streaming/segment/{stream.StreamId}/{segmentName}");
+            sb.AppendLine($"#EXTINF:{segment.Duration.TotalSeconds.ToString("0.000", CultureInfo.InvariantCulture)},");
+            sb.AppendLine($"/api/streaming/segment/{stream.StreamId}/{segment.Name}");
         }
 
         return OperationResult<string>.Text(sb.ToString(), "application/vnd.apple.mpegurl");
@@ -244,14 +260,15 @@ public sealed class StreamManager : IStreamManager, IDisposable
     {
         try
         {
-            var segmentStartTime = DateTime.UtcNow;
             var stdout = stream.Ffmpeg.StandardOutput.BaseStream;
-            var buffer = new byte[188 * 1024];
-            var segmentBuffer = new MemoryStream();
+            var buffer = new byte[TsKeyframeDetector.PacketSize * 1024];
+            var detector = new TsKeyframeDetector();
+            var segment = new SegmentBuilder();
+            var carried = 0;
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var read = await stdout.ReadAsync(buffer, cancellationToken);
+                var read = await stdout.ReadAsync(buffer.AsMemory(carried, buffer.Length - carried), cancellationToken);
                 if (read == 0)
                 {
                     // ffmpeg closed the pipe: the source is gone, retrying would just spin
@@ -259,30 +276,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
                     return;
                 }
 
-                segmentBuffer.Write(buffer, 0, read);
-
-                if (!((DateTime.UtcNow - segmentStartTime).TotalSeconds >= 6) || segmentBuffer.Length <= 0)
-                {
-                    continue;
-                }
-
-                var name = $"seg{stream.SegmentIndex++}.ts";
-                stream.TsSegments[name] = segmentBuffer.ToArray();
-
-                lock (stream.PlaylistLock)
-                {
-                    stream.Playlist.Add(name);
-                    while (stream.Playlist.Count > 5)
-                    {
-                        var oldSegment = stream.Playlist[0];
-                        stream.Playlist.RemoveAt(0);
-                        stream.TsSegments.TryRemove(oldSegment, out _);
-                        stream.MediaSequenceId++;
-                    }
-                }
-
-                segmentBuffer = new MemoryStream();
-                segmentStartTime = DateTime.UtcNow;
+                carried = ConsumePackets(stream, detector, buffer, carried + read, segment);
             }
         }
         catch (OperationCanceledException)
@@ -292,6 +286,98 @@ public sealed class StreamManager : IStreamManager, IDisposable
         catch (Exception ex)
         {
             m_logger.LogError(ex, "Stream loop failed stream: {StreamId}", stream.StreamId);
+        }
+    }
+
+    /// <summary>
+    /// Copies whole transport stream packets into the current segment, starting a
+    /// new one on each keyframe. Returns the number of trailing bytes moved to the
+    /// front of the buffer, being the start of a packet the next read completes.
+    /// </summary>
+    private int ConsumePackets(
+        TvStream stream,
+        TsKeyframeDetector detector,
+        byte[] buffer,
+        int available,
+        SegmentBuilder segment
+    )
+    {
+        var consumed = 0;
+
+        while (available - consumed >= TsKeyframeDetector.PacketSize)
+        {
+            var packet = buffer.AsSpan(consumed, TsKeyframeDetector.PacketSize);
+            consumed += TsKeyframeDetector.PacketSize;
+
+            if (packet[0] != TsKeyframeDetector.SyncByte)
+            {
+                // ffmpeg writes whole packets, so this only happens after a hiccup
+                consumed -= TsKeyframeDetector.PacketSize - 1;
+                continue;
+            }
+
+            if (detector.IsKeyframeStart(packet))
+            {
+                if (segment.Keyframes > 0 && DateTime.UtcNow - segment.StartedAt >= MinSegmentDuration)
+                {
+                    PublishSegment(stream, segment);
+                    segment.Reset();
+                }
+
+                segment.Keyframes++;
+            }
+
+            // anything before the first keyframe cannot be decoded on its own
+            if (segment.Keyframes > 0)
+            {
+                segment.Write(packet);
+            }
+        }
+
+        var remaining = available - consumed;
+        buffer.AsSpan(consumed, remaining).CopyTo(buffer);
+        return remaining;
+    }
+
+    private void PublishSegment(TvStream stream, SegmentBuilder segment)
+    {
+        var name = $"seg{stream.SegmentIndex++}.ts";
+        stream.TsSegments[name] = segment.ToArray();
+
+        // every keyframe is one forced interval of media, which is what a player
+        // needs; wall clock drifts whenever the transcode runs behind realtime
+        var duration = segment.Keyframes * SegmentDuration;
+
+        lock (stream.PlaylistLock)
+        {
+            stream.Playlist.Add(new TvSegment(name, duration));
+
+            while (stream.Playlist.Count > PlaylistLength)
+            {
+                var oldSegment = stream.Playlist[0];
+                stream.Playlist.RemoveAt(0);
+                stream.TsSegments.TryRemove(oldSegment.Name, out _);
+                stream.MediaSequenceId++;
+            }
+        }
+    }
+
+    private sealed class SegmentBuilder
+    {
+        private MemoryStream m_buffer = new();
+
+        public int Keyframes { get; set; }
+        public DateTime StartedAt { get; private set; } = DateTime.UtcNow;
+
+        public void Write(ReadOnlySpan<byte> packet) => m_buffer.Write(packet);
+
+        public byte[] ToArray() => m_buffer.ToArray();
+
+        public void Reset()
+        {
+            m_buffer = new MemoryStream();
+            Keyframes = 0;
+            StartedAt = DateTime.UtcNow;
         }
     }
 
@@ -305,7 +391,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         {
             FileName = "ffmpeg",
             RedirectStandardOutput = true,
-            RedirectStandardError = false,
+            RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
@@ -316,7 +402,19 @@ public sealed class StreamManager : IStreamManager, IDisposable
             startInfo.ArgumentList.Add(arg);
         }
 
-        return new Process { StartInfo = startInfo };
+        var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+
+        // ffmpeg logs to stderr; without this the configured log level went to the
+        // container's console with no indication of which stream produced it
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.Data))
+            {
+                m_logger.LogInformation("[ffmpeg {Channel}] {Line}", channel.CanonicalName, e.Data);
+            }
+        };
+
+        return process;
     }
 
     private string[] GetFfmpegArgs(ChannelDto channel, int audioStreamIndex, GeneralAppSettingsDto appSettings)
@@ -330,14 +428,20 @@ public sealed class StreamManager : IStreamManager, IDisposable
             args.AddRange(["-analyzeduration", "5000000"]);
             args.AddRange(["-probesize", "10000000"]);
             args.AddRange(["-i", $"{channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1"]);
-            args.AddRange(["-map", "0:v:0"]);
-            args.AddRange(["-g", "300"]);
         }
         else
         {
             args.AddRange(["-i", channel.HlsSource]);
-            args.AddRange(["-map", "0:v:0"]);
         }
+
+        args.AddRange(["-map", "0:v:0"]);
+
+        // a keyframe exactly every segment, and nothing else: -g is a frame count
+        // so libx264's default 250 lands between the forced ones at 50fps, and
+        // scene cuts would add more. Both make segments span uneven media.
+        args.AddRange(["-force_key_frames", $"expr:gte(t,n_forced*{SegmentSeconds})"]);
+        args.AddRange(["-g", "600"]);
+        args.AddRange(["-x264-params", "scenecut=0"]);
 
         args.AddRange(["-c:v", "libx264"]);
         args.AddRange(["-preset", appSettings.FfmpegPreset]);

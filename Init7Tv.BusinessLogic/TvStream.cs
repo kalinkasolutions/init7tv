@@ -5,12 +5,15 @@ using Init7Tv.Dto;
 
 namespace Init7Tv.BusinessLogic;
 
+/// <summary>A published segment and how much media it actually holds.</summary>
+public readonly record struct TvSegment(string Name, TimeSpan Duration);
+
 public sealed class TvStream
 {
     public required string StreamId { get; init; }
     public ConcurrentDictionary<string, byte[]> TsSegments { get; set; } = new();
     public required Process Ffmpeg { get; set; }
-    public List<string> Playlist { get; set; } = [];
+    public List<TvSegment> Playlist { get; } = [];
     public Lock PlaylistLock { get; } = new();
     public ulong SegmentIndex { get; set; }
     public CancellationTokenSource CancellationToken { get; set; } = new();
