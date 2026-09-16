@@ -5,8 +5,10 @@
         <h2 x-text="channel ? channel.displayName : 'Pick a channel'"></h2>
 
         <div class="day-picker" x-show="channel" x-cloak>
-            <button :class="{ 'chosen': day === 'today' }" @click="await showDay('today')">today</button>
-            <button :class="{ 'chosen': day === 'tomorrow' }" @click="await showDay('tomorrow')">tomorrow</button>
+            <template x-for="d in days" :key="d.offset">
+                <button :class="{ 'chosen': day === d.offset }"
+                        @click="await showDay(d.offset)" x-text="d.label"></button>
+            </template>
         </div>
     </div>
 
@@ -21,7 +23,7 @@
             <template x-for="programme in epg" :key="programme.id">
                 <div class="programme"
                      :class="{ 'ended': hasEnded(programme), 'on-now': isOnNow(programme),
-                               'planned': isPlanned(programme) }">
+                               'picked': isPlanned(programme) }">
                     <div class="when">
                         <span class="span" x-text="span(programme)"></span>
                         <span class="length" x-text="`${minutes(programme)} min`"></span>

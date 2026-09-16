@@ -67,11 +67,20 @@
     margin: 0;
 }
 
+/* The row squeezes every column to nothing and lets the contents decide, so a
+   column told never to wrap simply hangs out of the box. Three roles already
+   did; any further one would too. */
 .roles-container {
     display: flex;
-    flex-wrap: nowrap;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
     align-items: center;
+}
+
+.user-list-entry > .roles-container,
+.user-form > .roles-container {
+    flex: 1 1 14em;
+    min-width: 10em;
 }
 
 .roles {

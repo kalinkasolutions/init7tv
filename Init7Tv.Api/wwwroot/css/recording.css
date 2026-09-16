@@ -20,6 +20,8 @@
 
 #recording .day-picker {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.4em;
 }
 
@@ -80,7 +82,9 @@
     border-left: 3px solid #2fb12f;
 }
 
-#recording .programme.planned {
+/* not "planned": that is the panel beside the guide, and the same class on a row
+   collapsed it to the panel's width */
+#recording .programme.picked {
     background-color: #2a3a2a;
 }
 
@@ -138,9 +142,13 @@
     cursor: pointer;
     font: inherit;
     white-space: nowrap;
+    /* it says more once picked, and without a floor under it the whole row
+       shifted sideways on every click */
+    min-width: 9.5em;
+    text-align: center;
 }
 
-#recording .programme.planned .record-button {
+#recording .programme.picked .record-button {
     border-color: #2fb12f;
     color: #2fb12f;
 }

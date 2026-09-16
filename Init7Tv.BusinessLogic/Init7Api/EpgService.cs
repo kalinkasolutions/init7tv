@@ -27,7 +27,13 @@ public sealed class EpgService : IEpgService
         m_channelService = channelService;
     }
 
-    public async Task<OperationResult<EpgDto[]>> GetEpg(string canonicalName, bool tomorrow)
+    /// <summary>
+    /// How far ahead the guide is worth asking for. Measured against the source:
+    /// full days out to six, a part of the seventh, nothing after that.
+    /// </summary>
+    public const int MaxDaysAhead = 7;
+
+    public async Task<OperationResult<EpgDto[]>> GetEpg(string canonicalName, int daysAhead)
     {
         var channelResult = await m_channelService.GetByCanonicalName(canonicalName);
         if (!channelResult.IsSuccess)
@@ -35,7 +41,7 @@ public sealed class EpgService : IEpgService
             return channelResult.MapError<EpgDto[]>();
         }
 
-        var url = BuildEpgUrl(channelResult.Value.ChannelId, tomorrow);
+        var url = BuildEpgUrl(channelResult.Value.ChannelId, Math.Clamp(daysAhead, 0, MaxDaysAhead));
         var cacheKey = Hash.GetSha256(url);
 
         if (m_cache.TryGetValue(cacheKey, out EpgDto[]? cachedEpg) && cachedEpg != null)
@@ -47,17 +53,11 @@ public sealed class EpgService : IEpgService
         return OperationResult<EpgDto[]>.Success(m_cache.Set(cacheKey, epgData.ToDto(), m_cacheDuration));
     }
 
-    private static string BuildEpgUrl(Guid channelId, bool tomorrow)
+    private static string BuildEpgUrl(Guid channelId, int daysAhead)
     {
-        var start = DateTime.UtcNow.Date;
+        var start = DateTime.UtcNow.Date.AddDays(daysAhead);
         var end = start.AddDays(1);
-        if (tomorrow)
-        {
-            start = start.AddDays(1);
-            end = start.AddDays(1);
-        }
 
-        var url = $"{EpgApiUrl}/?channel={channelId}&start__gte={start:o}&stop__lte={end:o}";
-        return url;
+        return $"{EpgApiUrl}/?channel={channelId}&start__gte={start:o}&stop__lte={end:o}";
     }
 }

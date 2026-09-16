@@ -8,9 +8,21 @@ const STORE = 'planned-recordings';
 export const recordingView = () => ({
     channel: null,
     epg: [],
-    day: 'today',
+    day: 0,
     loading: false,
     planned: [],
+
+    /// The source carries full days out to six and part of a seventh.
+    days: Array.from({length: 7}, (_, offset) => {
+        const date = new Date();
+        date.setDate(date.getDate() + offset);
+        return {
+            offset,
+            label: offset === 0 ? 'today'
+                : offset === 1 ? 'tomorrow'
+                : date.toLocaleDateString([], {weekday: 'short', day: 'numeric', month: 'short'})
+        };
+    }),
 
     init() {
         this.planned = this.read();
@@ -28,16 +40,16 @@ export const recordingView = () => ({
 
     async selectChannel(channel) {
         this.channel = channel;
-        this.day = 'today';
+        this.day = 0;
         await this.load();
     },
 
-    async showDay(day) {
-        if (this.day === day) {
+    async showDay(offset) {
+        if (this.day === offset) {
             return;
         }
 
-        this.day = day;
+        this.day = offset;
         await this.load();
     },
 
@@ -47,17 +59,20 @@ export const recordingView = () => ({
         }
 
         const canonicalName = this.channel.canonicalName;
-        const tomorrow = this.day === 'tomorrow';
+        const day = this.day;
 
         this.loading = true;
         try {
-            this.epg = await epgFor(canonicalName, tomorrow);
+            this.epg = await epgFor(canonicalName, day);
         } finally {
             this.loading = false;
         }
 
-        // the other day is usually the next thing asked for
-        warm(canonicalName, !tomorrow);
+        // whichever way the viewer steps next is already there
+        warm(canonicalName, day + 1);
+        if (day > 0) {
+            warm(canonicalName, day - 1);
+        }
     },
 
     // --- what is on when -------------------------------------------------

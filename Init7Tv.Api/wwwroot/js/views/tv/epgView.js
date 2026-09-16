@@ -71,7 +71,7 @@ export const epgView = () => ({
 
         if (this.future.length < 3 && !this.tomorrowFetched) {
             this.tomorrowFetched = true;
-            const tomorrow = await get(`/api/epg/${this.channel.canonicalName}?tomorrow=true`);
+            const tomorrow = await get(`/api/epg/${this.channel.canonicalName}?day=1`);
             if (tomorrow?.length) {
                 this.epg = this.epg.concat(tomorrow);
                 this.future = this.epg.slice(index + 1, index + 4);

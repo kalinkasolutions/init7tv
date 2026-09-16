@@ -52,27 +52,23 @@ function sweep() {
     }
 }
 
-export async function epgFor(canonicalName, tomorrow = false) {
-    const offset = tomorrow ? 1 : 0;
-    const key = keyFor(canonicalName, offset);
+export async function epgFor(canonicalName, daysAhead = 0) {
+    const key = keyFor(canonicalName, daysAhead);
 
     const cached = read(key);
     if (cached) {
         return cached;
     }
 
-    const query = tomorrow ? '?tomorrow=true' : '';
-    const programmes = await get(`/api/epg/${canonicalName}${query}`) ?? [];
+    const programmes = await get(`/api/epg/${canonicalName}?day=${daysAhead}`) ?? [];
     write(key, programmes);
     return programmes;
 }
 
-/// Fetched quietly so the other day is already there when it is asked for.
-export function warm(canonicalName, tomorrow = false) {
-    const key = keyFor(canonicalName, tomorrow ? 1 : 0);
-
-    if (!read(key)) {
-        epgFor(canonicalName, tomorrow).catch(() => {});
+/// Fetched quietly so a day is already there when it is asked for.
+export function warm(canonicalName, daysAhead = 0) {
+    if (!read(keyFor(canonicalName, daysAhead))) {
+        epgFor(canonicalName, daysAhead).catch(() => {});
     }
 }
 
