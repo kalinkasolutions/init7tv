@@ -28,7 +28,8 @@ public class FfmpegArgumentsTest
     {
         BaseDomain = "https://tv.example.org",
         FfmpegPreset = "ultrafast",
-        FfmpegLogLevel = "warning"
+        FfmpegLogLevel = "warning",
+        FfmpegDeinterlaceMode = "send_field"
     };
 
     private static FfprobeRoot Probe(bool interlaced, string frameRate = "", bool topFieldFirst = true) => new()
@@ -85,11 +86,58 @@ public class FfmpegArgumentsTest
     }
 
     [Test]
-    public void InterlacedSource_IsDeinterlacedOneFramePerFrame()
+    public void InterlacedSource_IsDeinterlaced()
     {
         var args = Build(interlaced: true);
 
-        Assert.That(ValueOf(args, "-vf"), Is.EqualTo("yadif=mode=send_frame:parity=0"));
+        Assert.That(ValueOf(args, "-vf"), Is.EqualTo("yadif=mode=send_field:parity=0"));
+    }
+
+    [TestCase("send_field")]
+    [TestCase("send_frame")]
+    public void TheConfiguredDeinterlaceModeIsUsed(string mode)
+    {
+        // configurable because which one looks right depends on the display:
+        // 25fps cannot be shown evenly on a 60Hz screen
+        var settings = new GeneralAppSettingsDto
+        {
+            BaseDomain = "x", FfmpegPreset = "ultrafast", FfmpegLogLevel = "warning",
+            FfmpegDeinterlaceMode = mode
+        };
+
+        var args = FfmpegArguments.Build(Channel, 0, settings, Probe(true), true, SegmentSeconds);
+
+        Assert.That(ValueOf(args, "-vf"), Is.EqualTo($"yadif=mode={mode}:parity=0"));
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase(null)]
+    public void AnEmptyDeinterlaceModeNeverProducesAMalformedFilter(string? mode)
+    {
+        var settings = new GeneralAppSettingsDto
+        {
+            BaseDomain = "x", FfmpegPreset = "ultrafast", FfmpegLogLevel = "warning",
+            FfmpegDeinterlaceMode = mode!
+        };
+
+        var args = FfmpegArguments.Build(Channel, 0, settings, Probe(true), true, SegmentSeconds);
+
+        Assert.That(ValueOf(args, "-vf"), Is.EqualTo("yadif=mode=send_field:parity=0"));
+    }
+
+    [Test]
+    public void TheDeinterlaceModeIsIgnoredForProgressiveSources()
+    {
+        var settings = new GeneralAppSettingsDto
+        {
+            BaseDomain = "x", FfmpegPreset = "ultrafast", FfmpegLogLevel = "warning",
+            FfmpegDeinterlaceMode = "send_field"
+        };
+
+        var args = FfmpegArguments.Build(Channel, 0, settings, Probe(false), true, SegmentSeconds);
+
+        Assert.That(args, Does.Not.Contain("-vf"));
     }
 
     [Test]

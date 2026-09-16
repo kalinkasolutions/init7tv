@@ -12,6 +12,8 @@ namespace Init7Tv.BusinessLogic.StreamManager;
 /// </summary>
 public static class FfmpegArguments
 {
+    private const string DefaultDeinterlaceMode = "send_field";
+
     public static string[] Build(
         ChannelDto channel,
         int audioStreamIndex,
@@ -56,7 +58,11 @@ public static class FfmpegArguments
             // one output per input frame. Deinterlacing a progressive channel
             // would soften it for nothing, so this is conditional.
             var parity = streamInfo.IsTopFieldFirst ? 0 : 1;
-            args.AddRange(["-vf", $"yadif=mode=send_frame:parity={parity}"]);
+            var mode = string.IsNullOrWhiteSpace(appSettings.FfmpegDeinterlaceMode)
+                ? DefaultDeinterlaceMode
+                : appSettings.FfmpegDeinterlaceMode;
+
+            args.AddRange(["-vf", $"yadif=mode={mode}:parity={parity}"]);
         }
 
         args.AddRange(["-pix_fmt", "yuv420p"]);

@@ -32,4 +32,8 @@ public sealed class AppSettings
 
     [MaxLength(10)]
     public string FfmpegPreset { get; set; } = "ultrafast";
+
+    /// <summary>yadif mode. send_field recovers 50fps from interlaced sources.</summary>
+    [MaxLength(20)]
+    public string FfmpegDeinterlaceMode { get; set; } = "send_field";
 }

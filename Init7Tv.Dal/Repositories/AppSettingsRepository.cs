@@ -83,6 +83,7 @@ public sealed class AppSettingsRepository : IAppSettingsRepository
         existing.BaseDomain = update.BaseDomain;
         existing.FfmpegPreset = update.FfmpegPreset;
         existing.FfmpegLogLevel = update.FfmpegLogLevel;
+        existing.FfmpegDeinterlaceMode = update.FfmpegDeinterlaceMode;
 
         await m_context.SaveChangesAsync();
 

@@ -25,7 +25,8 @@ public static class AppSettingsMapper
         {
             BaseDomain = appSettings.BaseDomain,
             FfmpegPreset = appSettings.FfmpegPreset,
-            FfmpegLogLevel = appSettings.FfmpegLogLevel
+            FfmpegLogLevel = appSettings.FfmpegLogLevel,
+            FfmpegDeinterlaceMode = appSettings.FfmpegDeinterlaceMode
         };
     }
 
@@ -36,6 +37,7 @@ public static class AppSettingsMapper
             BaseDomain = appSettingsDto.BaseDomain,
             FfmpegLogLevel = appSettingsDto.FfmpegLogLevel,
             FfmpegPreset =  appSettingsDto.FfmpegPreset,
+            FfmpegDeinterlaceMode = appSettingsDto.FfmpegDeinterlaceMode,
         };
     }
 

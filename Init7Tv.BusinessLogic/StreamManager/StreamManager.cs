@@ -284,7 +284,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 }
             }
 
-            if (stream.Ffmpeg.HasExited)
+            if (stream.CancellationToken.IsCancellationRequested || HasExited(stream))
             {
                 return false;
             }
@@ -293,6 +293,22 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The read loop disposes the process as soon as ffmpeg dies, and a disposed
+    /// Process throws rather than reporting that it exited.
+    /// </summary>
+    private static bool HasExited(TvStream stream)
+    {
+        try
+        {
+            return stream.Ffmpeg.HasExited;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
     }
 
     private async Task StreamLoopAsync(TvStream stream, CancellationToken cancellationToken)

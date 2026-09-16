@@ -51,7 +51,8 @@
     gap: 1em;
     align-items: center;
     justify-content: center;
-    background-color: #000000d0;
+    /* opaque: the video element sits behind this and would otherwise show through */
+    background-color: #000000;
     color: #ffffffcf;
     font-size: 0.9em;
 }

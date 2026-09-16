@@ -16,6 +16,8 @@
             </div>
         </div>
         <div class="video-wrapper">
+            <!-- controls stay on: the loading overlay is opaque and covers them,
+                 and they are the only way to start playback when autoplay is blocked -->
             <video id="player" controls></video>
             <div class="player-loading" x-show="loading" x-cloak>
                 <div class="spinner"></div>
