@@ -3,27 +3,27 @@
     top: 0;
     right: 0;
     margin: 2em;
-    max-width: 300px;
+    max-width: 360px;
+    /* only the stack scrolls, and only once it would run off screen */
+    max-height: calc(100vh - 4em);
     display: flex;
     flex-direction: column;
-    height: auto;
     overflow-y: auto;
     pointer-events: none;
-
 }
 
 #notification .notification-wrapper {
     pointer-events: auto;
-    height: auto;
     position: relative;
     border-radius: 0.25em;
-    padding: 1em;
-    max-height: 250px;
-    min-height: 100px;
+    /* room on the right so the text never runs under the close button */
+    padding: 1em 2.2em 1em 1em;
     box-shadow: 0 12px 12px rgba(0, 0, 0, 0.25);
     margin-bottom: 1em;
     display: flex;
     flex-direction: column;
+    /* size to the text: a fixed height made two lines scroll */
+    flex-shrink: 0;
 }
 
 #notification .notification-wrapper.success {
@@ -47,10 +47,15 @@
 #notification .notification-wrapper .title {
     padding-bottom: 0.2em;
     border-bottom: 1px solid #ffffff80;
-    margin-bottom: 1em;
+    margin-bottom: 0.6em;
+    font-weight: 600;
 }
 
 #notification .notification-wrapper .message {
+    line-height: 1.4;
+    /* stream ids and urls in error messages have no spaces to break on */
+    overflow-wrap: anywhere;
+    /* grows with the text, scrolls only if something is genuinely huge */
+    max-height: 40vh;
     overflow-y: auto;
-    flex-grow: 1;
 }
