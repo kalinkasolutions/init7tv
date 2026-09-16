@@ -234,6 +234,24 @@ public class FfmpegArgumentsTest
     }
 
     [Test]
+    public void TheSubtitlePipeIsWrittenToEvenThoughItExists()
+    {
+        // it is created before ffmpeg starts, and ffmpeg will not write over
+        // something already there unless told to
+        var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
+            Teletext, "/tmp/subs.vtt");
+
+        Assert.That(args, Does.Contain("-y"));
+    }
+
+    [Test]
+    public void WithoutSubtitles_NothingIsOverwritten()
+    {
+        // stdout is the only output then, and -y would be a licence to clobber
+        Assert.That(Build(), Does.Not.Contain("-y"));
+    }
+
+    [Test]
     public void CaptionsAreGivenAnEnd()
     {
         // without this ffmpeg ends every caption hours later and they never clear

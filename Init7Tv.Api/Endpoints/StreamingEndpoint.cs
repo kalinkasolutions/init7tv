@@ -27,6 +27,9 @@ public static class StreamingEndpoint
         group.MapPut("/channels/{channelId:guid}/favourite", SetFavourite);
         group.MapGet("/start-stream", StartStream);
         group.MapGet("/playlist", GetPlaylist);
+        group.MapGet("/playlist/video", GetVideoPlaylist);
+        group.MapGet("/playlist/subtitles", GetSubtitlePlaylist);
+        group.MapGet("/subtitle/{streamId}/{name}", GetSubtitleSegment);
         group.MapGet("/segment/{streamId}/{name}", GetSegment);
         group.MapGet("/events", GetEvents);
     }
@@ -152,6 +155,23 @@ public static class StreamingEndpoint
     private static IResult GetPlaylist(string streamId, IStreamManager streamManager, IUserIdentityProvider userIdentityProvider)
     {
         return streamManager.GetPlaylist(streamId, userIdentityProvider.UserName).ToHttpResult();
+    }
+
+    private static IResult GetVideoPlaylist(string streamId, IStreamManager streamManager,
+        IUserIdentityProvider userIdentityProvider)
+    {
+        return streamManager.GetVideoPlaylist(streamId, userIdentityProvider.UserName).ToHttpResult();
+    }
+
+    private static IResult GetSubtitlePlaylist(string streamId, IStreamManager streamManager,
+        IUserIdentityProvider userIdentityProvider)
+    {
+        return streamManager.GetSubtitlePlaylist(streamId, userIdentityProvider.UserName).ToHttpResult();
+    }
+
+    private static IResult GetSubtitleSegment(string streamId, string name, IStreamManager streamManager)
+    {
+        return streamManager.GetSubtitleSegment(streamId, name).ToHttpResult();
     }
 
     private static IResult GetSegment(string streamId, string name, IStreamManager streamManager)

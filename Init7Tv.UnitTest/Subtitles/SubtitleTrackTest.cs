@@ -72,6 +72,16 @@ public class SubtitleTrackTest
     }
 
     [Test]
+    public void OnlyOneLanguageIsReportedForATrack()
+    {
+        // a teletext stream carries several components, and ffprobe joins their
+        // languages: SRF 1 reports "deu,deu", which is not a language tag
+        var probe = new FfprobeRoot { Streams = [Stream("subtitle", "dvb_teletext", "deu,deu")] };
+
+        Assert.That(probe.GetSubtitleTracks[0].Language, Is.EqualTo("deu"));
+    }
+
+    [Test]
     public void AChannelWithNoSubtitlesHasNone()
     {
         var probe = new FfprobeRoot { Streams = [Stream("video", "h264"), Stream("audio", "ac3", "deu")] };

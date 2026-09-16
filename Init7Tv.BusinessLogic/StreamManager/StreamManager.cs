@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Init7Tv.BusinessLogic.Ffprobe;
+using Init7Tv.BusinessLogic.Subtitles;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.Mapping;
 using Init7Tv.BusinessLogic.StreamEventBus;
@@ -135,11 +136,24 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 streamInfo.Value.GetVideoCodec,
                 streamInfo.Value.GetLanguages);
 
+            // one track only. Every channel that carries teletext carries a single
+            // stream of it, and a second output per track would cost a decode each
+            // for something no channel here offers.
+            var subtitle = streamInfo.Value.GetSubtitleTracks.FirstOrDefault();
+            var subtitlePipe = subtitle == null ? null : CreateSubtitlePipe(streamId);
+            if (subtitle != null && subtitlePipe == null)
+            {
+                subtitle = null;
+            }
+
             var stream = new TvStream
             {
                 StreamId = streamId,
                 AudioStreamIndex = audioStreamIndex,
-                Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex, appSettings, streamInfo.Value),
+                Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex, appSettings, streamInfo.Value,
+                    subtitle, subtitlePipe),
+                Subtitle = subtitle,
+                SubtitlePipe = subtitlePipe,
                 StreamInfo = streamInfo.Value,
                 Channel = channelResult.Value
             };
@@ -164,6 +178,11 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 m_logger.LogError("Stream {StreamId} was registered concurrently, discarding it", streamId);
                 StopProcess(stream);
                 return OperationResult<StreamDto>.Error("Failed to start stream");
+            }
+
+            if (stream.SubtitlePipe != null)
+            {
+                _ = Task.Run(() => ReadSubtitlesAsync(stream, stream.CancellationToken.Token));
             }
 
             _ = Task.Run(async () =>
@@ -213,7 +232,39 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
     }
 
+    /// <summary>
+    /// What a player is pointed at. With subtitles to offer this is a master
+    /// naming both renditions, otherwise the media playlist itself, because a
+    /// master with one rendition buys nothing and costs a round trip.
+    /// </summary>
     public OperationResult<string> GetPlaylist(string streamId, string userName)
+    {
+        if (!m_streams.TryGetValue(streamId, out var stream))
+        {
+            return OperationResult<string>.NotFound($"Could not find stream while getting playlist: {streamId}");
+        }
+
+        if (stream.Subtitle == null)
+        {
+            return GetVideoPlaylist(streamId, userName);
+        }
+
+        stream.Viewers[userName] = DateTime.UtcNow;
+
+        var master = new StringBuilder();
+        master.AppendLine("#EXTM3U");
+        master.AppendLine("#EXT-X-VERSION:6");
+        master.AppendLine(
+            $"#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"{stream.Subtitle.Language}\"," +
+            $"LANGUAGE=\"{stream.Subtitle.Language}\",DEFAULT=NO,AUTOSELECT=NO," +
+            $"URI=\"/api/streaming/playlist/subtitles?streamId={streamId}\"");
+        master.AppendLine("#EXT-X-STREAM-INF:BANDWIDTH=3000000,SUBTITLES=\"subs\"");
+        master.AppendLine($"/api/streaming/playlist/video?streamId={streamId}");
+
+        return OperationResult<string>.Text(master.ToString(), "application/vnd.apple.mpegurl");
+    }
+
+    public OperationResult<string> GetVideoPlaylist(string streamId, string userName)
     {
         if (!m_streams.TryGetValue(streamId, out var stream))
         {
@@ -249,6 +300,80 @@ public sealed class StreamManager : IStreamManager, IDisposable
         return OperationResult<string>.Text(sb.ToString(), "application/vnd.apple.mpegurl");
     }
 
+
+    /// <summary>
+    /// The captions, cut on the same boundaries as the pictures. It mirrors the
+    /// video playlist exactly: a player expects the two to line up segment for
+    /// segment, and works out where it is from the media sequence.
+    /// </summary>
+    public OperationResult<string> GetSubtitlePlaylist(string streamId, string userName)
+    {
+        if (!m_streams.TryGetValue(streamId, out var stream))
+        {
+            return OperationResult<string>.NotFound($"Could not find stream while getting subtitles: {streamId}");
+        }
+
+        stream.Viewers[userName] = DateTime.UtcNow;
+
+        TvSegment[] segments;
+        int mediaSequenceId;
+        lock (stream.PlaylistLock)
+        {
+            segments = stream.Playlist.ToArray();
+            mediaSequenceId = stream.MediaSequenceId;
+        }
+
+        var targetDuration = segments.Length == 0
+            ? SegmentSeconds
+            : (int)Math.Ceiling(segments.Max(x => x.Duration.TotalSeconds));
+
+        var sb = new StringBuilder();
+        sb.AppendLine("#EXTM3U");
+        sb.AppendLine("#EXT-X-VERSION:6");
+        sb.AppendLine($"#EXT-X-TARGETDURATION:{targetDuration}");
+        sb.AppendLine($"#EXT-X-MEDIA-SEQUENCE:{mediaSequenceId}");
+
+        foreach (var segment in segments)
+        {
+            sb.AppendLine($"#EXTINF:{segment.Duration.TotalSeconds.ToString("0.000", CultureInfo.InvariantCulture)},");
+            sb.AppendLine($"/api/streaming/subtitle/{stream.StreamId}/{Path.ChangeExtension(segment.Name, "vtt")}");
+        }
+
+        return OperationResult<string>.Text(sb.ToString(), "application/vnd.apple.mpegurl");
+    }
+
+    public OperationResult<string> GetSubtitleSegment(string streamId, string name)
+    {
+        if (!m_streams.TryGetValue(streamId, out var stream))
+        {
+            return OperationResult<string>.NotFound($"Could not find stream: {streamId} for subtitles: {name}");
+        }
+
+        var tsName = Path.ChangeExtension(name, "ts");
+
+        TvSegment segment;
+        lock (stream.PlaylistLock)
+        {
+            var found = stream.Playlist.FirstOrDefault(x => x.Name == tsName);
+            if (found.Name == null)
+            {
+                return OperationResult<string>.NotFound($"No segment {name} in stream {streamId}");
+            }
+
+            segment = found;
+        }
+
+        var start = PtsToTime(segment.StartPts);
+
+        WebVttCue[] cues;
+        lock (stream.CuesLock)
+        {
+            cues = stream.Cues.ToArray();
+        }
+
+        return OperationResult<string>.Text(
+            WebVttSegment.Build(cues, start, start + segment.Duration), "text/vtt");
+    }
 
     public OperationResult<byte[]> GetSegment(string streamId, string name)
     {
@@ -416,6 +541,10 @@ public sealed class StreamManager : IStreamManager, IDisposable
                     segment.Reset();
                 }
 
+                // where this segment sits on the stream clock, which is what a
+                // caption is matched against
+                segment.StartPts ??= detector.LastKeyframePts;
+
                 // the program tables have to lead the segment. ffmpeg emits them
                 // periodically, so cutting at a keyframe left them a third of a
                 // second in, and a player that demuxes each segment on its own
@@ -449,9 +578,11 @@ public sealed class StreamManager : IStreamManager, IDisposable
         // needs; wall clock drifts whenever the transcode runs behind realtime
         var duration = segment.Keyframes * SegmentDuration;
 
+        TimeSpan? oldestStart = null;
+
         lock (stream.PlaylistLock)
         {
-            stream.Playlist.Add(new TvSegment(name, duration));
+            stream.Playlist.Add(new TvSegment(name, duration, segment.StartPts ?? 0));
 
             while (stream.Playlist.Count > PlaylistLength)
             {
@@ -460,6 +591,129 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 stream.TsSegments.TryRemove(oldSegment.Name, out _);
                 stream.MediaSequenceId++;
             }
+
+            if (stream.Playlist.Count > 0)
+            {
+                oldestStart = PtsToTime(stream.Playlist[0].StartPts);
+            }
+        }
+
+        DropCuesBefore(stream, oldestStart);
+    }
+
+    /// <summary>
+    /// A named pipe for ffmpeg's WebVTT. A pipe rather than a file so the captions
+    /// arrive as they are spoken; a file would have to be watched for growth and
+    /// left behind afterwards.
+    /// </summary>
+    private string? CreateSubtitlePipe(string streamId)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"init7tv-{streamId[..12]}.vtt");
+
+        try
+        {
+            File.Delete(path);
+
+            using var mkfifo = Process.Start(new ProcessStartInfo("mkfifo", path) { UseShellExecute = false });
+            mkfifo?.WaitForExit(TimeSpan.FromSeconds(5));
+
+            if (mkfifo?.ExitCode == 0)
+            {
+                return path;
+            }
+
+            m_logger.LogWarning("Could not create a subtitle pipe at {Path}, continuing without subtitles", path);
+        }
+        catch (Exception ex)
+        {
+            // subtitles are worth having but not worth failing a channel over
+            m_logger.LogWarning(ex, "Could not create a subtitle pipe at {Path}", path);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads the captions ffmpeg writes for as long as the stream runs. Opening
+    /// the pipe blocks until ffmpeg opens its end, which is why this is never
+    /// awaited by the start.
+    /// </summary>
+    private async Task ReadSubtitlesAsync(TvStream stream, CancellationToken cancellationToken)
+    {
+        var path = stream.SubtitlePipe;
+        if (path == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var pipe = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                bufferSize: 4096, useAsync: true);
+            using var text = new StreamReader(pipe);
+
+            var reader = new WebVttReader();
+            var buffer = new char[2048];
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var read = await text.ReadAsync(buffer, cancellationToken);
+                if (read == 0)
+                {
+                    return;
+                }
+
+                var cues = reader.Read(new string(buffer, 0, read));
+                if (cues.Count == 0)
+                {
+                    continue;
+                }
+
+                lock (stream.CuesLock)
+                {
+                    stream.Cues.AddRange(cues);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // the stream was stopped
+        }
+        catch (Exception ex)
+        {
+            m_logger.LogWarning(ex, "Reading subtitles failed for stream: {StreamId}", stream.StreamId);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                m_logger.LogWarning(ex, "Could not remove the subtitle pipe {Path}", path);
+            }
+        }
+    }
+
+    /// <summary>The 90 kHz clock the transport stream and the captions share.</summary>
+    private static TimeSpan PtsToTime(ulong pts) =>
+        TimeSpan.FromTicks((long)pts * TimeSpan.TicksPerSecond / 90_000);
+
+    /// <summary>
+    /// Captions older than the playlist itself can never be asked for again, and
+    /// a channel left running all day would otherwise collect every word spoken.
+    /// </summary>
+    private static void DropCuesBefore(TvStream stream, TimeSpan? oldest)
+    {
+        if (oldest == null)
+        {
+            return;
+        }
+
+        lock (stream.CuesLock)
+        {
+            stream.Cues.RemoveAll(x => x.End < oldest.Value);
         }
     }
 
@@ -469,6 +723,9 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
         public int Keyframes { get; set; }
 
+        /// <summary>Presentation time of the keyframe this segment opens on.</summary>
+        public ulong? StartPts { get; set; }
+
         public void Write(ReadOnlySpan<byte> packet) => m_buffer.Write(packet);
 
         public byte[] ToArray() => m_buffer.ToArray();
@@ -477,6 +734,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         {
             m_buffer = new MemoryStream();
             Keyframes = 0;
+            StartPts = null;
         }
     }
 
@@ -488,11 +746,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
         ChannelDto channel,
         int audioStreamIndex,
         GeneralAppSettingsDto appSettings,
-        FfprobeRoot streamInfo
+        FfprobeRoot streamInfo,
+        SubtitleTrack? subtitle,
+        string? subtitlePipe
     )
     {
         var ffmpegArgs = FfmpegArguments.Build(
-            channel, audioStreamIndex, appSettings, streamInfo, m_options.UseMultiCast, SegmentSeconds);
+            channel, audioStreamIndex, appSettings, streamInfo, m_options.UseMultiCast, SegmentSeconds,
+            subtitle, subtitlePipe);
 
         m_logger.LogInformation("starting ffmpeg with args: {FfmpegArgs}", string.Join(' ', ffmpegArgs));
 

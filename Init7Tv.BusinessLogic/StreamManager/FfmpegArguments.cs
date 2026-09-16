@@ -29,6 +29,10 @@ public static class FfmpegArguments
         var withSubtitles = subtitle != null && !string.IsNullOrWhiteSpace(subtitleOutput);
         if (withSubtitles)
         {
+            // the subtitle output is a named pipe that already exists, and without
+            // this ffmpeg refuses to write to anything already there
+            args.Add("-y");
+
             // Teletext carries the whole service, pages of football tables and all,
             // and the default is to decode every one of them. Only the subtitle
             // pages are wanted, as text rather than as pictures of text.

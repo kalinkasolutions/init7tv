@@ -99,7 +99,9 @@ public sealed class FfprobeRoot
             .Select(x => new SubtitleTrack
             {
                 SubtitleStreamIndex = x.index,
-                Language = x.stream.Tags?.GetValueOrDefault("language") ?? "und"
+                // a teletext stream carries several components and ffprobe joins
+                // their languages with a comma; a track has one language
+                Language = (x.stream.Tags?.GetValueOrDefault("language") ?? "und").Split(',')[0].Trim()
             })
             .ToArray();
 
