@@ -257,3 +257,36 @@ input[type=number] {
         max-width: none;
     }
 }
+
+/* The drawer trigger, only where the channel list is off canvas. */
+.menu-button {
+    display: none;
+    font-size: 1.6rem;
+    line-height: 1;
+    padding: 0.2em 0.4em;
+    text-decoration: none;
+    color: #ffffffcf;
+}
+
+.menu-backdrop {
+    display: none;
+}
+
+@media (max-width: 1100px) {
+    .menu-button {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .menu-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 15;
+        background-color: rgba(0, 0, 0, 0.6);
+    }
+}
+
+[x-cloak] {
+    display: none !important;
+}

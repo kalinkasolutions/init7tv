@@ -66,3 +66,20 @@
 #epg .starts-at {
     white-space: nowrap;
 }
+/* Sits above the guide rather than inside it, so it is still there to press
+   once the guide is hidden. */
+.epg-controls {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 1em;
+}
+
+.epg-toggle {
+    font-size: 0.8rem;
+    opacity: 0.75;
+    padding: 0.4em 0.2em;
+}
+
+.epg-toggle:hover {
+    opacity: 1;
+}

@@ -1,4 +1,5 @@
-<aside id="sidebar" x-data="sidebarView()">
+<div class="menu-backdrop" x-show="$store.ui.menuOpen" @click="$store.ui.closeMenu()" x-cloak></div>
+<aside id="sidebar" x-data="sidebarView()" :class="{ 'menu-open': $store.ui.menuOpen }">
     <div class="channel-search">
         <label>
             <input @keyup="searchChannel($event)" type="search" placeholder="search"/>

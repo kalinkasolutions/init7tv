@@ -23,3 +23,32 @@ header ul li {
     text-decoration: none;
 }
 
+
+/* The nav gained a guide toggle, which no longer fits a phone on one line. */
+@media (max-width: 1100px) {
+    header {
+        flex-wrap: wrap;
+        gap: 0.3em;
+        padding: 0.4em 0.6em;
+    }
+
+    header ul {
+        flex-wrap: wrap;
+        font-size: 0.85rem;
+        align-items: center;
+    }
+
+    header ul li {
+        margin-right: 0.7em;
+    }
+}
+
+@media (max-width: 420px) {
+    header ul {
+        font-size: 0.8rem;
+    }
+
+    header ul li {
+        margin-right: 0.5em;
+    }
+}

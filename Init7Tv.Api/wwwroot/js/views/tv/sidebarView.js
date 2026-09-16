@@ -22,6 +22,7 @@ export const sidebarView = () => ({
         this.selectedChannel = channel;
         this.selectedChannel.selected = true;
         this.dispatch();
+        this.$store.ui.closeMenu();
     },
 
     dispatchLastWatchedChannel() {
