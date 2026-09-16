@@ -126,6 +126,45 @@ public class TsKeyframeDetectorTest
     }
 
     [Test]
+    public void ProgramTables_AreRememberedSoASegmentCanLeadWithThem()
+    {
+        var detector = new TsKeyframeDetector();
+        Assert.That(detector.ProgramTables, Is.Empty, "nothing to offer before a PAT has been seen");
+
+        detector.IsKeyframeStart(Pat());
+        Assert.That(detector.ProgramTables, Is.Empty, "a PAT alone does not describe the streams");
+
+        detector.IsKeyframeStart(Pmt());
+
+        // a player that demuxes each segment on its own needs both, ahead of any
+        // media, or it discards everything until the next set arrives
+        Assert.That(detector.ProgramTables, Has.Count.EqualTo(2));
+        Assert.Multiple(() =>
+        {
+            Assert.That(detector.ProgramTables[0][0], Is.EqualTo(TsKeyframeDetector.SyncByte));
+            Assert.That(detector.ProgramTables[0], Has.Length.EqualTo(TsKeyframeDetector.PacketSize));
+            Assert.That(detector.ProgramTables[1], Has.Length.EqualTo(TsKeyframeDetector.PacketSize));
+            Assert.That(Pid(detector.ProgramTables[0]), Is.EqualTo(0x0000), "the PAT comes first");
+            Assert.That(Pid(detector.ProgramTables[1]), Is.EqualTo(PmtPid));
+        });
+    }
+
+    [Test]
+    public void ProgramTables_FollowTheLatestVersion()
+    {
+        var detector = Primed();
+        var before = detector.ProgramTables[0];
+
+        var updated = Pat();
+        updated[7] = 0x42;                       // a different table body
+        detector.IsKeyframeStart(updated);
+
+        Assert.That(detector.ProgramTables[0], Is.Not.EqualTo(before));
+    }
+
+    private static int Pid(byte[] packet) => ((packet[1] & 0x1F) << 8) | packet[2];
+
+    [Test]
     public void APacketWithoutASyncByte_IsNot()
     {
         var detector = Primed();

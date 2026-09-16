@@ -19,6 +19,17 @@ public sealed class TsKeyframeDetector
     private int m_pmtPid = -1;
     private int m_videoPid = -1;
 
+    private byte[]? m_pat;
+    private byte[]? m_pmt;
+
+    /// <summary>
+    /// The most recent program tables. A segment has to carry them before any
+    /// media or a demuxer that reads segments independently, as hls.js does,
+    /// cannot tell what the streams are and drops everything until the next set.
+    /// </summary>
+    public IReadOnlyList<byte[]> ProgramTables =>
+        m_pat is not null && m_pmt is not null ? [m_pat, m_pmt] : [];
+
     public bool IsKeyframeStart(ReadOnlySpan<byte> packet)
     {
         if (packet.Length != PacketSize || packet[0] != SyncByte)
@@ -38,12 +49,14 @@ public sealed class TsKeyframeDetector
         if (pid == PatPid)
         {
             ReadPat(packet, payloadStart);
+            m_pat = packet.ToArray();
             return false;
         }
 
         if (pid == m_pmtPid)
         {
             ReadPmt(packet, payloadStart);
+            m_pmt = packet.ToArray();
             return false;
         }
 

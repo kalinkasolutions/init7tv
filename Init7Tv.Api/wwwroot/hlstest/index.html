@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-<h1>Same 25s of SAT.1, two segment formats</h1>
+<h1>Same 25s of SAT.1, three ways</h1>
 <p>
     Identical encode. The only difference is the container hls.js is handed.
     MPEG-TS has to be remuxed to fMP4 in JavaScript before MSE will take it;
@@ -32,6 +32,17 @@
         <h2>B &mdash; fMP4 / CMAF (no remuxing)</h2>
         <video id="b" controls muted></video>
         <pre id="statsB">not started</pre>
+    </div>
+    <div class="col">
+        <h2>C &mdash; identical segments, LIVE playlist</h2>
+        <p>
+            Byte for byte the same files as A. The only difference is that the
+            playlist has no EXT-X-ENDLIST, so hls.js treats it as live and uses
+            its live code path. If A is smooth and C is not, that path is the
+            fault and nothing upstream of it is.
+        </p>
+        <video id="c" controls muted></video>
+        <pre id="statsC">not started</pre>
     </div>
 </div>
 
@@ -67,9 +78,14 @@
         video.requestVideoFrameCallback(cb);
     }
 
-    for (const [id, src, out] of [['a', 'ts/index.m3u8', 'statsA'], ['b', 'fmp4/index.m3u8', 'statsB']]) {
+    for (const [id, src, out] of [['a', 'ts/index.m3u8', 'statsA'],
+                                 ['b', 'fmp4/index.m3u8', 'statsB'],
+                                 ['c', 'live/index.m3u8', 'statsC']]) {
         const video = document.getElementById(id);
-        const hls = new Hls();
+        // same options the app now uses, so C reproduces the real player
+        const hls = new Hls(id === 'c'
+            ? {lowLatencyMode: false, liveSyncDurationCount: 4, liveMaxLatencyDurationCount: 12, maxBufferLength: 30}
+            : {});
         hls.loadSource(src);
         hls.attachMedia(video);
         measure(video, document.getElementById(out));

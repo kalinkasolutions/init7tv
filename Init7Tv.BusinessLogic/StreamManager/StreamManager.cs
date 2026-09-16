@@ -381,6 +381,15 @@ public sealed class StreamManager : IStreamManager, IDisposable
                     segment.Reset();
                 }
 
+                // the program tables have to lead the segment. ffmpeg emits them
+                // periodically, so cutting at a keyframe left them a third of a
+                // second in, and a player that demuxes each segment on its own
+                // discards everything before them.
+                foreach (var table in detector.ProgramTables)
+                {
+                    segment.Write(table);
+                }
+
                 segment.Keyframes++;
             }
 
