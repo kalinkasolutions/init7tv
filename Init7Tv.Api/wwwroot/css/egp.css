@@ -8,14 +8,23 @@
 }
 
 #epg .epg-data {
+    position: relative;
+    overflow: hidden;
     width: 320px;
     border: 1px solid #ffffff80;
     padding: 0.5em;
-    background: linear-gradient(to right, rgba(81, 81, 138, 0.58) var(--progress, 0%), transparent 0%);
-    transition: background 0.3s linear;
     height: 200px;
     display: flex;
     flex-direction: column;
+}
+
+#epg .epg-progress {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: rgba(81, 81, 138, 0.58);
+    transform: scaleX(0);
+    transform-origin: left;
 }
 
 #epg .description {

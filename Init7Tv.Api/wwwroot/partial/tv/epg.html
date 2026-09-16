@@ -2,6 +2,7 @@
      @channel-selected.window="await getEpg($event.detail.channel)">
     <template x-if="current">
         <div class="epg-data">
+            <div class="epg-progress" x-ref="progressFill"></div>
             <div class="title-wrapper">
                 <h4 x-text="current.title"></h4>
                 <h5 class="ends-at" x-text="endsAt(current)"></h5>
