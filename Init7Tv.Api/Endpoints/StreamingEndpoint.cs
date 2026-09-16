@@ -24,6 +24,7 @@ public static class StreamingEndpoint
             .RequireAuthorization();
 
         group.MapGet("/channels", Channels);
+        group.MapPut("/channels/{channelId:guid}/favourite", SetFavourite);
         group.MapGet("/start-stream", StartStream);
         group.MapGet("/playlist", GetPlaylist);
         group.MapGet("/segment/{streamId}/{name}", GetSegment);
@@ -113,9 +114,23 @@ public static class StreamingEndpoint
             .ToArray();
     }
 
-    private static async Task<IResult> Channels(IChannelService channelService)
+    private static async Task<IResult> Channels(
+        IFavouriteChannelService favouriteChannelService,
+        IUserIdentityProvider userIdentityProvider
+    )
     {
-        return (await channelService.GetChannelsAsync()).ToHttpResult();
+        return (await favouriteChannelService.GetChannelsAsync(userIdentityProvider.UserName)).ToHttpResult();
+    }
+
+    private static async Task<IResult> SetFavourite(
+        Guid channelId,
+        bool isFavourite,
+        IFavouriteChannelService favouriteChannelService,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        return (await favouriteChannelService.SetFavouriteAsync(userIdentityProvider.UserName, channelId, isFavourite))
+            .ToHttpResult();
     }
 
     private static async Task<IResult> StartStream(Guid channelId,

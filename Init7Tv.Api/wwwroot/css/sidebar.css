@@ -33,6 +33,7 @@
 }
 
 #sidebar .channels .channel {
+    position: relative;
     cursor: pointer;
     padding: 1em;
     display: flex;
@@ -40,6 +41,29 @@
     justify-content: center;
     border-bottom: 1px solid #ffffff80;
     border-right: 1px solid #ffffff80;
+}
+
+#sidebar .channels .favourite {
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: absolute;
+    top: 0.1em;
+    right: 0.2em;
+    /* a comfortable tap target without pushing the row taller */
+    padding: 0.3em;
+    line-height: 1;
+    font-size: 1.1rem;
+    color: #ffffff80;
+}
+
+/* not the green the selected channel uses, or the two read as the same thing */
+#sidebar .channels .favourite.is-favourite {
+    color: #e0b341;
+}
+
+#sidebar .channels .favourite:hover {
+    color: #ffffffcf;
 }
 
 #sidebar .channels .channel:hover {
@@ -106,5 +130,13 @@
         max-width: 56px;
         max-height: 36px;
         object-fit: contain;
+    }
+
+    /* the row runs left to right here, so the star takes its place at the end
+       rather than sitting on top of the logo */
+    #sidebar .channels .favourite {
+        position: static;
+        order: 3;
+        padding: 0.4em;
     }
 }

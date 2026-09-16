@@ -72,11 +72,13 @@ builder.Services.AddHostedService<DashboardNotifier>();
 builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
 builder.Services.AddScoped<IIdentityRepository, IdentityRepository>();
 builder.Services.AddScoped<IAppSettingsRepository, AppSettingsRepository>();
+builder.Services.AddScoped<IFavouriteChannelRepository, FavouriteChannelRepository>();
 builder.Services.AddScoped<IIdentityService, IdentityService>();
 builder.Services.AddScoped<IAppSettingsService, AppSettingsService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 
 builder.Services.AddTransient<IChannelService, ChannelService>();
+builder.Services.AddScoped<IFavouriteChannelService, FavouriteChannelService>();
 builder.Services.AddTransient<IEpgService, EpgService>();
 
 var proxyAddress = builder.Configuration["ProxyAddress"];

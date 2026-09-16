@@ -1,18 +1,43 @@
-import {get} from '../../requestHandler.js';
+import {get, put} from '../../requestHandler.js';
 
 export const sidebarView = () => ({
     channels: [],
     allChannels: [],
+    searchTerm: "",
     selectedChannel: null,
 
     async init() {
-        this.channels = await get("/api/streaming/channels") ?? [];
-        this.allChannels = this.channels;
+        this.allChannels = await get("/api/streaming/channels") ?? [];
+        this.showChannels();
         this.dispatchLastWatchedChannel();
     },
 
     searchChannel(event) {
-        this.channels = this.allChannels.filter(c => c.displayName.toLowerCase().includes(event.target.value.toLowerCase()));
+        this.searchTerm = event.target.value.toLowerCase();
+        this.showChannels();
+    },
+
+    async toggleFavourite(channel) {
+        const isFavourite = !channel.isFavourite;
+
+        if (await put(`/api/streaming/channels/${channel.channelId}/favourite?isFavourite=${isFavourite}`) === null) {
+            return;
+        }
+
+        channel.isFavourite = isFavourite;
+        this.showChannels();
+    },
+
+    /// Always built from the list as the server sends it, never from what is on
+    /// screen: sorting an already sorted list loses where a channel belongs once
+    /// it stops being a favourite. Sorting is stable, so within each group the
+    /// channels keep that order.
+    showChannels() {
+        const matching = this.searchTerm
+            ? this.allChannels.filter(c => c.displayName.toLowerCase().includes(this.searchTerm))
+            : this.allChannels;
+
+        this.channels = [...matching].sort((a, b) => Boolean(b.isFavourite) - Boolean(a.isFavourite));
     },
 
     channelSelected(channel) {

@@ -1,6 +1,8 @@
-﻿namespace Init7Tv.Dto;
+namespace Init7Tv.Dto;
 
-public sealed class ChannelDto
+/// <summary>A record so a per-viewer copy can be made with `with`: the channel
+/// list itself is cached and shared between everyone.</summary>
+public sealed record ChannelDto
 {
     public Guid ChannelId { get; set; }
     public string DisplayName { get; set; }
@@ -10,4 +12,5 @@ public sealed class ChannelDto
     public string HlsSource { get; set; }
     public bool ManuallyAdded { get; set; }
     public string UdpSource { get; set; }
+    public bool IsFavourite { get; set; }
 }
