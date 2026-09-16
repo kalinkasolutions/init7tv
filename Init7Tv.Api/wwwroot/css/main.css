@@ -67,7 +67,9 @@ main {
     flex-direction: row;
     flex: 1;
     min-height: 0;
-    overflow: hidden;
+    /* Nothing scrolls at a usable window size. In one too short for even the
+       smallest player and a card, scrolling beats hiding the rest for good. */
+    overflow: auto;
 }
 
 select {
