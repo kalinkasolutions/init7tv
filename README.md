@@ -94,7 +94,8 @@ server {
     proxy_set_header X-Forwarded-Proto   $scheme;
     proxy_set_header X-Forwarded-Host    $host;
 
-    # WebSocket support (required for live dashboard)
+    # WebSocket support (live dashboard) and unbuffered responses, which the
+    # player's server-sent event stream needs to receive updates promptly
     proxy_http_version  1.1;
     proxy_set_header    Upgrade     $http_upgrade;
     proxy_set_header    Connection  "upgrade";

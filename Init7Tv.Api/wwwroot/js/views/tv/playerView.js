@@ -6,6 +6,41 @@ export const playerView = () => ({
     languages: [],
     selectedLanguage: null,
     hls: null,
+    streamId: null,
+    events: null,
+
+    init() {
+        // the server tears a stream down when ffmpeg exits; without this the
+        // player just stalls with no explanation
+        this.events = new EventSource("/api/streaming/events");
+        this.events.addEventListener("streams", event => {
+            const {streamIds} = JSON.parse(event.data);
+            this.onViewerStreams(streamIds ?? []);
+        });
+    },
+
+    destroy() {
+        this.events?.close();
+    },
+
+    onViewerStreams(streamIds) {
+        // streamId is null while a channel switch is in flight, when the server
+        // legitimately reports us as watching nothing
+        if (!this.streamId || streamIds.includes(this.streamId)) {
+            return;
+        }
+
+        this.stopPlayback();
+        notify("Stream ended", "The channel stopped streaming.", "error");
+    },
+
+    stopPlayback() {
+        this.streamId = null;
+        if (this.hls) {
+            this.hls.destroy();
+            this.hls = null;
+        }
+    },
 
     get currentTitle() {
         return this.currentChannel?.displayName ?? "";
@@ -19,10 +54,13 @@ export const playerView = () => ({
 
     async playChannel(channel, audioStreamIndex = null) {
         this.currentChannel = channel;
+        this.streamId = null;
+
         const streamId = await this.startStream(channel.channelId, audioStreamIndex);
         if (streamId) {
             this.selectedLanguage = audioStreamIndex;
             this.startHls(streamId);
+            this.streamId = streamId;
             this.saveLastChannelInfo(audioStreamIndex);
         }
     },
@@ -45,6 +83,7 @@ export const playerView = () => ({
 
         if (this.hls) {
             this.hls.destroy();
+            this.hls = null;
         }
 
         if (!Hls.isSupported()) {

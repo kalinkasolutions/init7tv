@@ -215,6 +215,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
     {
         return m_streams.Values.ToArray().Select(stream => new CurrentStreamDto
         {
+            StreamId = stream.StreamId,
             ChannelId = stream.Channel.ChannelId,
             ChannelDisplayName = stream.Channel.DisplayName,
             ChannelLogo = stream.Channel.Logo,
