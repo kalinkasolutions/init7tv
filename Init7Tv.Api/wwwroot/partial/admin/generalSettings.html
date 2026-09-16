@@ -25,8 +25,11 @@
     <div class="form-group">
         <label for="ffmpeg-deinterlace">Deinterlace (interlaced channels only):</label>
         <select id="ffmpeg-deinterlace" x-model="appSettings.ffmpegDeinterlaceMode">
-            <option value="send_field">send_field - 50fps, one frame per field</option>
-            <option value="send_frame">send_frame - 25fps, one frame per frame</option>
+            <option value="yadif:send_field">yadif send_field - 50fps</option>
+            <option value="yadif:send_frame">yadif send_frame - 25fps</option>
+            <option value="bwdif:send_field">bwdif send_field - 50fps, better interpolation</option>
+            <option value="bwdif:send_frame">bwdif send_frame - 25fps, better interpolation</option>
+            <option value="none:none">none - leave interlaced</option>
         </select>
     </div>
 

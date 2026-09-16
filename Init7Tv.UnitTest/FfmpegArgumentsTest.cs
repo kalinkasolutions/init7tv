@@ -29,7 +29,7 @@ public class FfmpegArgumentsTest
         BaseDomain = "https://tv.example.org",
         FfmpegPreset = "ultrafast",
         FfmpegLogLevel = "warning",
-        FfmpegDeinterlaceMode = "send_field"
+        FfmpegDeinterlaceMode = "yadif:send_field"
     };
 
     private static FfprobeRoot Probe(bool interlaced, string frameRate = "", bool topFieldFirst = true) => new()
@@ -93,22 +93,45 @@ public class FfmpegArgumentsTest
         Assert.That(ValueOf(args, "-vf"), Is.EqualTo("yadif=mode=send_field:parity=0"));
     }
 
-    [TestCase("send_field")]
-    [TestCase("send_frame")]
-    public void TheConfiguredDeinterlaceModeIsUsed(string mode)
+    [TestCase("yadif:send_field", "yadif=mode=send_field:parity=0")]
+    [TestCase("yadif:send_frame", "yadif=mode=send_frame:parity=0")]
+    [TestCase("bwdif:send_field", "bwdif=mode=send_field:parity=0")]
+    [TestCase("bwdif:send_frame", "bwdif=mode=send_frame:parity=0")]
+    public void TheConfiguredDeinterlacerIsUsed(string setting, string expected)
     {
-        // configurable because which one looks right depends on the display:
-        // 25fps cannot be shown evenly on a 60Hz screen
-        var settings = new GeneralAppSettingsDto
-        {
-            BaseDomain = "x", FfmpegPreset = "ultrafast", FfmpegLogLevel = "warning",
-            FfmpegDeinterlaceMode = mode
-        };
-
-        var args = FfmpegArguments.Build(Channel, 0, settings, Probe(true), true, SegmentSeconds);
-
-        Assert.That(ValueOf(args, "-vf"), Is.EqualTo($"yadif=mode={mode}:parity=0"));
+        Assert.That(ValueOf(BuildWith(setting), "-vf"), Is.EqualTo(expected));
     }
+
+    [TestCase("send_field", "yadif=mode=send_field:parity=0")]
+    [TestCase("send_frame", "yadif=mode=send_frame:parity=0")]
+    public void SettingsWrittenBeforeTheDeinterlacerWasSelectableStillWork(string setting, string expected)
+    {
+        Assert.That(ValueOf(BuildWith(setting), "-vf"), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void DeinterlacingCanBeTurnedOff()
+    {
+        Assert.That(BuildWith("none:none"), Does.Not.Contain("-vf"));
+    }
+
+    [TestCase("rm -rf /")]
+    [TestCase("yadif:nonsense")]
+    [TestCase("evil:send_field")]
+    public void AnUnknownDeinterlacerFallsBackInsteadOfBreakingTheFilterGraph(string setting)
+    {
+        Assert.That(ValueOf(BuildWith(setting), "-vf"), Is.EqualTo("yadif=mode=send_field:parity=0"));
+    }
+
+    private static string[] BuildWith(string? deinterlaceMode) =>
+        FfmpegArguments.Build(
+            Channel, 0,
+            new GeneralAppSettingsDto
+            {
+                BaseDomain = "x", FfmpegPreset = "ultrafast", FfmpegLogLevel = "warning",
+                FfmpegDeinterlaceMode = deinterlaceMode!
+            },
+            Probe(true), true, SegmentSeconds);
 
     [TestCase("")]
     [TestCase("   ")]
@@ -132,7 +155,7 @@ public class FfmpegArgumentsTest
         var settings = new GeneralAppSettingsDto
         {
             BaseDomain = "x", FfmpegPreset = "ultrafast", FfmpegLogLevel = "warning",
-            FfmpegDeinterlaceMode = "send_field"
+            FfmpegDeinterlaceMode = "yadif:send_field"
         };
 
         var args = FfmpegArguments.Build(Channel, 0, settings, Probe(false), true, SegmentSeconds);

@@ -12,7 +12,7 @@ namespace Init7Tv.BusinessLogic.StreamManager;
 /// </summary>
 public static class FfmpegArguments
 {
-    private const string DefaultDeinterlaceMode = "send_field";
+    private const string DefaultDeinterlaceMode = "yadif:send_field";
 
     public static string[] Build(
         ChannelDto channel,
@@ -57,12 +57,12 @@ public static class FfmpegArguments
         {
             // one output per input frame. Deinterlacing a progressive channel
             // would soften it for nothing, so this is conditional.
-            var parity = streamInfo.IsTopFieldFirst ? 0 : 1;
-            var mode = string.IsNullOrWhiteSpace(appSettings.FfmpegDeinterlaceMode)
-                ? DefaultDeinterlaceMode
-                : appSettings.FfmpegDeinterlaceMode;
+            var filter = DeinterlaceFilter(appSettings.FfmpegDeinterlaceMode, streamInfo.IsTopFieldFirst);
 
-            args.AddRange(["-vf", $"yadif=mode={mode}:parity={parity}"]);
+            if (filter != null)
+            {
+                args.AddRange(["-vf", filter]);
+            }
         }
 
         args.AddRange(["-pix_fmt", "yuv420p"]);
@@ -75,6 +75,37 @@ public static class FfmpegArguments
         args.Add("pipe:1");
 
         return args.ToArray();
+    }
+
+    /// <summary>
+    /// Null when deinterlacing is turned off. Only known values are accepted, so
+    /// whatever is in the database cannot turn into a broken filter graph.
+    /// </summary>
+    private static string? DeinterlaceFilter(string? setting, bool topFieldFirst)
+    {
+        var parity = topFieldFirst ? 0 : 1;
+
+        // values written before the deinterlacer was selectable named only the mode
+        var value = string.IsNullOrWhiteSpace(setting) ? DefaultDeinterlaceMode : setting.Trim();
+        if (!value.Contains(':'))
+        {
+            value = $"yadif:{value}";
+        }
+
+        var parts = value.Split(':', 2);
+        var (deinterlacer, mode) = (parts[0], parts[1]);
+
+        if (deinterlacer == "none")
+        {
+            return null;
+        }
+
+        if (deinterlacer is not ("yadif" or "bwdif") || mode is not ("send_frame" or "send_field"))
+        {
+            return $"yadif=mode=send_field:parity={parity}";
+        }
+
+        return $"{deinterlacer}=mode={mode}:parity={parity}";
     }
 
     private static int KeyframeInterval(FfprobeRoot streamInfo, int segmentSeconds)
