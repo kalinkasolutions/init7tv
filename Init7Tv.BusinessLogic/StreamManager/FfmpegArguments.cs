@@ -33,11 +33,12 @@ public static class FfmpegArguments
             // this ffmpeg refuses to write to anything already there
             args.Add("-y");
 
-            // Teletext carries the whole service, pages of football tables and all,
-            // and the default is to decode every one of them. Only the subtitle
-            // pages are wanted, as text rather than as pictures of text.
+            // Teletext carries the whole service, pages of football tables and all.
+            // The page is named rather than asking for every subtitle page,
+            // because one stream carries several: arte D has German on 150 and
+            // French on 888, and asking for both returns them interleaved.
             args.AddRange(["-txt_format", "text"]);
-            args.AddRange(["-txt_page", "subtitle"]);
+            args.AddRange(["-txt_page", subtitle!.Page.ToString(CultureInfo.InvariantCulture)]);
 
             // without this every caption is given an end hours away, so none of
             // them ever clears and they pile up on top of each other

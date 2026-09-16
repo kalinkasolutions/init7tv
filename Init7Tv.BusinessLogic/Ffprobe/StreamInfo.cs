@@ -46,6 +46,13 @@ public sealed class StreamInfo
     [JsonPropertyName("sample_rate")]
     public string? SampleRate { get; set; }
 
+    /// <summary>
+    /// Written by ffprobe with -show_data, as a hexdump. For teletext it is the
+    /// PMT descriptor with the language codes taken out, two bytes a component.
+    /// </summary>
+    [JsonPropertyName("extradata")]
+    public string? ExtraData { get; set; }
+
     [JsonPropertyName("tags")]
     public Dictionary<string, string>? Tags { get; set; }
 

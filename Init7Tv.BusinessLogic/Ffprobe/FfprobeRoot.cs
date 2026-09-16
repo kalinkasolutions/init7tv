@@ -87,22 +87,25 @@ public sealed class FfprobeRoot
     private StreamInfo[] GetAudioStreams => Streams.Where(x => x.CodecType == "audio").ToArray();
 
     /// <summary>
-    /// Subtitle tracks that can be turned into words. Teletext decodes to text;
-    /// DVB subtitles are pictures of text and would need recognising, so they are
-    /// left out rather than offered and then found empty.
+    /// Subtitle tracks that can be turned into words, one for each teletext page
+    /// that carries captions. DVB subtitles are pictures of text and would need
+    /// recognising, so they are left out rather than offered and found empty.
     /// </summary>
     public SubtitleTrack[] GetSubtitleTracks =>
         Streams
             .Where(x => x.CodecType == "subtitle")
             .Select((stream, index) => (stream, index))
             .Where(x => x.stream.CodecName == TeletextCodec)
-            .Select(x => new SubtitleTrack
-            {
-                SubtitleStreamIndex = x.index,
-                // a teletext stream carries several components and ffprobe joins
-                // their languages with a comma; a track has one language
-                Language = (x.stream.Tags?.GetValueOrDefault("language") ?? "und").Split(',')[0].Trim()
-            })
+            .SelectMany(x => TeletextDescriptor
+                .FromProbe(x.stream.Tags?.GetValueOrDefault("language"), x.stream.ExtraData)
+                .Where(component => component.IsSubtitle)
+                .Select(component => new SubtitleTrack
+                {
+                    SubtitleStreamIndex = x.index,
+                    Language = component.Language,
+                    Page = component.Page,
+                    HearingImpaired = component.HearingImpaired
+                }))
             .ToArray();
 
     private const string TeletextCodec = "dvb_teletext";

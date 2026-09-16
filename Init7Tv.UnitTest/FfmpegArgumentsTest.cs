@@ -176,7 +176,8 @@ public class FfmpegArgumentsTest
         Assert.That(args, Does.Contain($"0:a:{audioStreamIndex}"));
     }
 
-    private static readonly SubtitleTrack Teletext = new() { SubtitleStreamIndex = 1, Language = "deu" };
+    private static readonly SubtitleTrack Teletext =
+        new() { SubtitleStreamIndex = 1, Language = "deu", Page = 777 };
 
     [Test]
     public void WithNoSubtitleChosen_NothingAboutSubtitlesIsPassed()
@@ -219,18 +220,29 @@ public class FfmpegArgumentsTest
     }
 
     [Test]
-    public void OnlyTheSubtitlePagesAreDecoded_AsText()
+    public void OnlyTheChosenPageIsDecoded_AsText()
     {
-        // teletext carries the whole service; decoding all of it gives pages of
-        // sports results where the captions should be
+        // teletext carries the whole service, and one stream carries several
+        // subtitle pages: asking for all of them mixes the languages together
         var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
             Teletext, "/tmp/subs.vtt");
 
         Assert.Multiple(() =>
         {
-            Assert.That(ValueOf(args, "-txt_page"), Is.EqualTo("subtitle"));
+            Assert.That(ValueOf(args, "-txt_page"), Is.EqualTo("777"));
             Assert.That(ValueOf(args, "-txt_format"), Is.EqualTo("text"));
         });
+    }
+
+    [Test]
+    public void ADifferentPageIsAskedForByNumber()
+    {
+        var french = new SubtitleTrack { SubtitleStreamIndex = 0, Language = "fra", Page = 888 };
+
+        var args = FfmpegArguments.Build(Channel, 0, Settings, Probe(true), true, SegmentSeconds,
+            french, "/tmp/subs.vtt");
+
+        Assert.That(ValueOf(args, "-txt_page"), Is.EqualTo("888"));
     }
 
     [Test]

@@ -136,9 +136,10 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 streamInfo.Value.GetVideoCodec,
                 streamInfo.Value.GetLanguages);
 
-            // one track only. Every channel that carries teletext carries a single
-            // stream of it, and a second output per track would cost a decode each
-            // for something no channel here offers.
+            // One track. -txt_page configures the teletext decoder, and one input
+            // has one decoder, so a second page would need the source opened and
+            // decoded again. Channels carrying captions in two languages are rare
+            // enough to be worth naming rather than paying that on every stream.
             var subtitle = streamInfo.Value.GetSubtitleTracks.FirstOrDefault();
             var subtitlePipe = subtitle == null ? null : CreateSubtitlePipe(streamId);
             if (subtitle != null && subtitlePipe == null)
@@ -255,7 +256,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         master.AppendLine("#EXTM3U");
         master.AppendLine("#EXT-X-VERSION:6");
         master.AppendLine(
-            $"#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"{stream.Subtitle.Language}\"," +
+            $"#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"{stream.Subtitle.Label}\"," +
             $"LANGUAGE=\"{stream.Subtitle.Language}\",DEFAULT=NO,AUTOSELECT=NO," +
             $"URI=\"/api/streaming/playlist/subtitles?streamId={streamId}\"");
         master.AppendLine("#EXT-X-STREAM-INF:BANDWIDTH=3000000,SUBTITLES=\"subs\"");
@@ -819,6 +820,9 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 "-probesize", "2000000",
                 "-print_format", "json",
                 "-read_intervals", "%+1",
+                // the teletext pages are only in the stream's extradata, and the
+                // page is what tells one language's captions from another's
+                "-show_data",
                 "-show_entries", "stream:format:frame=media_type,interlaced_frame,top_field_first",
                 streamUrl
             },
