@@ -73,10 +73,11 @@ export const recordingView = () => ({
         }));
     },
 
-    /// Whole days between today and the one a programme starts on, counted
-    /// locally so a programme late tonight does not read as tomorrow.
+    /// Which day of the guide a programme is on. The source cuts its days at UTC
+    /// midnight, so counting in local days sends anything airing after midnight
+    /// here to a day the programme is not on.
     dayOffsetOf(when) {
-        const midnight = date => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const midnight = date => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
         const days = Math.round((midnight(new Date(when)) - midnight(new Date())) / 86_400_000);
         return Math.min(Math.max(days, 0), this.days.length - 1);
     },

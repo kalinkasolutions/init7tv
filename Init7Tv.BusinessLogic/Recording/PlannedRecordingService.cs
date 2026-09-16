@@ -95,7 +95,16 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
         CanonicalName = x.CanonicalName,
         Title = x.Title,
         SubTitle = x.SubTitle,
-        StartsAt = x.StartsAt,
-        EndsAt = x.EndsAt
+        StartsAt = AsUtc(x.StartsAt),
+        EndsAt = AsUtc(x.EndsAt)
+    };
+
+    /// These are stored in UTC, but the database hands them back with no kind at
+    /// all, and a time that reaches the browser unmarked is read there as local.
+    private static DateTime AsUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
     };
 }
