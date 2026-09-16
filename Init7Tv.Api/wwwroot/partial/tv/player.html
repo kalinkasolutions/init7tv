@@ -15,6 +15,12 @@
                 </select>
             </div>
         </div>
-        <video id="player" controls></video>
+        <div class="video-wrapper">
+            <video id="player" controls></video>
+            <div class="player-loading" x-show="loading" x-cloak>
+                <div class="spinner"></div>
+                <span x-text="`Starting ${currentTitle}...`"></span>
+            </div>
+        </div>
     </div>
 </section>

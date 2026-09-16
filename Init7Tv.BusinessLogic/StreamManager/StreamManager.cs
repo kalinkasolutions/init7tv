@@ -197,7 +197,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
     {
         if (!m_streams.TryGetValue(streamId, out var stream))
         {
-            return OperationResult<string>.Error($"Could not find stream while getting playlist: {streamId}");
+            return OperationResult<string>.NotFound($"Could not find stream while getting playlist: {streamId}");
         }
 
         stream.Viewers[userName] = DateTime.UtcNow;
@@ -234,7 +234,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
     {
         if (!m_streams.TryGetValue(streamId, out var stream))
         {
-            return OperationResult<byte[]>.Error($"Could not find stream: {streamId} for segment:  {name}");
+            return OperationResult<byte[]>.NotFound($"Could not find stream: {streamId} for segment: {name}");
         }
 
         if (stream.TsSegments.TryGetValue(name, out var tsSegment))

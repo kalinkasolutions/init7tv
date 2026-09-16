@@ -8,6 +8,7 @@ export const playerView = () => ({
     hls: null,
     streamId: null,
     events: null,
+    loading: false,
 
     init() {
         // the server tears a stream down when ffmpeg exits; without this the
@@ -36,9 +37,17 @@ export const playerView = () => ({
 
     stopPlayback() {
         this.streamId = null;
+
         if (this.hls) {
             this.hls.destroy();
             this.hls = null;
+        }
+
+        // destroying hls leaves the last decoded frame on screen
+        const player = document.getElementById("player");
+        if (player) {
+            player.removeAttribute("src");
+            player.load();
         }
     },
 
@@ -54,14 +63,22 @@ export const playerView = () => ({
 
     async playChannel(channel, audioStreamIndex = null) {
         this.currentChannel = channel;
-        this.streamId = null;
 
-        const streamId = await this.startStream(channel.channelId, audioStreamIndex);
-        if (streamId) {
-            this.selectedLanguage = audioStreamIndex;
-            this.startHls(streamId);
-            this.streamId = streamId;
-            this.saveLastChannelInfo(audioStreamIndex);
+        // the server stops the previous stream as soon as this one is asked for,
+        // so keep the old player from polling a playlist that is already gone
+        this.stopPlayback();
+        this.loading = true;
+
+        try {
+            const streamId = await this.startStream(channel.channelId, audioStreamIndex);
+            if (streamId) {
+                this.selectedLanguage = audioStreamIndex;
+                this.startHls(streamId);
+                this.streamId = streamId;
+                this.saveLastChannelInfo(audioStreamIndex);
+            }
+        } finally {
+            this.loading = false;
         }
     },
 
