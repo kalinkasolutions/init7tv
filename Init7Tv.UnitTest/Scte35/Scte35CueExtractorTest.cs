@@ -125,6 +125,23 @@ public class Scte35CueExtractorTest
     }
 
     [Test]
+    public void APatSplitAcrossSections_IsFollowedThrough()
+    {
+        // a PAT may be sent as several sections, each in its own packet. Reading
+        // only the first one loses every programme announced in the rest.
+        var extractor = new Scte35CueExtractor(OtherProgramNumber);
+
+        var cues = extractor.Read(Stream(
+            Scte35TestStream.Packet(0x0000, true, Scte35TestStream.Pat((ProgramNumber, PmtPid))),
+            Scte35TestStream.Packet(0x0000, true, Scte35TestStream.Pat((OtherProgramNumber, OtherPmtPid))),
+            Scte35TestStream.Packet(OtherPmtPid, true,
+                Scte35TestStream.Pmt(OtherCuePid, programNumber: OtherProgramNumber)),
+            Scte35TestStream.Packet(OtherCuePid, true, Cue(eventId: 3)))).ToArray();
+
+        Assert.That(cues.Select(x => x.SpliceInsert!.SpliceEventId), Is.EqualTo(new uint[] { 3 }));
+    }
+
+    [Test]
     public void ASectionSpanningTwoPackets_IsPutBackTogether()
     {
         // a cue with a long upid does not fit in what is left of one packet
