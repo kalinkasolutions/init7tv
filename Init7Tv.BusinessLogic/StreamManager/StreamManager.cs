@@ -103,9 +103,13 @@ public sealed class StreamManager : IStreamManager, IDisposable
             return channelResult.MapError<StreamDto>();
         }
 
-        StopSingleUserStream(userName);
-
         var streamId = GetStreamId($"{channelResult.Value.HlsSource}_{audioStreamIndex}");
+
+        // Leaving a channel stops it once nobody is left, but not when this is
+        // the same channel: a second start would otherwise find the caller
+        // listed as the only viewer of the stream the first start is still
+        // waiting on, stop it, and fail that first request.
+        StopSingleUserStream(userName, streamId);
         var startStreamLock = m_streamLocks.GetOrAdd(streamId, _ => new SemaphoreSlim(1, 1));
 
         await startStreamLock.WaitAsync();
@@ -612,10 +616,10 @@ public sealed class StreamManager : IStreamManager, IDisposable
         return Hash.GetSha256(input);
     }
 
-    private void StopSingleUserStream(string userName)
+    private void StopSingleUserStream(string userName, string? keepStreamId = null)
     {
         var stream = m_streams.Values.FirstOrDefault(s => s.Viewers.ContainsKey(userName));
-        if (stream == null)
+        if (stream == null || stream.StreamId == keepStreamId)
         {
             return;
         }
