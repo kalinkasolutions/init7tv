@@ -111,6 +111,8 @@ public class ChannelStreamSweepTest
             NullLogger<StreamManager>.Instance,
             CreateChannelService(),
             new StreamEventBus(NullLogger<StreamEventBus>.Instance),
+            // a fresh cache per case, so one channel's probe cannot serve another
+            new MemoryCache(new MemoryCacheOptions()),
             Options.Create(new Init7TvOptions { UseMultiCast = true }));
 
         var userName = $"sweep-{Guid.NewGuid():N}";

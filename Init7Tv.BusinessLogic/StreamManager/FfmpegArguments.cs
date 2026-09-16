@@ -33,8 +33,13 @@ public static class FfmpegArguments
             // motion went forward, back, forward. Bisected against the same
             // recording: without it smooth, with it stutters, and +genpts alone
             // is smooth.
-            args.AddRange(["-analyzeduration", "5000000"]);
-            args.AddRange(["-probesize", "10000000"]);
+            // the stream has already been probed, so ffmpeg does not need to spend
+            // five seconds rediscovering it. Measured on SAT.1: first output after
+            // 5.4s at the old window against 3.1s at this one, and nothing below
+            // this is faster because the floor is how fast udp delivers. Verified
+            // that the later audio tracks are still found and mappable.
+            args.AddRange(["-analyzeduration", "1000000"]);
+            args.AddRange(["-probesize", "2000000"]);
             args.AddRange(["-i", $"{channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1"]);
         }
         else
