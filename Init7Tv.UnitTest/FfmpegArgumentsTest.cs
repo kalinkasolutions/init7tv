@@ -28,8 +28,7 @@ public class FfmpegArgumentsTest
     {
         BaseDomain = "https://tv.example.org",
         FfmpegPreset = "ultrafast",
-        FfmpegLogLevel = "warning",
-        FfmpegDeinterlaceMode = "yadif:send_field"
+        FfmpegLogLevel = "warning"
     };
 
     private static FfprobeRoot Probe(bool interlaced, string frameRate = "", bool topFieldFirst = true) => new()
@@ -85,19 +84,17 @@ public class FfmpegArgumentsTest
         });
     }
 
-    [Test]
-    public void SendFrame_OnlyTouchesFramesThatAreActuallyInterlaced()
+    [TestCase(true)]
+    [TestCase(false)]
+    public void LowDelayIsNeverSet_ItReordersBFrameSourcesWrongly(bool multicast)
     {
-        // one output per input either way, so the rate stays constant while
-        // genuinely progressive frames pass through unfiltered
-        Assert.That(ValueOf(BuildWith("yadif:send_frame"), "-vf"), Does.Contain("deint=interlaced"));
-    }
+        // these sources are MPEG-2 with B frames. low_delay makes the decoder
+        // assume no reorder delay, so frames come out in decode order and the
+        // motion goes forward, back, forward.
+        var args = Build(multicast: multicast);
 
-    [Test]
-    public void SendField_DeinterlacesEveryFrame()
-    {
-        // doubling only some frames gave an output alternating 25 and 50fps
-        Assert.That(ValueOf(BuildWith("yadif:send_field"), "-vf"), Does.Not.Contain("deint="));
+        Assert.That(args, Does.Not.Contain("low_delay"));
+        Assert.That(args.Any(a => a.Contains("low_delay")), Is.False);
     }
 
     [Test]
@@ -106,76 +103,6 @@ public class FfmpegArgumentsTest
         var args = Build(interlaced: true);
 
         Assert.That(ValueOf(args, "-vf"), Is.EqualTo("yadif=mode=send_field:parity=0"));
-    }
-
-    [TestCase("yadif:send_field", "yadif=mode=send_field:parity=0")]
-    [TestCase("yadif:send_frame", "yadif=mode=send_frame:parity=0:deint=interlaced")]
-    [TestCase("bwdif:send_field", "bwdif=mode=send_field:parity=0")]
-    [TestCase("bwdif:send_frame", "bwdif=mode=send_frame:parity=0:deint=interlaced")]
-    public void TheConfiguredDeinterlacerIsUsed(string setting, string expected)
-    {
-        Assert.That(ValueOf(BuildWith(setting), "-vf"), Is.EqualTo(expected));
-    }
-
-    [TestCase("send_field", "yadif=mode=send_field:parity=0")]
-    [TestCase("send_frame", "yadif=mode=send_frame:parity=0:deint=interlaced")]
-    public void SettingsWrittenBeforeTheDeinterlacerWasSelectableStillWork(string setting, string expected)
-    {
-        Assert.That(ValueOf(BuildWith(setting), "-vf"), Is.EqualTo(expected));
-    }
-
-    [Test]
-    public void DeinterlacingCanBeTurnedOff()
-    {
-        Assert.That(BuildWith("none:none"), Does.Not.Contain("-vf"));
-    }
-
-    [TestCase("rm -rf /")]
-    [TestCase("yadif:nonsense")]
-    [TestCase("evil:send_field")]
-    public void AnUnknownDeinterlacerFallsBackInsteadOfBreakingTheFilterGraph(string setting)
-    {
-        Assert.That(ValueOf(BuildWith(setting), "-vf"), Is.EqualTo("yadif=mode=send_field:parity=0"));
-    }
-
-    private static string[] BuildWith(string? deinterlaceMode) =>
-        FfmpegArguments.Build(
-            Channel, 0,
-            new GeneralAppSettingsDto
-            {
-                BaseDomain = "x", FfmpegPreset = "ultrafast", FfmpegLogLevel = "warning",
-                FfmpegDeinterlaceMode = deinterlaceMode!
-            },
-            Probe(true), true, SegmentSeconds);
-
-    [TestCase("")]
-    [TestCase("   ")]
-    [TestCase(null)]
-    public void AnEmptyDeinterlaceModeNeverProducesAMalformedFilter(string? mode)
-    {
-        var settings = new GeneralAppSettingsDto
-        {
-            BaseDomain = "x", FfmpegPreset = "ultrafast", FfmpegLogLevel = "warning",
-            FfmpegDeinterlaceMode = mode!
-        };
-
-        var args = FfmpegArguments.Build(Channel, 0, settings, Probe(true), true, SegmentSeconds);
-
-        Assert.That(ValueOf(args, "-vf"), Is.EqualTo("yadif=mode=send_field:parity=0"));
-    }
-
-    [Test]
-    public void TheDeinterlaceModeIsIgnoredForProgressiveSources()
-    {
-        var settings = new GeneralAppSettingsDto
-        {
-            BaseDomain = "x", FfmpegPreset = "ultrafast", FfmpegLogLevel = "warning",
-            FfmpegDeinterlaceMode = "yadif:send_field"
-        };
-
-        var args = FfmpegArguments.Build(Channel, 0, settings, Probe(false), true, SegmentSeconds);
-
-        Assert.That(args, Does.Not.Contain("-vf"));
     }
 
     [Test]

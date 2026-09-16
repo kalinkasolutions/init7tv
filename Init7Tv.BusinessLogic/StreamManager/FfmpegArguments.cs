@@ -12,8 +12,6 @@ namespace Init7Tv.BusinessLogic.StreamManager;
 /// </summary>
 public static class FfmpegArguments
 {
-    private const string DefaultDeinterlaceMode = "yadif:send_field";
-
     public static string[] Build(
         ChannelDto channel,
         int audioStreamIndex,
@@ -28,7 +26,13 @@ public static class FfmpegArguments
         if (useMultiCast)
         {
             args.AddRange(["-fflags", "+genpts+discardcorrupt"]);
-            args.AddRange(["-flags", "low_delay"]);
+
+            // no -flags low_delay. It tells the decoder to assume frames need no
+            // reordering, and these sources are MPEG-2 with B frames, so it
+            // emitted them in decode order rather than presentation order and the
+            // motion went forward, back, forward. Bisected against the same
+            // recording: without it smooth, with it stutters, and +genpts alone
+            // is smooth.
             args.AddRange(["-analyzeduration", "5000000"]);
             args.AddRange(["-probesize", "10000000"]);
             args.AddRange(["-i", $"{channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1"]);
@@ -57,12 +61,11 @@ public static class FfmpegArguments
         {
             // one output per input frame. Deinterlacing a progressive channel
             // would soften it for nothing, so this is conditional.
-            var filter = DeinterlaceFilter(appSettings.FfmpegDeinterlaceMode, streamInfo.IsTopFieldFirst);
-
-            if (filter != null)
-            {
-                args.AddRange(["-vf", filter]);
-            }
+            // send_field recovers both fields as frames. parity is told outright
+            // because field_order is not dependable on these multicasts, and it
+            // comes from the coded frames instead.
+            var parity = streamInfo.IsTopFieldFirst ? 0 : 1;
+            args.AddRange(["-vf", $"yadif=mode=send_field:parity={parity}"]);
         }
 
         args.AddRange(["-pix_fmt", "yuv420p"]);
@@ -75,43 +78,6 @@ public static class FfmpegArguments
         args.Add("pipe:1");
 
         return args.ToArray();
-    }
-
-    /// <summary>
-    /// Null when deinterlacing is turned off. Only known values are accepted, so
-    /// whatever is in the database cannot turn into a broken filter graph.
-    /// </summary>
-    private static string? DeinterlaceFilter(string? setting, bool topFieldFirst)
-    {
-        var parity = topFieldFirst ? 0 : 1;
-
-        // values written before the deinterlacer was selectable named only the mode
-        var value = string.IsNullOrWhiteSpace(setting) ? DefaultDeinterlaceMode : setting.Trim();
-        if (!value.Contains(':'))
-        {
-            value = $"yadif:{value}";
-        }
-
-        var parts = value.Split(':', 2);
-        var (deinterlacer, mode) = (parts[0], parts[1]);
-
-        if (deinterlacer == "none")
-        {
-            return null;
-        }
-
-        if (deinterlacer is not ("yadif" or "bwdif") || mode is not ("send_frame" or "send_field"))
-        {
-            (deinterlacer, mode) = ("yadif", "send_field");
-        }
-
-        // send_frame emits one output per input, so restricting the filter to
-        // frames flagged interlaced leaves the rate constant and passes genuinely
-        // progressive material through untouched. send_field doubles, and doubling
-        // only some frames produced an output that alternated 25 and 50fps.
-        var deint = mode == "send_frame" ? ":deint=interlaced" : string.Empty;
-
-        return $"{deinterlacer}=mode={mode}:parity={parity}{deint}";
     }
 
     private static int KeyframeInterval(FfprobeRoot streamInfo, int segmentSeconds)
