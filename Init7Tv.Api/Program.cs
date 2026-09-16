@@ -6,6 +6,7 @@ using Init7Tv.BusinessLogic.AppSettingsService;
 using Init7Tv.BusinessLogic.Email;
 using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.BusinessLogic.Init7Api;
+using Init7Tv.BusinessLogic.Recording;
 using Init7Tv.BusinessLogic.StreamEventBus;
 using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.BusinessLogic.User;
@@ -73,12 +74,14 @@ builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
 builder.Services.AddScoped<IIdentityRepository, IdentityRepository>();
 builder.Services.AddScoped<IAppSettingsRepository, AppSettingsRepository>();
 builder.Services.AddScoped<IFavouriteChannelRepository, FavouriteChannelRepository>();
+builder.Services.AddScoped<IPlannedRecordingRepository, PlannedRecordingRepository>();
 builder.Services.AddScoped<IIdentityService, IdentityService>();
 builder.Services.AddScoped<IAppSettingsService, AppSettingsService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 
 builder.Services.AddTransient<IChannelService, ChannelService>();
 builder.Services.AddScoped<IFavouriteChannelService, FavouriteChannelService>();
+builder.Services.AddScoped<IPlannedRecordingService, PlannedRecordingService>();
 builder.Services.AddTransient<IEpgService, EpgService>();
 
 var proxyAddress = builder.Configuration["ProxyAddress"];
@@ -138,6 +141,7 @@ app.MapUserEndpoints();
 app.MapAdminEndpoint();
 app.MapDashboardEndpoints();
 app.MapEpgEndpoints();
+app.MapRecordingEndpoints();
 
 await Seed.InitializeAsync(app);
 

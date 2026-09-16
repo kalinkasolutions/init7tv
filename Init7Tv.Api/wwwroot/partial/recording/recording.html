@@ -43,7 +43,7 @@
                                 :disabled="hasEnded(programme)"
                                 :title="hasEnded(programme) ? 'Already over'
                                         : (isPlanned(programme) ? 'Do not record' : 'Record this')"
-                                @click="toggle(programme)">
+                                @click="await toggle(programme)">
                             <span x-show="!isPlanned(programme)">record</span>
                             <span x-show="isPlanned(programme)" x-cloak>&#10003; recording</span>
                         </button>
@@ -56,12 +56,12 @@
             <div class="planned-header">
                 <h3>Planned</h3>
                 <button class="link-button" x-show="planned.length" x-cloak
-                        @click="forgetEverything()">clear</button>
+                        @click="await forgetEverything()">clear</button>
             </div>
 
             <p class="empty" x-show="!planned.length" x-cloak>Nothing picked yet.</p>
 
-            <template x-for="entry in plannedInOrder" :key="entry.id">
+            <template x-for="entry in plannedInOrder" :key="entry.programmeId">
                 <div class="planned-item">
                     <div class="planned-open" role="button" tabindex="0"
                          :title="`Show ${entry.title} in the guide`"
@@ -71,14 +71,14 @@
                         <span class="planned-channel" x-text="entry.channelName"></span>
                         <span class="planned-title" x-text="entry.title"></span>
                     </div>
-                    <button class="icon-button danger-icon" title="Remove" @click="forget(entry.id)">
+                    <button class="icon-button danger-icon" title="Remove" @click="await forget(entry.programmeId)">
                         <i class="bi bi-trash3"></i>
                     </button>
                 </div>
             </template>
 
             <p class="note" x-show="planned.length" x-cloak>
-                Kept in this browser. Nothing records yet.
+                Saved. Nothing records them yet.
             </p>
         </aside>
     </div>
