@@ -24,7 +24,7 @@ header ul li {
 }
 
 
-/* The nav gained a guide toggle, which no longer fits a phone on one line. */
+/* The nav does not fit a phone on one line. */
 @media (max-width: 1100px) {
     header {
         flex-wrap: wrap;
