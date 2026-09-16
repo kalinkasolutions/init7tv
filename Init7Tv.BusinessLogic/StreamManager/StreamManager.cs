@@ -41,11 +41,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
     private const int SegmentsBeforeStart = 3;
     private static readonly TimeSpan SegmentDuration = TimeSpan.FromSeconds(SegmentSeconds);
 
-    // the encoder emits a keyframe every SegmentDuration, but it is measured in
-    // media time and this in wall clock: requiring the full duration rejects the
-    // keyframe that lands a few ms early and doubles the segment length
-    private static readonly TimeSpan MinSegmentDuration = SegmentDuration / 2;
-
     private readonly TimeSpan m_streamIdleTimeout = TimeSpan.FromSeconds(30);
     private readonly TimeSpan m_ffprobeTimeout = TimeSpan.FromSeconds(20);
 
@@ -362,7 +357,9 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
             if (detector.IsKeyframeStart(packet))
             {
-                if (segment.Keyframes > 0 && DateTime.UtcNow - segment.StartedAt >= MinSegmentDuration)
+                // scenecut is off and -g cannot fire first, so every keyframe here is
+                // a forced one exactly SegmentDuration of media after the last
+                if (segment.Keyframes > 0)
                 {
                     PublishSegment(stream, segment);
                     segment.Reset();
@@ -411,7 +408,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
         private MemoryStream m_buffer = new();
 
         public int Keyframes { get; set; }
-        public DateTime StartedAt { get; private set; } = DateTime.UtcNow;
 
         public void Write(ReadOnlySpan<byte> packet) => m_buffer.Write(packet);
 
@@ -421,7 +417,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
         {
             m_buffer = new MemoryStream();
             Keyframes = 0;
-            StartedAt = DateTime.UtcNow;
         }
     }
 
@@ -489,7 +484,11 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
         args.AddRange(["-c:v", "libx264"]);
         args.AddRange(["-preset", appSettings.FfmpegPreset]);
-        args.AddRange(["-vf", "yadif=mode=send_frame:parity=auto"]);
+        // send_field keeps all 50 fields a second as 50 frames: send_frame emitted
+        // one frame per field pair and halved broadcast motion to 25fps, which
+        // reads as judder on pans. deint=interlaced leaves progressive channels
+        // alone rather than filtering and doubling them.
+        args.AddRange(["-vf", "yadif=mode=send_field:parity=auto:deint=interlaced"]);
         args.AddRange(["-pix_fmt", "yuv420p"]);
         args.AddRange(["-map", $"0:a:{audioStreamIndex}"]);
         args.AddRange(["-c:a", "aac"]);
