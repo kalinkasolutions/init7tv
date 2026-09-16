@@ -1,6 +1,6 @@
 import {notify} from "./notification.js";
 
-async function request(url, options = {}) {
+async function request(url, {quietStatuses = [], ...options} = {}) {
     try {
         const res = await fetch(url, options);
 
@@ -13,7 +13,9 @@ async function request(url, options = {}) {
             return res.status !== 204 ? res.json() : null;
         }
 
-        notify("Error", await errorMessage(res, url), "error");
+        if (!quietStatuses.includes(res.status)) {
+            notify("Error", await errorMessage(res, url), "error");
+        }
     } catch (e) {
         // the caller gave up on this request on purpose
         if (e.name === "AbortError") {
@@ -60,6 +62,10 @@ export function putJson(url, body) {
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(body)
     });
+}
+
+export function put(url) {
+    return request(url, {method: "PUT"});
 }
 
 export function deleteItem(url) {

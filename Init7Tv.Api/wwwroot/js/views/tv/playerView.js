@@ -166,7 +166,9 @@ export const playerView = () => ({
             params.set("audioStreamIndex", audioStreamIndex);
         }
 
-        const stream = await get(`/api/streaming/start-stream?${params}`, {signal});
+        // 409 is this start being superseded, by this browser or by another one
+        // signed in as the same viewer. Nothing for them to act on.
+        const stream = await get(`/api/streaming/start-stream?${params}`, {signal, quietStatuses: [409]});
         if (!stream) {
             return null;
         }
