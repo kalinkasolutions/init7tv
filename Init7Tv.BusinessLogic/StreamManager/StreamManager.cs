@@ -34,9 +34,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
     // one exactly this often and the segmenter cuts on those keyframes
     // Short segments: the viewer joins sooner and the player gets a cushion of
     // several segments rather than riding the live edge with nothing in hand.
+    // Starting waits for SegmentsBeforeStart of media, and that wait is real
+    // time bound, so it is the floor on how fast a channel can open. One second
+    // costs about 15% more bitrate in keyframes and halves the wait.
     /// <summary>Public so tests cannot drift from the value actually used.</summary>
-    public const int SegmentSeconds = 2;
-    private const int PlaylistLength = 12;
+    public const int SegmentSeconds = 1;
+    private const int PlaylistLength = 20;
 
     // hls.js starts three target durations back from the live edge, so it needs
     // that many before it can buffer anything ahead of the playhead
@@ -534,12 +537,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
             ArgumentList =
             {
                 "-v", "quiet",
-                // a live multicast only yields data as it arrives, so bound the probe
-                "-analyzeduration", "3000000",
-                "-probesize", "5000000",
+                // a live multicast only yields data as it arrives, so bound the
+                // probe. One second of frames is enough to read the field order
+                // and costs about half of what two did; below this no video
+                // frames come back at all and it would be guessing.
+                "-analyzeduration", "1000000",
+                "-probesize", "2000000",
                 "-print_format", "json",
-                // a couple of seconds of frames, to read interlaced_frame
-                "-read_intervals", "%+2",
+                "-read_intervals", "%+1",
                 "-show_entries", "stream:format:frame=media_type,interlaced_frame,top_field_first",
                 streamUrl
             },
