@@ -110,7 +110,14 @@ app.Use(async (context, next) =>
 });
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    // the frontend carries no version in its urls, so without this a browser
+    // keeps serving the bundle it cached before an upgrade. no-cache still
+    // allows caching, it just forces a revalidation that answers 304.
+    OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "no-cache"
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
