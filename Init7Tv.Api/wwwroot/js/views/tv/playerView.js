@@ -122,7 +122,7 @@ export const playerView = () => ({
         this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
             player.play().catch(err => {
                 if (err.name === "NotAllowedError") {
-                    notify("Autoplay Error", "Autoplay is currently not allowed, you can allow it in your browser.", "error");
+                    this.waitForUserToPlay(player);
                 } else if (err.name !== "AbortError") {
                     notify("Playback error", "Something went wrong", "error");
                 }
@@ -131,6 +131,20 @@ export const playerView = () => ({
 
         this.hls.loadSource(`/api/streaming/playlist?streamId=${streamId}`);
         this.hls.attachMedia(player);
+    },
+
+    /// Autoplay was refused. Keep the player from pulling segments nobody is
+    /// watching, which otherwise continues for as long as the page is open.
+    waitForUserToPlay(player) {
+        this.hls?.stopLoad();
+
+        notify(
+            "Press play to start",
+            "Your browser blocked autoplay for this page.",
+            "error"
+        );
+
+        player.addEventListener("play", () => this.hls?.startLoad(), {once: true});
     },
 
     async startStream(channelId, audioStreamIndex = null) {

@@ -59,3 +59,38 @@
         width: calc(200px + 6px)
     }
 }
+
+/* Stacked under the player on narrow screens: the fixed 200px column becomes a
+   full width list that scrolls on its own rather than a thin strip. */
+@media (max-width: 1100px) {
+    #sidebar {
+        border-top: 1px solid #ffffff80;
+    }
+
+    #sidebar .channel-search {
+        width: 100%;
+        border-right: none;
+        padding: 0.5em;
+    }
+
+    #sidebar .channels {
+        width: 100%;
+        max-height: 50vh;
+    }
+
+    #sidebar .channels .channel {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1em;
+        padding: 0.6em 1em;
+        border-right: none;
+    }
+
+    #sidebar .channels .channel img {
+        align-self: auto;
+        max-width: 56px;
+        max-height: 36px;
+        object-fit: contain;
+    }
+}

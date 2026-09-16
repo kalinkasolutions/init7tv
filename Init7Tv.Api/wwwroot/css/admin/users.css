@@ -68,3 +68,37 @@
 .add-user {
     margin-left: auto;
 }
+
+/* The user rows are a flex table, which collapses illegibly on a phone.
+   Below this they become stacked cards instead. */
+@media (max-width: 800px) {
+    .user-list-header {
+        display: none;
+    }
+
+    .user-list-entry {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+
+    .user-form {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .roles-container {
+        flex-wrap: wrap;
+    }
+
+    .user-list-entry .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
+
+    .add-user {
+        margin-left: 0;
+        align-self: flex-end;
+    }
+}

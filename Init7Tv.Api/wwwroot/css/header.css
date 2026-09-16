@@ -1,5 +1,6 @@
 header {
-    height: 10%;
+    min-height: 4rem;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     border-bottom: 1px solid #ffffff80;

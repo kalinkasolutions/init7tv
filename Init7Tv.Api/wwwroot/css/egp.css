@@ -4,13 +4,16 @@
     flex-direction: row;
     gap: 1em;
     justify-content: center;
-    align-items: center;
+    align-items: stretch;
+    flex-wrap: wrap;
 }
 
 #epg .epg-data {
     position: relative;
     overflow: hidden;
     width: 320px;
+    max-width: 100%;
+    flex: 0 1 320px;
     border: 1px solid #ffffff80;
     padding: 0.5em;
     height: 200px;
