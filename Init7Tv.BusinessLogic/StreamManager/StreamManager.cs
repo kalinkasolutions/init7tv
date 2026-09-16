@@ -500,12 +500,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
         args.AddRange(["-preset", appSettings.FfmpegPreset]);
         if (streamInfo.IsInterlaced)
         {
-            // send_field keeps all 50 fields a second as 50 frames; send_frame
-            // emitted one per field pair and halved broadcast motion to 25fps.
-            // deint stays at the default all: restricting it to frames flagged
-            // interlaced left the odd frame undoubled, and an output that
-            // alternates between 25 and 50fps stutters.
-            args.AddRange(["-vf", "yadif=mode=send_field:parity=auto"]);
+            // send_frame, one output per input frame. send_field was tried, on the
+            // assumption that 25fps interlaced carries 50 distinct moments, but
+            // this material is 25p in an interlaced container: both fields are the
+            // same instant, so field doubling reconstructed that instant twice and
+            // added a wobble without adding any motion. Measured on SAT.1, the
+            // difference between consecutive frames was uniform with send_frame
+            // (ratio 1.01) and alternated 3.6x with send_field.
+            args.AddRange(["-vf", "yadif=mode=send_frame:parity=auto"]);
         }
         args.AddRange(["-pix_fmt", "yuv420p"]);
         args.AddRange(["-map", $"0:a:{audioStreamIndex}"]);
