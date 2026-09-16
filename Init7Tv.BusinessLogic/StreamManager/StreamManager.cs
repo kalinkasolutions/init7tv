@@ -364,12 +364,25 @@ public sealed class StreamManager : IStreamManager, IDisposable
             CreateNoWindow = true
         };
 
-        using var process = Process.Start(startInfo);
+        Process? process;
+        try
+        {
+            // throws rather than returning null when ffprobe is not on PATH
+            process = Process.Start(startInfo);
+        }
+        catch (Exception ex)
+        {
+            m_logger.LogError(ex, "Failed to start ffprobe for url: {StreamUrl}", streamUrl);
+            return OperationResult<FfprobeRoot>.Error("Failed to probe the stream");
+        }
+
         if (process == null)
         {
             m_logger.LogError("Failed to start ffprobe for url: {StreamUrl}", streamUrl);
             return OperationResult<FfprobeRoot>.Error("Failed to probe the stream");
         }
+
+        using var _ = process;
 
         // runs while holding the stream lock, so a hung probe would block
         // everyone tuning to this channel
