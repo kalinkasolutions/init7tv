@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.Dal.Entities;
 using Init7Tv.Dal.Repositories;
@@ -16,6 +18,7 @@ public sealed class RecordingService : IRecordingService
     private readonly RecordingSignal m_signal;
     private readonly IRecordingEngine m_engine;
     private readonly IChannelService m_channelService;
+    private readonly IRecordingSegmentCache m_segments;
     private readonly ILogger<RecordingService> m_logger;
     private readonly Init7TvOptions m_options;
 
@@ -25,6 +28,7 @@ public sealed class RecordingService : IRecordingService
         RecordingSignal signal,
         IRecordingEngine engine,
         IChannelService channelService,
+        IRecordingSegmentCache segments,
         ILogger<RecordingService> logger,
         IOptions<Init7TvOptions> options
     )
@@ -34,6 +38,7 @@ public sealed class RecordingService : IRecordingService
         m_signal = signal;
         m_engine = engine;
         m_channelService = channelService;
+        m_segments = segments;
         m_logger = logger;
         m_options = options.Value;
     }
@@ -60,6 +65,115 @@ public sealed class RecordingService : IRecordingService
 
         return OperationResult<RecordingDto[]>.Success(
             recordings.Select(x => ToDto(x, Others(sharers, x), HasFile(x))).ToArray());
+    }
+
+    public async Task<OperationResult<string>> GetPlaylistAsync(Guid recordingId, string userName, bool isAdmin)
+    {
+        var recording = await m_repository.GetByIdAsync(recordingId);
+        if (recording == null || !MayTouch(recording, userName, isAdmin))
+        {
+            return OperationResult<string>.NotFound("That recording was not found");
+        }
+
+        var directory = ResolveDirectory(recording);
+        if (directory == null)
+        {
+            return OperationResult<string>.NotFound("That recording is not on disk");
+        }
+
+        var parts = RecordingFiles.Captures(directory);
+        var running = recording.State is RecordingState.Pending or RecordingState.Recording;
+        var segments = m_segments.Segments(directory, parts, finished: !running);
+
+        if (segments.Count == 0)
+        {
+            // a capture that has only just started has no whole segment yet
+            return OperationResult<string>.Invalid("There is nothing to play yet");
+        }
+
+        return OperationResult<string>.Text(Playlist(segments, running), "application/vnd.apple.mpegurl");
+    }
+
+    /// <summary>
+    /// Byte ranges rather than files: every segment is a stretch of a capture that already exists,
+    /// so nothing is cut, copied or converted to make one.
+    /// </summary>
+    private static string Playlist(IReadOnlyList<RecordingSegment> segments, bool running)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("#EXTM3U");
+        // byte ranges arrived in version 4
+        sb.AppendLine("#EXT-X-VERSION:4");
+        sb.AppendLine($"#EXT-X-TARGETDURATION:{RecordingEngine.KeyframeSeconds + 1}");
+        sb.AppendLine("#EXT-X-MEDIA-SEQUENCE:0");
+
+        // Every segment is kept rather than a window near the end, so somebody joining an hour in
+        // can still start at the beginning. While the capture is still being written the list is
+        // left open, which is what has a player come back for the rest of it on its own instead of
+        // running out and having to be prodded.
+        sb.AppendLine(running ? "#EXT-X-PLAYLIST-TYPE:EVENT" : "#EXT-X-PLAYLIST-TYPE:VOD");
+
+        var previous = (Part: -1, End: -1L);
+        foreach (var segment in segments)
+        {
+            // Each part is its own ffmpeg run, started when the last one was interrupted, so its
+            // timestamps begin again at zero. Without being told, a player carries the timeline
+            // across the join and every seek past it lands somewhere else entirely.
+            if (previous.Part >= 0 && segment.Part != previous.Part)
+            {
+                sb.AppendLine("#EXT-X-DISCONTINUITY");
+            }
+
+            sb.AppendLine($"#EXTINF:{segment.Seconds.ToString("0.000", CultureInfo.InvariantCulture)},");
+
+            // the offset may be left out when a range carries on from the one before, which is the
+            // usual case and makes the playlist far smaller once it is thousands of lines long
+            sb.AppendLine(segment.Part == previous.Part && segment.Offset == previous.End
+                ? $"#EXT-X-BYTERANGE:{segment.Length}"
+                : $"#EXT-X-BYTERANGE:{segment.Length}@{segment.Offset}");
+
+            sb.AppendLine($"part/{segment.Part}.ts");
+            previous = (segment.Part, segment.Offset + segment.Length);
+        }
+
+        if (!running)
+        {
+            sb.AppendLine("#EXT-X-ENDLIST");
+        }
+
+        return sb.ToString();
+    }
+
+    public async Task<OperationResult<RecordingFileDto>> GetPartAsync(
+        Guid recordingId,
+        int part,
+        string userName,
+        bool isAdmin
+    )
+    {
+        var recording = await m_repository.GetByIdAsync(recordingId);
+        if (recording == null || !MayTouch(recording, userName, isAdmin))
+        {
+            return OperationResult<RecordingFileDto>.NotFound("That recording was not found");
+        }
+
+        var directory = ResolveDirectory(recording);
+        var parts = directory == null ? [] : RecordingFiles.Captures(directory);
+
+        if (part < 0 || part >= parts.Length)
+        {
+            return OperationResult<RecordingFileDto>.NotFound("That part of the recording was not found");
+        }
+
+        var file = new FileInfo(parts[part]);
+
+        return OperationResult<RecordingFileDto>.Success(new RecordingFileDto
+        {
+            Path = file.FullName,
+            DownloadName = file.Name,
+            LastModified = file.LastWriteTimeUtc,
+            Length = file.Length
+        });
     }
 
     public async Task<OperationResult<RecordingFileDto>> GetFileAsync(
@@ -214,6 +328,27 @@ public sealed class RecordingService : IRecordingService
     /// The stored path is only trusted after it is shown to sit under the root:
     /// a row that was edited by hand must not be able to read anywhere it likes.
     /// </summary>
+    /// <summary>The recording's own directory, once it is shown to be under the root.</summary>
+    private string? ResolveDirectory(RecordingRow recording)
+    {
+        if (string.IsNullOrEmpty(recording.Directory))
+        {
+            return null;
+        }
+
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(m_options.RecordingPath));
+        var directory = Path.GetFullPath(recording.Directory);
+
+        if (!directory.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            m_logger.LogError("Recording {RecordingId} points outside the recording root: {Directory}",
+                recording.RecordingId, recording.Directory);
+            return null;
+        }
+
+        return Directory.Exists(directory) ? directory : null;
+    }
+
     private string? ResolveFinalPath(RecordingRow recording)
     {
         if (string.IsNullOrEmpty(recording.Directory))

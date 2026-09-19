@@ -7,6 +7,16 @@ public interface IRecordingService
 {
     Task<OperationResult<RecordingDto[]>> GetAsync(string userName, bool isAdmin);
 
+    /// <summary>
+    /// The playlist for watching it, whether it has finished or is still being written. Byte ranges
+    /// of the captures on disk, so there is nothing to convert and nothing to copy.
+    /// </summary>
+    Task<OperationResult<string>> GetPlaylistAsync(Guid recordingId, string userName, bool isAdmin);
+
+    /// <summary>One of the captures the playlist points into, served with ranges.</summary>
+    Task<OperationResult<RecordingFileDto>> GetPartAsync(
+        Guid recordingId, int part, string userName, bool isAdmin);
+
     /// <summary>Where the file is and what to call it, never the file itself.</summary>
     Task<OperationResult<RecordingFileDto>> GetFileAsync(Guid recordingId, string userName, bool isAdmin);
 

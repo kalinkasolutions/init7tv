@@ -292,6 +292,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
                 row.ErrorMessage = finalized.ErrorMessage ?? "The recording could not be finished";
             });
 
+            await ForgetPicksAsync(rows);
             return;
         }
 
@@ -305,6 +306,8 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
             row.FileSizeBytes = finalized.Value;
             row.ErrorMessage = cutShort ? "Part of the programme is missing" : string.Empty;
         });
+
+        await ForgetPicksAsync(rows);
     }
 
     // --- captures that outstayed their window ----------------------------
@@ -618,6 +621,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
     private async Task SkipAsync(RecordingRow[] rows, string reason)
     {
         m_logger.LogWarning("Skipping {Title}: {Reason}", rows[0].Title, reason);
+        await ForgetPicksAsync(rows);
 
         foreach (var row in rows)
         {
@@ -631,16 +635,31 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         await m_recordings.AddRangeAsync(rows);
     }
 
-    private Task FailAsync(RecordingRow[] rows, string reason)
+    private async Task FailAsync(RecordingRow[] rows, string reason)
     {
         m_logger.LogError("Recording {Title} failed: {Reason}", rows[0].Title, reason);
+        await ForgetPicksAsync(rows);
 
-        return UpdateAsync(rows, row =>
+        await UpdateAsync(rows, row =>
         {
             row.State = RecordingState.Failed;
             row.ErrorMessage = reason;
             row.EndedAt = DateTime.UtcNow;
         });
+    }
+
+    /// <summary>
+    /// Drops the picks behind a recording that has finished, however it finished. A pick is a
+    /// request for something to be recorded, and once it has been there is nothing left to wait
+    /// for: left behind it sits in the planned list for ever, looking like something that is still
+    /// going to happen when the pass will never take it up again.
+    /// </summary>
+    private async Task ForgetPicksAsync(RecordingRow[] rows)
+    {
+        foreach (var row in rows)
+        {
+            await m_planned.RemoveAsync(row.UserName, row.ProgrammeId);
+        }
     }
 
     private async Task UpdateAsync(RecordingRow[] rows, Action<RecordingRow> change)

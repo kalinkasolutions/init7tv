@@ -45,6 +45,10 @@ export const recordingView = () => ({
         // the channel list is the one from the tv page and announces itself the
         // same way; here it waits to be asked
         // a channel is chosen to see what is on it, so that is what to show
+        // a recording finishing takes its pick with it, so this list has to look again
+        this.onRecordingsChanged = () => this.loadPlanned();
+        window.addEventListener('recordings-changed', this.onRecordingsChanged);
+
         this.onChannelSelected = event => {
             this.$store.tabs.show('guide');
             this.selectChannel(event.detail.channel);
@@ -54,6 +58,7 @@ export const recordingView = () => ({
 
     destroy() {
         window.removeEventListener('channel-selected', this.onChannelSelected);
+        window.removeEventListener('recordings-changed', this.onRecordingsChanged);
     },
 
     async selectChannel(channel) {
@@ -65,7 +70,10 @@ export const recordingView = () => ({
             const id = this.goingTo.id;
             this.goingTo = null;
             this.scrollTo(id);
+            return;
         }
+
+        this.scrollToNow();
     },
 
     /// Opens the guide where a pick sits: its channel, its day, scrolled to it.
@@ -115,6 +123,31 @@ export const recordingView = () => ({
         this.highlightTimer = setTimeout(() => (this.foundId = null), 2500);
     },
 
+    /// A day of the guide starts at midnight, so opening one lands on hours that
+    /// are already over. What is on now is where anybody wants to be, and on a
+    /// later day that is its first programme.
+    scrollToNow(attemptsLeft = 60) {
+        const programme = this.epg.find(x => this.isOnNow(x)) ?? this.epg.find(x => !this.hasEnded(x));
+
+        if (!programme) {
+            return;
+        }
+
+        const row = this.$root.querySelector(`[data-programme="${programme.id}"]`);
+
+        if (!row) {
+            if (attemptsLeft > 0) {
+                requestAnimationFrame(() => this.scrollToNow(attemptsLeft - 1));
+            }
+
+            return;
+        }
+
+        // no marking and no animation: this is where the guide opens, not
+        // somewhere it was asked to go
+        row.scrollIntoView({block: 'start', behavior: 'auto'});
+    },
+
     async showDay(offset) {
         if (this.day === offset) {
             return;
@@ -122,6 +155,7 @@ export const recordingView = () => ({
 
         this.day = offset;
         await this.load();
+        this.scrollToNow();
     },
 
     async load() {

@@ -25,6 +25,8 @@ public static class RecordingEndpoints
         // MapGet alone answers HEAD with 405, and a player checking the length
         // before it starts is entitled to an answer
         group.MapMethods("/recordings/{recordingId:guid}/file", ["GET", "HEAD"], GetRecordingFile);
+        group.MapGet("/recordings/{recordingId:guid}/playlist.m3u8", GetPlaylist);
+        group.MapMethods("/recordings/{recordingId:guid}/part/{part:int}.ts", ["GET", "HEAD"], GetPart);
         group.MapPost("/recordings/{recordingId:guid}/stop", StopRecording);
         group.MapDelete("/recordings/{recordingId:guid}", DeleteRecording);
     }
@@ -67,6 +69,40 @@ public static class RecordingEndpoints
             lastModified: file.LastModified,
             entityTag: null,
             enableRangeProcessing: true);
+    }
+
+    private static async Task<IResult> GetPlaylist(
+        Guid recordingId,
+        IRecordingService service,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        return (await service.GetPlaylistAsync(
+            recordingId, userIdentityProvider.UserName, userIdentityProvider.IsAdmin)).ToHttpResult();
+    }
+
+    /// <summary>
+    /// A capture the playlist points into. Ranged, because that is the whole arrangement: the player
+    /// asks for the stretch it wants out of the file ffmpeg is still writing.
+    /// </summary>
+    private static async Task<IResult> GetPart(
+        Guid recordingId,
+        int part,
+        IRecordingService service,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        var result = await service.GetPartAsync(
+            recordingId, part, userIdentityProvider.UserName, userIdentityProvider.IsAdmin);
+
+        if (!result.IsSuccess)
+        {
+            return result.ToHttpResult();
+        }
+
+        // no last-modified or etag: the file is still growing, and a player told it had not changed
+        // would sit on what it already has
+        return Results.File(result.Value.Path, "video/mp2t", enableRangeProcessing: true);
     }
 
     private static async Task<IResult> StopRecording(

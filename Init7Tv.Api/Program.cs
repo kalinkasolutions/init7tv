@@ -74,6 +74,7 @@ builder.Services.AddSingleton<IFfprobeService, FfprobeService>();
 builder.Services.AddSingleton<RecordingSignal>();
 builder.Services.AddSingleton<IRecordingEngine, RecordingEngine>();
 builder.Services.AddSingleton<IRecordingEventBus, RecordingEventBus>();
+builder.Services.AddSingleton<IRecordingSegmentCache, RecordingSegmentCache>();
 
 builder.Services.AddHostedService<DashboardNotifier>();
 builder.Services.AddHostedService<RecordingScheduler>();

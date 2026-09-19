@@ -22,7 +22,8 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
 {
     // keyframes are seek granularity in a file rather than segment boundaries,
     // so they can be further apart than the live stream's two seconds
-    private const int KeyframeSeconds = 4;
+    /// <summary>Public so the playlist cannot drift from the spacing actually recorded.</summary>
+    public const int KeyframeSeconds = 4;
 
     private static readonly TimeSpan RemuxTimeout = TimeSpan.FromMinutes(30);
 
@@ -78,10 +79,12 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         var capturePath = RecordingFiles.CapturePath(
             request.Directory, RecordingFiles.NextPart(request.Directory));
 
+        // the pick carries no language preference, so the channel's own is the best guide
+        var audioStreamIndex = streamInfo.Value.GetPreferredAudioStream(request.Channel.MainLanguage);
+
         var args = FfmpegArguments.BuildRecording(
             request.Channel,
-            // the pick carries no language preference, so the first track it is
-            audioStreamIndex: 0,
+            audioStreamIndex,
             request.Preset,
             request.LogLevel,
             streamInfo.Value,

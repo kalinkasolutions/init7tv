@@ -96,4 +96,51 @@ public sealed class FfprobeRoot
 
         return audioStreams[audioStreamIndex].Tags?.GetValueOrDefault("language");
     }
+
+    /// <summary>
+    /// Which audio track to record, using ffmpeg's <c>-map 0:a:N</c> numbering.
+    ///
+    /// A track that is already stereo is preferred over a surround one in the same language, because
+    /// the alternative is asking ffmpeg to fold 5.1 down to two channels, and its default fold puts
+    /// the centre channel, which is where the dialogue is, well below the rest. These channels carry
+    /// both: a 5.1 mix first and a stereo mix of the same language further down.
+    /// </summary>
+    public int GetPreferredAudioStream(string? language)
+    {
+        var audioStreams = GetAudioStreams;
+        if (audioStreams.Length == 0)
+        {
+            return 0;
+        }
+
+        var spoken = audioStreams
+            .Select((stream, index) => (stream, index))
+            .Where(x => Matches(x.stream, language))
+            .ToArray();
+
+        // nothing in that language, so the choice is between what there is
+        var candidates = spoken.Length > 0
+            ? spoken
+            : audioStreams.Select((stream, index) => (stream, index)).ToArray();
+
+        var stereo = candidates.FirstOrDefault(x => x.stream.Channels == 2);
+
+        return stereo.stream != null ? stereo.index : candidates[0].index;
+    }
+
+    private static bool Matches(StreamInfo stream, string? language)
+    {
+        if (string.IsNullOrEmpty(language))
+        {
+            return false;
+        }
+
+        var tagged = stream.Tags?.GetValueOrDefault("language");
+
+        // the channel list says "de" where the stream says "deu"
+        return tagged != null
+               && (tagged.Equals(language, StringComparison.OrdinalIgnoreCase)
+                   || tagged.StartsWith(language, StringComparison.OrdinalIgnoreCase)
+                   || language.StartsWith(tagged, StringComparison.OrdinalIgnoreCase));
+    }
 }

@@ -1,5 +1,6 @@
 import Alpine from 'https://cdn.jsdelivr.net/npm/alpinejs@3.17.3/dist/module.esm.js';
 import focus from 'https://cdn.jsdelivr.net/npm/@alpinejs/focus@3.17.3/dist/module.esm.js';
+import Hls from 'https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.mjs';
 
 import {notificationView} from './views/notificationView.js';
 import {headerView} from './views/headerView.js';
@@ -110,6 +111,8 @@ Alpine.store('ui', {
 });
 
 window.loadPartialView = loadPartial;
+// a recording still being written is a transport stream, which the browser needs hls.js to demux
+window.Hls = Hls;
 window.Alpine = Alpine;
 
 Alpine.start();

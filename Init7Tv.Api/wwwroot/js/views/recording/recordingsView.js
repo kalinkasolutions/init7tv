@@ -13,6 +13,7 @@ export const recordingsView = () => ({
     /// The one open in the player, or null when it is closed.
     playing: null,
     timer: null,
+    hls: null,
 
     async init() {
         await this.load();
@@ -34,11 +35,21 @@ export const recordingsView = () => ({
 
     destroy() {
         clearTimeout(this.timer);
+        this.stopHls();
     },
 
     async load() {
+        const before = this.recordings.map(x => `${x.recordingId}:${x.state}`).join();
+
         this.recordings = await get('/api/recording/recordings') ?? [];
         this.$store.filter.offer(this.recordings.map(x => x.userName));
+
+        // The picks behind a recording are dropped once it finishes, so the planned list is stale
+        // the moment any of this changes. It owns its own data and is a component away, so it is
+        // told rather than reached into.
+        if (before !== this.recordings.map(x => `${x.recordingId}:${x.state}`).join()) {
+            window.dispatchEvent(new CustomEvent('recordings-changed'));
+        }
     },
 
     /// A pick turns into a recording with nobody touching this page, so the list
@@ -82,8 +93,73 @@ export const recordingsView = () => ({
         return `/api/recording/recordings/${recording.recordingId}/file${download ? '?download=true' : ''}`;
     },
 
+    playlistUrl(recording) {
+        return `/api/recording/recordings/${recording.recordingId}/playlist.m3u8`;
+    },
+
+    /// A finished recording is an mp4 the browser plays on its own. One still being written is the
+    /// transport stream on disk, described as byte ranges, which needs hls.js to demux it.
+    needsHls(recording) {
+        return this.isBusy(recording);
+    },
+
+    /// Anything with a whole segment on disk can be watched, which for one under way is everything
+    /// recorded up to a few seconds ago.
+    canPlay(recording) {
+        return recording.isPlayable || this.isBusy(recording);
+    },
+
     play(recording) {
         this.playing = recording;
+
+        if (!this.needsHls(recording)) {
+            return;
+        }
+
+        // the element only exists once the overlay has been drawn
+        this.$nextTick(() => this.startHls(recording));
+    },
+
+    startHls(recording) {
+        const video = this.$root.querySelector('.player-box video');
+
+        this.stopHls();
+
+        if (!Hls.isSupported()) {
+            notify('Hls is not supported', 'This browser cannot play a recording that is still running', 'error');
+            return;
+        }
+
+        // A growing capture is a live playlist, which is what has hls.js come back for new segments
+        // and append them without a gap. Left alone it would also drag the playhead to within a few
+        // seconds of the end and refuse to be moved off it, so it is told to target an hour behind:
+        // far enough back that it never pulls, which is the point of watching what has already been
+        // recorded.
+        const behind = 3600;
+
+        this.hls = new Hls({
+            lowLatencyMode: false,
+            liveSyncDuration: behind,
+            liveMaxLatencyDuration: behind * 24,
+            backBufferLength: Infinity,
+            maxBufferLength: 30
+        });
+
+        this.hls.on(Hls.Events.ERROR, (_, data) => {
+            if (data.fatal) {
+                this.gone(recording);
+            }
+        });
+
+        this.hls.loadSource(this.playlistUrl(recording));
+        this.hls.attachMedia(video);
+    },
+
+    stopHls() {
+        if (this.hls) {
+            this.hls.destroy();
+            this.hls = null;
+        }
     },
 
     /// A file can go between the list being drawn and the button being pressed, and a video element
@@ -110,6 +186,7 @@ export const recordingsView = () => ({
     },
 
     stopPlaying() {
+        this.stopHls();
         this.playing = null;
     },
 

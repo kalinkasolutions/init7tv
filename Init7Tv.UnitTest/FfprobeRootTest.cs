@@ -68,4 +68,51 @@ public class FfprobeRootTest
     {
         Assert.That(new FfprobeRoot().IsInterlaced, Is.False);
     }
+
+    private static FfprobeRoot WithAudio(params (string Language, int Channels)[] tracks) => new()
+    {
+        Streams = tracks
+            .Select(t => new StreamInfo
+            {
+                CodecType = "audio",
+                Channels = t.Channels,
+                Tags = new Dictionary<string, string> { ["language"] = t.Language }
+            })
+            .ToList()
+    };
+
+    /// <summary>
+    /// These channels carry a 5.1 mix first and a stereo mix of the same language after it. Folding
+    /// the 5.1 down puts the dialogue well below the rest, so the stereo one is what to record.
+    /// </summary>
+    [Test]
+    public void AStereoTrackIsPreferredOverSurroundInTheSameLanguage()
+    {
+        var probe = WithAudio(("deu", 6), ("eng", 2), ("deu", 2));
+
+        Assert.That(probe.GetPreferredAudioStream("de"), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void TheLanguageIsPreferredOverTheChannelCount()
+    {
+        var probe = WithAudio(("eng", 2), ("deu", 6));
+
+        Assert.That(probe.GetPreferredAudioStream("de"), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void WithNothingInThatLanguageAStereoTrackIsStillPreferred()
+    {
+        var probe = WithAudio(("fra", 6), ("eng", 2));
+
+        Assert.That(probe.GetPreferredAudioStream("de"), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void OneTrackIsTheOnlyChoice()
+    {
+        Assert.That(WithAudio(("deu", 6)).GetPreferredAudioStream("de"), Is.Zero);
+        Assert.That(new FfprobeRoot().GetPreferredAudioStream("de"), Is.Zero);
+    }
 }

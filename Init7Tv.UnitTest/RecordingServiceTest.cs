@@ -40,6 +40,7 @@ public class RecordingServiceTest
             new RecordingSignal(),
             m_engine.Object,
             Mock.Of<IChannelService>(),
+            new RecordingSegmentCache(),
             NullLogger<RecordingService>.Instance,
             Options.Create(new Init7TvOptions { RecordingPath = m_root }));
     }

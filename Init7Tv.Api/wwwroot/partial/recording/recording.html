@@ -147,8 +147,9 @@
                     </div>
 
                     <div class="entry-actions">
-                        <button class="icon-button" title="Play" x-show="recording.isPlayable"
-                                @click="play(recording)">
+                        <button class="icon-button"
+                                :title="isBusy(recording) ? 'Watch what has been recorded so far' : 'Play'"
+                                x-show="canPlay(recording)" @click="play(recording)">
                             <i class="bi bi-play-fill"></i>
                         </button>
                         <button class="icon-button" title="Download" x-show="recording.isPlayable"
@@ -180,8 +181,9 @@
                         </button>
                     </div>
                     <template x-if="playing">
-                        <video controls autoplay preload="metadata" :src="fileUrl(playing)"
-                               @error="await gone(playing)"></video>
+                        <video controls autoplay preload="metadata"
+                               :src="needsHls(playing) ? null : fileUrl(playing)"
+                               @error="if (!needsHls(playing)) await gone(playing)"></video>
                     </template>
                 </div>
             </div>
