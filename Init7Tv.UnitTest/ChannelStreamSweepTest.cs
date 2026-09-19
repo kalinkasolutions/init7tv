@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.StreamEventBus;
@@ -112,7 +113,7 @@ public class ChannelStreamSweepTest
             CreateChannelService(),
             new StreamEventBus(NullLogger<StreamEventBus>.Instance),
             // a fresh cache per case, so one channel's probe cannot serve another
-            new MemoryCache(new MemoryCacheOptions()),
+            new FfprobeService(NullLogger<FfprobeService>.Instance, new MemoryCache(new MemoryCacheOptions())),
             Options.Create(new Init7TvOptions { UseMultiCast = true }));
 
         var userName = $"sweep-{Guid.NewGuid():N}";

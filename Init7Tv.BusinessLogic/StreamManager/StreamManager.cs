@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Diagnostics;
 using System.Text;
-using System.Text.Json;
 using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.Mapping;
@@ -10,7 +9,6 @@ using Init7Tv.BusinessLogic.StreamEventBus;
 using Init7Tv.Dto;
 using Init7Tv.Dto.Settings;
 using Init7Tv.Shared;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -21,7 +19,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
     private readonly ILogger<StreamManager> m_logger;
     private readonly IChannelService m_channelService;
     private readonly IStreamEventBus m_streamEventBus;
-    private readonly IMemoryCache m_cache;
+    private readonly IFfprobeService m_ffprobeService;
     private readonly Init7TvOptions m_options;
 
     private readonly ConcurrentDictionary<string, TvStream> m_streams = new();
@@ -47,20 +45,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
     private static readonly TimeSpan SegmentDuration = TimeSpan.FromSeconds(SegmentSeconds);
 
     private readonly TimeSpan m_streamIdleTimeout = TimeSpan.FromSeconds(30);
-    private readonly TimeSpan m_ffprobeTimeout = TimeSpan.FromSeconds(20);
-
-    // codec, frame rate, field order and the audio tracks belong to the channel
-    // rather than to the moment, and probing costs about three seconds. Short
-    // enough that a channel which does change its tracks recovers on its own.
-    private readonly TimeSpan m_probeCacheDuration = TimeSpan.FromMinutes(10);
 
     // a player handed a playlist with no segments retries a couple of times and
     // then gives up, so starting waits until there is something to play
     private readonly TimeSpan m_firstSegmentTimeout = TimeSpan.FromSeconds(30);
     private readonly TimeSpan m_timerDueTime = TimeSpan.FromSeconds(10);
     private readonly TimeSpan m_timerPeriod = TimeSpan.FromSeconds(10);
-
-    private static readonly JsonSerializerOptions JsonSerializerOptions = new() { PropertyNameCaseInsensitive = true };
 
     private bool m_disposed;
 
@@ -69,14 +59,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
         ILogger<StreamManager> logger,
         IChannelService channelService,
         IStreamEventBus streamEventBus,
-        IMemoryCache cache,
+        IFfprobeService ffprobeService,
         IOptions<Init7TvOptions> options
     )
     {
         m_logger = logger;
         m_channelService = channelService;
         m_streamEventBus = streamEventBus;
-        m_cache = cache;
+        m_ffprobeService = ffprobeService;
         m_options = options.Value;
         m_cleanupTimer = new Timer(
             _ => CleanupIdleStreams(),
@@ -123,7 +113,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 return OperationResult<StreamDto>.Success(existingStream.ToDto());
             }
 
-            var streamInfo = await GetCachedFfprobeInfo(SourceUrl(channelResult.Value));
+            var streamInfo = await m_ffprobeService.ProbeAsync(SourceUrl(channelResult.Value));
 
             if (streamInfo.HasError)
             {
@@ -524,100 +514,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
         };
 
         return process;
-    }
-
-    private async Task<OperationResult<FfprobeRoot>> GetCachedFfprobeInfo(string streamUrl)
-    {
-        if (m_cache.TryGetValue(streamUrl, out FfprobeRoot? cached) && cached != null)
-        {
-            return OperationResult<FfprobeRoot>.Success(cached);
-        }
-
-        var result = await GetFfprobeInfo(streamUrl);
-        if (result.IsSuccess)
-        {
-            m_cache.Set(streamUrl, result.Value, m_probeCacheDuration);
-        }
-
-        return result;
-    }
-
-    private async Task<OperationResult<FfprobeRoot>> GetFfprobeInfo(string streamUrl)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "ffprobe",
-            ArgumentList =
-            {
-                "-v", "quiet",
-                // a live multicast only yields data as it arrives, so bound the
-                // probe. One second of frames is enough to read the field order
-                // and costs about half of what two did; below this no video
-                // frames come back at all and it would be guessing.
-                "-analyzeduration", "1000000",
-                "-probesize", "2000000",
-                "-print_format", "json",
-                "-read_intervals", "%+1",
-                "-show_entries", "stream:format:frame=media_type,interlaced_frame,top_field_first",
-                streamUrl
-            },
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        Process? process;
-        try
-        {
-            // throws rather than returning null when ffprobe is not on PATH
-            process = Process.Start(startInfo);
-        }
-        catch (Exception ex)
-        {
-            m_logger.LogError(ex, "Failed to start ffprobe for url: {StreamUrl}", streamUrl);
-            return OperationResult<FfprobeRoot>.Error("Failed to probe the stream");
-        }
-
-        if (process == null)
-        {
-            m_logger.LogError("Failed to start ffprobe for url: {StreamUrl}", streamUrl);
-            return OperationResult<FfprobeRoot>.Error("Failed to probe the stream");
-        }
-
-        using var _ = process;
-
-        // runs while holding the stream lock, so a hung probe would block
-        // everyone tuning to this channel
-        using var timeout = new CancellationTokenSource(m_ffprobeTimeout);
-
-        string output;
-        try
-        {
-            output = await process.StandardOutput.ReadToEndAsync(timeout.Token);
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            m_logger.LogError("ffprobe timed out after {Timeout} for url: {StreamUrl}", m_ffprobeTimeout, streamUrl);
-            KillProcess(process);
-            return OperationResult<FfprobeRoot>.Error("Timed out while probing the stream");
-        }
-
-        try
-        {
-            var streamInfo = JsonSerializer.Deserialize<FfprobeRoot>(output, JsonSerializerOptions);
-            if (streamInfo == null)
-            {
-                return OperationResult<FfprobeRoot>.Error("Failed to parse ffprobe json");
-            }
-
-            return OperationResult<FfprobeRoot>.Success(streamInfo);
-        }
-        catch (Exception e)
-        {
-            m_logger.LogError(e, "Failed to parse ffprobe json for url: {StreamUrl}", streamUrl);
-            return OperationResult<FfprobeRoot>.Error("Failed to parse ffprobe json");
-        }
     }
 
     private static string GetStreamId(string input)

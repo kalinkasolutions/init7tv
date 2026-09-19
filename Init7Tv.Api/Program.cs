@@ -4,6 +4,7 @@ using Init7Tv;
 using Init7Tv.BusinessLogic;
 using Init7Tv.BusinessLogic.AppSettingsService;
 using Init7Tv.BusinessLogic.Email;
+using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.Recording;
@@ -67,6 +68,7 @@ builder.Services.AddHttpClient<IHttpClientWrapper, HttpClientWrapper>();
 
 builder.Services.AddSingleton<IStreamManager, StreamManager>();
 builder.Services.AddSingleton<IStreamEventBus, StreamEventBus>();
+builder.Services.AddSingleton<IFfprobeService, FfprobeService>();
 
 builder.Services.AddHostedService<DashboardNotifier>();
 
