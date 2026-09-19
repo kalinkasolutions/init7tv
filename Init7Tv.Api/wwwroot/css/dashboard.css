@@ -1,62 +1,126 @@
-#dashboard,
-#dashboard ul {
+#dashboard {
     width: 100%;
     margin: 0;
-    padding: 0;
+    padding: 0 0 1.5em;
     box-sizing: border-box;
 }
 
+#dashboard h2 {
+    padding: 0.8em 1em 0.4em;
+}
+
+#dashboard > h3 {
+    padding: 0 1em 0.5em;
+    color: #ffffff80;
+    font-weight: normal;
+}
+
 #dashboard ul {
     display: flex;
-    padding: 1em;
+    padding: 0 1em;
     flex-wrap: wrap;
     gap: 1rem;
     list-style: none;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 #dashboard ul > li {
-    flex: 0 1 300px;
-    border: 1px solid #ffffff80;
-    border-radius: 10px;
-    padding: 1rem;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-    background-color: #373232;
+    flex: 1 1 300px;
+    max-width: 420px;
+    border: 1px solid #ffffff30;
+    /* the app is square edged elsewhere, so only enough to soften the corner */
+    border-radius: 3px;
+    padding: 0.9rem 1rem;
+    background-color: #232c27;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
+    align-items: stretch;
+    gap: 0.5rem;
 }
 
-#dashboard img {
-    width: 90px;
-    object-fit: cover;
-    border-radius: 50%;
-    flex-shrink: 0;
+/* the same marker a row under way carries on the recording page */
+#dashboard ul > li.recording {
+    border-left: 3px solid #2fb12f;
 }
 
 #dashboard .dashcard-title {
     width: 100%;
     display: flex;
     align-items: center;
-    border-bottom: 1px solid #ffffff80;
+    gap: 0.7em;
+    padding-bottom: 0.7em;
+    border-bottom: 1px solid #ffffff30;
 }
 
-/* a card says more than a stream's does, so its lines sit closer together */
-#dashboard ul > li.recording {
-    gap: 0.4rem;
+/* channel logos are wide rather than square, and a circle cropped them */
+#dashboard img {
+    height: 32px;
+    width: auto;
+    max-width: 110px;
+    object-fit: contain;
+    flex-shrink: 0;
 }
 
-#dashboard ul > li.recording .dashcard-title {
-    margin-bottom: 0.6rem;
+#dashboard .dashcard-title h3 {
+    padding: 0;
+    font-size: 1rem;
 }
 
-#dashboard .dashcard-sub,
-#dashboard .dashcard-note {
+#dashboard .dashcard-what {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15em;
+}
+
+#dashboard .dashcard-what h4 {
+    padding: 0;
+    font-size: 0.95rem;
+}
+
+#dashboard .dashcard-sub {
     font-size: 0.85em;
     color: #ffffffb0;
 }
 
+/* the quiet uppercase label the recording page uses for the same job */
+#dashboard .dashcard-label {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #ffffff80;
+}
+
+#dashboard .dashcard-people {
+    font-size: 0.9em;
+}
+
+#dashboard .dashcard-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35em;
+}
+
 #dashboard .dashcard-note {
+    font-size: 0.8em;
     color: #2fb12f;
     font-variant-numeric: tabular-nums;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* how far through it is, which a line of text alone does not show at a glance */
+#dashboard .dashcard-bar {
+    height: 4px;
+    background: #ffffff20;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+#dashboard .dashcard-bar > span {
+    display: block;
+    height: 100%;
+    background: #2fb12f;
+    transition: width 1s linear;
 }

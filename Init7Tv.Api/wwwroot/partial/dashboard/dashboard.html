@@ -1,43 +1,53 @@
 <div id="dashboard" x-data="dashboardView()">
-    <h2 class="text-xl font-bold mb-2">Current streams</h2>
+    <h2>Current streams</h2>
     <template x-if="streams.length">
         <ul>
             <template x-for="stream in streams" :key="`${stream.channelId}_${stream.language}`">
                 <li>
                     <div class="dashcard-title">
-                        <img alt="tv-logo" :src="`data:image/png;base64,${stream.channelLogo}`">
+                        <img alt="" :src="`data:image/png;base64,${stream.channelLogo}`">
                         <h3 x-text="`${stream.channelDisplayName} (${stream.language})`"></h3>
                     </div>
-                    <h4>Users watching</h4>
-                    <div x-text="stream.userNames.join(', ')"></div>
+
+                    <div class="dashcard-label">Watching</div>
+                    <div class="dashcard-people" x-text="stream.userNames.join(', ')"></div>
                 </li>
             </template>
         </ul>
     </template>
-    <template x-if="!streams.length">
-        <h3>No activity...</h3>
-    </template>
+    <h3 x-show="!streams.length" x-cloak>Nobody is watching.</h3>
 
-    <h2 class="text-xl font-bold mb-2">Current recordings</h2>
+    <h2>Current recordings</h2>
     <template x-if="recordings.length">
         <ul>
             <template x-for="recording in recordings" :key="recording.recordingId">
                 <li class="recording">
                     <div class="dashcard-title">
-                        <img alt="tv-logo" :src="`data:image/png;base64,${recording.channelLogo}`">
+                        <img alt="" :src="`data:image/png;base64,${recording.channelLogo}`">
                         <h3 x-text="recording.channelDisplayName"></h3>
                     </div>
-                    <h4 x-text="recording.title"></h4>
-                    <div class="dashcard-sub" x-show="recording.subTitle" x-text="recording.subTitle"></div>
-                    <div class="dashcard-note"
-                         x-text="`${progress(recording)}, until ${until(recording)}`"></div>
-                    <h4>Recording for</h4>
-                    <div x-text="recording.userNames.join(', ')"></div>
+
+                    <div class="dashcard-what">
+                        <h4 x-text="recording.title"></h4>
+                        <span class="dashcard-sub" x-show="recording.subTitle"
+                              x-text="recording.subTitle"></span>
+                    </div>
+
+                    <div class="dashcard-progress">
+                        <div class="dashcard-bar">
+                            <span :style="`width: ${percent(recording)}%`"></span>
+                        </div>
+                        <div class="dashcard-note">
+                            <span x-text="elapsed(recording)"></span>
+                            <span x-text="`until ${until(recording)}`"></span>
+                        </div>
+                    </div>
+
+                    <div class="dashcard-label">Recording for</div>
+                    <div class="dashcard-people" x-text="recording.userNames.join(', ')"></div>
                 </li>
             </template>
         </ul>
     </template>
-    <template x-if="!recordings.length">
-        <h3>Nothing recording...</h3>
-    </template>
+    <h3 x-show="!recordings.length" x-cloak>Nothing is recording.</h3>
 </div>
