@@ -10,14 +10,17 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
 {
     private readonly IPlannedRecordingRepository m_repository;
     private readonly IChannelService m_channelService;
+    private readonly RecordingSignal m_signal;
 
     public PlannedRecordingService(
         IPlannedRecordingRepository repository,
-        IChannelService channelService
+        IChannelService channelService,
+        RecordingSignal signal
     )
     {
         m_repository = repository;
         m_channelService = channelService;
+        m_signal = signal;
     }
 
     public async Task<OperationResult<PlannedRecordingDto[]>> GetAsync(string userName)
@@ -69,12 +72,20 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
 
         await m_repository.AddAsync(stored);
 
+        // One starting in a minute must not wait out a sleep the loop has already committed to
+        m_signal.Signal();
+
         return OperationResult<PlannedRecordingDto>.Success(ToDto(stored));
     }
 
     public async Task<OperationResult<bool>> CancelAsync(string userName, Guid programmeId)
     {
         var removed = await m_repository.RemoveAsync(userName, programmeId);
+
+        if (removed)
+        {
+            m_signal.Signal();
+        }
 
         return removed
             ? OperationResult<bool>.Success(true)

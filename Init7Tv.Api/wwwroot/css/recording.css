@@ -39,7 +39,7 @@
     color: #2fb12f;
 }
 
-/* the guide scrolls, the list of picks stays put beside it */
+/* one tab at a time, filling what is left under the tab bar */
 #recording .recording-body {
     display: flex;
     flex-direction: row;
@@ -160,49 +160,131 @@
     opacity: 0.4;
 }
 
-#recording .planned {
-    width: 280px;
-    flex: 0 0 auto;
-    border-left: 1px solid #ffffff80;
+#recording .tabs {
     display: flex;
-    flex-direction: column;
-    min-height: 0;
+    border-bottom: 1px solid #ffffff80;
+    padding: 0 1em;
+    gap: 0.3em;
+}
+
+#recording .tabs button {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #ffffff80;
+    padding: 0.6em 1em;
+    cursor: pointer;
+    font: inherit;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+#recording .tabs button:hover {
+    color: #ffffffcf;
+}
+
+#recording .tabs button.chosen {
+    color: #2fb12f;
+    border-bottom-color: #2fb12f;
+}
+
+#recording .tabs .count {
+    font-size: 0.75em;
+    background: #ffffff20;
+    border-radius: 1em;
+    padding: 0.1em 0.5em;
+    font-variant-numeric: tabular-nums;
+}
+
+#recording .tabs button.chosen .count {
+    background: #2fb12f30;
+}
+
+/* a tab's content takes the whole area rather than a column beside the guide */
+#recording .listing {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow-y: auto;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
     scrollbar-width: thin;
 }
 
-#recording .planned-header {
+#recording .listing-actions {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
+    justify-content: flex-end;
     padding: 0.6em 1em;
-    border-bottom: 1px solid #ffffff30;
 }
 
-#recording .planned-item {
+#recording .entry {
     display: flex;
+    gap: 1em;
     align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.5em;
-    padding: 0.6em 1em;
+    padding: 0.7em 1em;
     border-bottom: 1px solid #ffffff30;
+    /* held even when unmarked, so a row taking a marker does not shift sideways */
+    border-left: 3px solid transparent;
 }
 
-#recording .planned-item > div {
+#recording .entry:hover {
+    background-color: #36453e;
+}
+
+/* something is happening to this one right now */
+#recording .entry.busy {
+    border-left-color: #2fb12f;
+}
+
+#recording .entry-when {
     display: flex;
     flex-direction: column;
-    min-width: 0;
+    width: 11em;
+    flex: 0 0 auto;
 }
 
-#recording .planned-open {
-    cursor: pointer;
-    flex: 1 1 auto;
-}
-
-#recording .planned-open:hover .planned-title,
-#recording .planned-open:focus-visible .planned-title {
+#recording .entry-day {
     color: #2fb12f;
+    font-variant-numeric: tabular-nums;
+}
+
+#recording .entry-length,
+#recording .entry-channel {
+    font-size: 0.8em;
+    color: #ffffff80;
+}
+
+#recording .entry-state {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #ffffff80;
+}
+
+#recording .entry.busy .entry-state {
+    color: #2fb12f;
+}
+
+#recording .entry-what {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+#recording .entry-what h5 {
+    color: #ffffffcf;
+}
+
+#recording .entry-error {
+    font-size: 0.8em;
+    color: #d98a8a;
+}
+
+#recording .entry-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    flex: 0 0 auto;
 }
 
 /* one row among forty, so it says which one was meant */
@@ -210,38 +292,43 @@
     border-left: 6px solid #2fb12f;
 }
 
-#recording .planned-when {
-    font-size: 0.8em;
-    color: #2fb12f;
-    font-variant-numeric: tabular-nums;
+/* something is happening to this one right now */
+
+#recording .player-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: #000000cc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2em;
 }
 
-#recording .planned-channel {
-    font-size: 0.8em;
-    color: #ffffff80;
+#recording .player-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    width: min(1100px, 100%);
+    max-height: 100%;
 }
 
-#recording .note {
-    padding: 1em;
-    font-size: 0.8em;
-    color: #ffffff80;
+#recording .player-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
 }
 
-/* the picks go under the guide rather than beside it, and the guide keeps the
-   height, because that is what is being read */
+#recording .player-box video {
+    width: 100%;
+    min-height: 0;
+    background: #000;
+}
+
 @media (max-width: 1100px) {
-    #recording .recording-body {
-        flex-direction: column;
-    }
-
-    #recording .planned {
-        width: 100%;
-        border-left: none;
-        border-top: 1px solid #ffffff80;
-        max-height: 40%;
-    }
-
-    #recording .when {
+    #recording .when,
+    #recording .entry-when {
         width: 6em;
     }
 }

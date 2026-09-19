@@ -20,6 +20,62 @@ public static class RecordingEndpoints
         group.MapGet("/planned", GetPlanned);
         group.MapPost("/planned", Plan);
         group.MapDelete("/planned/{programmeId:guid}", Cancel);
+
+        group.MapGet("/recordings", GetRecordings);
+        // MapGet alone answers HEAD with 405, and a player checking the length
+        // before it starts is entitled to an answer
+        group.MapMethods("/recordings/{recordingId:guid}/file", ["GET", "HEAD"], GetRecordingFile);
+        group.MapDelete("/recordings/{recordingId:guid}", DeleteRecording);
+    }
+
+    private static async Task<IResult> GetRecordings(
+        IRecordingService service,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        return (await service.GetAsync(userIdentityProvider.UserName, userIdentityProvider.IsAdmin)).ToHttpResult();
+    }
+
+    /// <summary>
+    /// Served from the path rather than through OperationResult, whose file case
+    /// hands Results.File a byte array: a recording is gigabytes, and reading one
+    /// into memory per request would be the end of the process. The path overload
+    /// also brings range requests, which is what lets a browser seek.
+    /// </summary>
+    private static async Task<IResult> GetRecordingFile(
+        Guid recordingId,
+        bool? download,
+        IRecordingService service,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        var result = await service.GetFileAsync(
+            recordingId, userIdentityProvider.UserName, userIdentityProvider.IsAdmin);
+
+        if (!result.IsSuccess)
+        {
+            return result.ToHttpResult();
+        }
+
+        var file = result.Value;
+
+        return Results.File(
+            file.Path,
+            "video/mp4",
+            fileDownloadName: download == true ? file.DownloadName : null,
+            lastModified: file.LastModified,
+            entityTag: null,
+            enableRangeProcessing: true);
+    }
+
+    private static async Task<IResult> DeleteRecording(
+        Guid recordingId,
+        IRecordingService service,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        return (await service.DeleteAsync(
+            recordingId, userIdentityProvider.UserName, userIdentityProvider.IsAdmin)).ToHttpResult();
     }
 
     private static async Task<IResult> GetPlanned(

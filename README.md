@@ -189,9 +189,34 @@ the password immediately after first login.
 | `KESTREL__CERTIFICATES__DEFAULT__PATH`     | Path to the `.pfx` certificate inside the container                                            | —         | Yes (Option B only) |
 | `KESTREL__CERTIFICATES__DEFAULT__PASSWORD` | Password for the `.pfx` certificate                                                            | —         | Yes (Option B only) |
 | `Init7TvOptions__UseMultiCast`             | Enable multicast stream reception. Requires `network_mode: host`. Set to `false` to use HLS.  | `true`    | No                  |
+| `Init7TvOptions__RecordingPath`            | Where recordings are written. Keep it inside the data volume so they survive an update.        | `/var/srv/recordings` | No      |
+| `Init7TvOptions__MaxConcurrentRecordings`  | How many programmes may record at once. Each one is a separate FFmpeg encode.                  | `2`       | No                  |
 
 The FFmpeg preset and log level are not environment variables; they are configured at runtime under **admin → General
-Settings**.
+Settings**, along with the recording preset and how many minutes to start early and keep going after.
+
+---
+
+## Recording
+
+Users with the **Recording** role, and admins, get a recording page: pick a programme from the guide and the
+application records it when the time comes, whether or not anybody is watching.
+
+Recordings are written to `/var/srv/recordings`, one directory per recording, inside the same `./data` volume as the
+database. They are captured as a transport stream and wrapped as MP4 when they finish, so a crash costs the tail of a
+recording rather than all of it, and the finished file plays and seeks in the browser.
+
+A few things worth knowing:
+
+- **Each recording is an encode.** With the default `veryfast` preset expect roughly 2.5 GB per hour on an HD channel
+  and about a core per recording, on top of whatever live viewers are using. `Init7TvOptions__MaxConcurrentRecordings` is the ceiling;
+  anything over it is skipped with a reason shown on the page.
+- **The database shares the volume.** The recorder refuses to start with less than 5 GB free, because filling the disk
+  would take the database with it.
+- **Two people picking the same programme get one recording**, one encode and one file, listed for each of them. The
+  file goes when the last of them deletes it.
+- **A restart is survivable.** Anything that was recording is picked up again on the next start, and either continues
+  or is wrapped up as a partial recording.
 
 ---
 

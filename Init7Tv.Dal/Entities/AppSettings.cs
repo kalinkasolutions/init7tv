@@ -33,4 +33,13 @@ public sealed class AppSettings
     [MaxLength(10)]
     public string FfmpegPreset { get; set; } = "ultrafast";
 
+    /// Live trades quality for latency; a recording is watched later and kept, so
+    /// it is worth the slower preset. ultrafast measured about three times the size.
+    [MaxLength(10)]
+    public string RecordingPreset { get; set; } = "veryfast";
+
+    /// Broadcasts run late far more often than early, hence the asymmetry.
+    public int RecordingPreRollMinutes { get; set; } = 2;
+
+    public int RecordingPostRollMinutes { get; set; } = 5;
 }

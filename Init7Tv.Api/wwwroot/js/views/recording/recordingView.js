@@ -36,9 +36,17 @@ export const recordingView = () => ({
         await this.loadPlanned();
         await this.adoptAnythingPickedBefore();
 
+        // the tab shows how many are waiting without having to be opened
+        this.$watch('planned', value => (this.$store.tabs.counts.planned = value.length));
+        this.$store.tabs.counts.planned = this.planned.length;
+
         // the channel list is the one from the tv page and announces itself the
         // same way; here it waits to be asked
-        this.onChannelSelected = event => this.selectChannel(event.detail.channel);
+        // a channel is chosen to see what is on it, so that is what to show
+        this.onChannelSelected = event => {
+            this.$store.tabs.show('guide');
+            this.selectChannel(event.detail.channel);
+        };
         window.addEventListener('channel-selected', this.onChannelSelected);
     },
 
@@ -61,6 +69,7 @@ export const recordingView = () => ({
     /// Opens the guide where a pick sits: its channel, its day, scrolled to it.
     openPlanned(entry) {
         this.goingTo = {id: entry.programmeId, day: this.dayOffsetOf(entry.startsAt)};
+        this.$store.tabs.show('guide');
 
         if (this.channel?.channelId === entry.channelId) {
             // already here, so nothing will announce a change
@@ -250,6 +259,17 @@ export const recordingView = () => ({
     /// Soonest first, which is the order they will happen in.
     get plannedInOrder() {
         return [...this.planned].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+    },
+
+    plannedMinutes(entry) {
+        return Math.round((Date.parse(entry.endsAt) - Date.parse(entry.startsAt)) / 60000);
+    },
+
+    /// The guide is about a channel, the other tabs are not.
+    get heading() {
+        return this.$store.tabs.is('guide')
+            ? (this.channel ? this.channel.displayName : 'Pick a channel')
+            : this.$store.tabs.label;
     },
 
     plannedOn(entry) {

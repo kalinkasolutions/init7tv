@@ -2,9 +2,9 @@
     <div class="recording-header">
         <button class="menu-button" @click="$store.ui.toggleMenu()"
                 :aria-expanded="$store.ui.menuOpen" aria-label="Channels" title="Channels">&#9776;</button>
-        <h2 x-text="channel ? channel.displayName : 'Pick a channel'"></h2>
+        <h2 x-text="heading"></h2>
 
-        <div class="day-picker" x-show="channel" x-cloak>
+        <div class="day-picker" x-show="$store.tabs.is('guide') && channel" x-cloak>
             <template x-for="d in days" :key="d.offset">
                 <button :class="{ 'chosen': day === d.offset }"
                         @click="await showDay(d.offset)" x-text="d.label"></button>
@@ -12,8 +12,20 @@
         </div>
     </div>
 
+    <nav class="tabs" aria-label="Recordings">
+        <template x-for="tab in $store.tabs.all" :key="tab.key">
+            <button :class="{ 'chosen': $store.tabs.is(tab.key) }"
+                    :aria-current="$store.tabs.is(tab.key)"
+                    @click="$store.tabs.show(tab.key)">
+                <span x-text="tab.label"></span>
+                <span class="count" x-show="$store.tabs.counts[tab.key]" x-cloak
+                      x-text="$store.tabs.counts[tab.key]"></span>
+            </button>
+        </template>
+    </nav>
+
     <div class="recording-body">
-        <div class="schedule">
+        <div class="schedule" x-show="$store.tabs.is('guide')">
             <p class="empty" x-show="!channel" x-cloak>Choose a channel to see what is on.</p>
             <p class="empty" x-show="channel && loading" x-cloak>Loading the guide...</p>
             <p class="empty" x-show="channel && !loading && epg.length === 0" x-cloak>
@@ -52,34 +64,98 @@
             </template>
         </div>
 
-        <aside class="planned">
-            <div class="planned-header">
-                <h3>Planned</h3>
-                <button class="link-button" x-show="planned.length" x-cloak
-                        @click="await forgetEverything()">clear</button>
+        <div class="listing" x-show="$store.tabs.is('planned')" x-cloak>
+            <p class="empty" x-show="!planned.length">Nothing picked yet.</p>
+
+            <div class="listing-actions" x-show="planned.length">
+                <button class="link-button" @click="await forgetEverything()">clear all</button>
             </div>
 
-            <p class="empty" x-show="!planned.length" x-cloak>Nothing picked yet.</p>
-
             <template x-for="entry in plannedInOrder" :key="entry.programmeId">
-                <div class="planned-item">
-                    <div class="planned-open" role="button" tabindex="0"
-                         :title="`Show ${entry.title} in the guide`"
-                         @click="await openPlanned(entry)"
-                         @keydown.enter="await openPlanned(entry)">
-                        <span class="planned-when" x-text="plannedOn(entry)"></span>
-                        <span class="planned-channel" x-text="entry.channelName"></span>
-                        <span class="planned-title" x-text="entry.title"></span>
+                <div class="entry">
+                    <div class="entry-when">
+                        <span class="entry-day" x-text="plannedOn(entry)"></span>
+                        <span class="entry-length" x-text="`${plannedMinutes(entry)} min`"></span>
                     </div>
-                    <button class="icon-button danger-icon" title="Remove" @click="await forget(entry.programmeId)">
-                        <i class="bi bi-trash3"></i>
-                    </button>
+
+                    <div class="entry-what">
+                        <h4 x-text="entry.title"></h4>
+                        <h5 x-show="entry.subTitle" x-text="entry.subTitle"></h5>
+                        <span class="entry-channel" x-text="entry.channelName"></span>
+                    </div>
+
+                    <div class="entry-actions">
+                        <button class="link-button" title="Show it in the guide"
+                                @click="await openPlanned(entry)">show in guide</button>
+                        <button class="icon-button danger-icon" title="Remove"
+                                @click="await forget(entry.programmeId)">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- one component behind both tabs, so there is one poll rather than two -->
+        <div class="listing" x-data="recordingsView()" x-cloak
+             x-show="$store.tabs.is('recording') || $store.tabs.is('recorded')">
+            <p class="empty" x-show="!visible.length && $store.tabs.is('recording')">
+                Nothing is recording right now.
+            </p>
+            <p class="empty" x-show="!visible.length && $store.tabs.is('recorded')">
+                Nothing recorded yet.
+            </p>
+
+            <template x-for="recording in visible" :key="recording.recordingId">
+                <div class="entry" :class="{ 'busy': isBusy(recording) }">
+                    <div class="entry-when">
+                        <span class="entry-state" x-text="label(recording)"></span>
+                        <span class="entry-day" x-text="when(recording)"></span>
+                        <span class="entry-length" x-text="size(recording)"></span>
+                    </div>
+
+                    <div class="entry-what">
+                        <h4 x-text="recording.title"></h4>
+                        <h5 x-show="recording.subTitle" x-text="recording.subTitle"></h5>
+                        <span class="entry-channel" x-text="recording.channelName"></span>
+                        <span class="entry-error" x-show="recording.errorMessage"
+                              x-text="recording.errorMessage"></span>
+                    </div>
+
+                    <div class="entry-actions">
+                        <button class="icon-button" title="Play" x-show="recording.isPlayable"
+                                @click="play(recording)">
+                            <i class="bi bi-play-fill"></i>
+                        </button>
+                        <a class="icon-button" title="Download" x-show="recording.isPlayable"
+                           :href="fileUrl(recording, true)">
+                            <i class="bi bi-download"></i>
+                        </a>
+                        <button class="icon-button danger-icon"
+                                :title="isBusy(recording) ? 'Stop and delete' : 'Delete'"
+                                @click="await remove(recording)">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </div>
                 </div>
             </template>
 
-            <p class="note" x-show="planned.length" x-cloak>
-                Saved. Nothing records them yet.
-            </p>
-        </aside>
+            <!-- kept inside this component so closing it can drop the source and
+                 stop the browser holding on to the file -->
+            <div class="player-overlay" x-show="playing" x-cloak
+                 @keydown.escape.window="stopPlaying()">
+                <div class="player-box">
+                    <div class="player-head">
+                        <h4 x-text="playing?.title"></h4>
+                        <button class="icon-button" title="Close" @click="stopPlaying()">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <template x-if="playing">
+                        <video controls autoplay preload="metadata" :src="fileUrl(playing)"></video>
+                    </template>
+                </div>
+            </div>
+        </div>
     </div>
 </div>

@@ -69,14 +69,20 @@ builder.Services.AddHttpClient<IHttpClientWrapper, HttpClientWrapper>();
 builder.Services.AddSingleton<IStreamManager, StreamManager>();
 builder.Services.AddSingleton<IStreamEventBus, StreamEventBus>();
 builder.Services.AddSingleton<IFfprobeService, FfprobeService>();
+// the doorbell, and the only thing the scheduler keeps in memory. A singleton because the services
+// that ring it are scoped, and a field there would die with the request
+builder.Services.AddSingleton<RecordingSignal>();
+builder.Services.AddSingleton<IRecordingEngine, RecordingEngine>();
 
 builder.Services.AddHostedService<DashboardNotifier>();
+builder.Services.AddHostedService<RecordingScheduler>();
 
 builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
 builder.Services.AddScoped<IIdentityRepository, IdentityRepository>();
 builder.Services.AddScoped<IAppSettingsRepository, AppSettingsRepository>();
 builder.Services.AddScoped<IFavouriteChannelRepository, FavouriteChannelRepository>();
 builder.Services.AddScoped<IPlannedRecordingRepository, PlannedRecordingRepository>();
+builder.Services.AddScoped<IRecordingRepository, RecordingRepository>();
 builder.Services.AddScoped<IIdentityService, IdentityService>();
 builder.Services.AddScoped<IAppSettingsService, AppSettingsService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -84,6 +90,8 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddTransient<IChannelService, ChannelService>();
 builder.Services.AddScoped<IFavouriteChannelService, FavouriteChannelService>();
 builder.Services.AddScoped<IPlannedRecordingService, PlannedRecordingService>();
+builder.Services.AddScoped<IRecordingService, RecordingService>();
+builder.Services.AddScoped<IRecordingCoordinator, RecordingCoordinator>();
 builder.Services.AddTransient<IEpgService, EpgService>();
 
 var proxyAddress = builder.Configuration["ProxyAddress"];

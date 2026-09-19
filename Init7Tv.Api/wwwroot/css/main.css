@@ -84,6 +84,9 @@ select {
 .icon-button {
     color: rgba(47, 177, 47, 0.80);
     background: transparent;
+    /* the rule above lists elements rather than using *, and an anchor is not on
+       it: without this a link styled as one comes out two pixels larger */
+    box-sizing: border-box;
     width: 40px;
     height: 40px;
     border-radius: 2px;

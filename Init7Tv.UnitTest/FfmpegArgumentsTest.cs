@@ -241,10 +241,110 @@ public class FfmpegArgumentsTest
     {
         // they are passed through ArgumentList, so a value containing a space
         // would otherwise have to be quoted and could split
-        foreach (var args in new[] { Build(true, true), Build(false, false) })
+        foreach (var args in new[] { Build(true, true), Build(false, false), BuildRecording() })
         {
             Assert.That(args, Is.All.Not.Null);
             Assert.That(args.Any(string.IsNullOrWhiteSpace), Is.False);
         }
+    }
+
+    // --- recording -------------------------------------------------------
+
+    private const string CapturePath = "/var/srv/recordings/abc/capture-1.ts";
+
+    private static string[] BuildRecording(bool interlaced = true, bool multicast = true) =>
+        FfmpegArguments.BuildRecording(
+            Channel, audioStreamIndex: 0, "veryfast", "warning", Probe(interlaced), multicast,
+            keyframeSeconds: 4, TimeSpan.FromMinutes(65), CapturePath);
+
+    [Test]
+    public void Recording_WritesAFileRatherThanThePipe()
+    {
+        var args = BuildRecording();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(args[^1], Is.EqualTo(CapturePath));
+            Assert.That(args, Does.Not.Contain("pipe:1"));
+            Assert.That(ValueOf(args, "-f"), Is.EqualTo("mpegts"));
+        });
+    }
+
+    /// <summary>Without these ffmpeg asks on stdin whether to overwrite and waits for ever.</summary>
+    [Test]
+    public void Recording_NeverWaitsOnStdin()
+    {
+        var args = BuildRecording();
+
+        Assert.That(args, Does.Contain("-nostdin"));
+        Assert.That(args, Does.Contain("-y"));
+    }
+
+    /// <summary>-t is what ends a recording; the scheduler killing it is the fallback.</summary>
+    [Test]
+    public void Recording_EndsItselfAfterTheWindow()
+    {
+        Assert.That(ValueOf(BuildRecording(), "-t"), Is.EqualTo("3900"));
+    }
+
+    [Test]
+    public void Recording_UsesItsOwnPresetAndKeyframeSpacing()
+    {
+        var args = BuildRecording();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ValueOf(args, "-preset"), Is.EqualTo("veryfast"));
+            Assert.That(ValueOf(args, "-force_key_frames"), Is.EqualTo("expr:gte(t,n_forced*4)"));
+            // twice the measured rate over the interval, so -g can never fire first
+            Assert.That(ValueOf(args, "-g"), Is.EqualTo("200"));
+        });
+    }
+
+    /// <summary>The live path is what the rest of this file pins, so it must not
+    /// pick anything up from the recording one.</summary>
+    [Test]
+    public void Recording_ReadsTheSameSourceAsTheLiveStream()
+    {
+        Assert.That(ValueOf(BuildRecording(multicast: true), "-i"),
+            Is.EqualTo(ValueOf(Build(multicast: true), "-i")));
+        Assert.That(ValueOf(BuildRecording(multicast: false), "-i"),
+            Is.EqualTo(ValueOf(Build(multicast: false), "-i")));
+    }
+
+    [Test]
+    public void Recording_DeinterlacesOnlyWhenTheSourceIsInterlaced()
+    {
+        Assert.That(BuildRecording(interlaced: true), Does.Contain("-vf"));
+        Assert.That(BuildRecording(interlaced: false), Does.Not.Contain("-vf"));
+    }
+
+    [Test]
+    public void Remux_CopiesAndMovesTheIndexToTheFront()
+    {
+        var args = FfmpegArguments.BuildRemux(CapturePath, "/var/srv/recordings/abc/recording.mp4", "warning");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ValueOf(args, "-c"), Is.EqualTo("copy"));
+            Assert.That(ValueOf(args, "-movflags"), Is.EqualTo("+faststart"));
+            Assert.That(ValueOf(args, "-bsf:a"), Is.EqualTo("aac_adtstoasc"));
+            Assert.That(args, Does.Not.Contain("libx264"));
+            Assert.That(args[^1], Is.EqualTo("/var/srv/recordings/abc/recording.mp4"));
+        });
+    }
+
+    [Test]
+    public void Concat_ReadsThePartListWithoutReEncoding()
+    {
+        var args = FfmpegArguments.BuildConcat("/var/srv/recordings/abc/parts.txt", "/tmp/out.mp4", "warning");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ValueOf(args, "-f"), Is.EqualTo("concat"));
+            Assert.That(ValueOf(args, "-safe"), Is.EqualTo("0"));
+            Assert.That(ValueOf(args, "-c"), Is.EqualTo("copy"));
+            Assert.That(args, Does.Not.Contain("libx264"));
+        });
     }
 }

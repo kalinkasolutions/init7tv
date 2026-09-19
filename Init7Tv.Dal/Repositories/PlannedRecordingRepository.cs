@@ -20,6 +20,14 @@ public sealed class PlannedRecordingRepository : IPlannedRecordingRepository
             .ToArrayAsync();
     }
 
+    public async Task<PlannedRecording[]> GetInWindowAsync(DateTime from, DateTime to)
+    {
+        return await m_context.PlannedRecordings
+            .Where(x => x.EndsAt > from && x.StartsAt <= to)
+            .OrderBy(x => x.StartsAt)
+            .ToArrayAsync();
+    }
+
     public async Task AddAsync(PlannedRecording recording)
     {
         var existing = await m_context.PlannedRecordings

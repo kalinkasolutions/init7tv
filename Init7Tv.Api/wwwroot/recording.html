@@ -20,6 +20,7 @@
     </div>
 </main>
 
+<div x-init="$el.outerHTML = await loadPartialView('partial/modal.html')"></div>
 <div x-init="$el.outerHTML = await loadPartialView('partial/notification.html')"></div>
 
 <script type="module" src="js/recording.js"></script>

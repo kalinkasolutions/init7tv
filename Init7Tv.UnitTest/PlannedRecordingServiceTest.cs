@@ -36,7 +36,7 @@ public class PlannedRecordingServiceTest
         m_repository = new Mock<IPlannedRecordingRepository>();
         m_repository.Setup(x => x.GetForUserAsync(It.IsAny<string>())).ReturnsAsync([]);
 
-        m_service = new PlannedRecordingService(m_repository.Object, channelService.Object);
+        m_service = new PlannedRecordingService(m_repository.Object, channelService.Object, new RecordingSignal());
     }
 
     /// The guide gives UTC. A time read back without a kind reaches the browser

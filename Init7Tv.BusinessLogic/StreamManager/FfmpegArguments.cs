@@ -21,11 +21,115 @@ public static class FfmpegArguments
         int segmentSeconds
     )
     {
-        var args = new List<string> { "-loglevel", appSettings.FfmpegLogLevel };
+        var args = new List<string>();
+        args.AddRange(LogLevel(appSettings.FfmpegLogLevel));
+        args.AddRange(Input(channel, useMultiCast));
+        args.AddRange(Transcode(appSettings.FfmpegPreset, streamInfo, audioStreamIndex, segmentSeconds));
+        args.AddRange(["-f", "mpegts"]);
+        args.Add("pipe:1");
 
-        if (useMultiCast)
+        return args.ToArray();
+    }
+
+    /// <summary>
+    /// The same transcode written to a file rather than a pipe.
+    ///
+    /// Transport stream rather than mp4 because a killed ffmpeg leaves an mp4
+    /// with no moov atom, which is an unplayable file: every crash would cost
+    /// the whole recording rather than its tail. The remux at the end is what
+    /// makes it seekable.
+    /// </summary>
+    /// <param name="duration">
+    /// What -t is set from, and the thing that actually ends the recording. A
+    /// scheduler that is wedged or restarting must not leave an ffmpeg running
+    /// against a multicast for ever.
+    /// </param>
+    public static string[] BuildRecording(
+        ChannelDto channel,
+        int audioStreamIndex,
+        string preset,
+        string logLevel,
+        FfprobeRoot streamInfo,
+        bool useMultiCast,
+        int keyframeSeconds,
+        TimeSpan duration,
+        string capturePath
+    )
+    {
+        // without -nostdin an existing output file makes ffmpeg ask on stdin and
+        // wait for an answer that is never coming
+        var args = new List<string> { "-nostdin", "-y" };
+        args.AddRange(LogLevel(logLevel));
+        args.AddRange(Input(channel, useMultiCast));
+        args.AddRange(Transcode(preset, streamInfo, audioStreamIndex, keyframeSeconds));
+        args.AddRange(["-t", ((int)duration.TotalSeconds).ToString(CultureInfo.InvariantCulture)]);
+        args.AddRange(["-f", "mpegts"]);
+        args.Add(capturePath);
+
+        return args.ToArray();
+    }
+
+    /// <summary>
+    /// Wraps the captured transport stream as mp4 so a browser can play and seek
+    /// it. A stream copy, so this costs no encode and runs far faster than real
+    /// time.
+    /// </summary>
+    public static string[] BuildRemux(string capturePath, string mp4Path, string logLevel)
+    {
+        return
+        [
+            "-nostdin", "-y",
+            .. LogLevel(logLevel),
+            // a capture that was cut mid-packet can start without timestamps
+            "-fflags", "+genpts",
+            "-i", capturePath,
+            "-map", "0:v:0",
+            "-map", "0:a:0",
+            "-c", "copy",
+            // aac leaves a transport stream as ADTS and mp4 wants it as ASC.
+            // Recent ffmpeg inserts this itself; saying it keeps the command from
+            // depending on which ffmpeg the image happens to ship.
+            "-bsf:a", "aac_adtstoasc",
+            // moves the index to the front, without which a browser downloads the
+            // whole file before it can play a second of it
+            "-movflags", "+faststart",
+            mp4Path
+        ];
+    }
+
+    /// <summary>Joins the parts of a recording that ffmpeg had to be restarted for.</summary>
+    public static string[] BuildConcat(string listPath, string mp4Path, string logLevel)
+    {
+        return
+        [
+            "-nostdin", "-y",
+            .. LogLevel(logLevel),
+            "-f", "concat",
+            // the list names files this process wrote, so it is not reading
+            // anywhere the caller did not intend
+            "-safe", "0",
+            "-i", listPath,
+            "-map", "0:v:0",
+            "-map", "0:a:0",
+            "-c", "copy",
+            "-bsf:a", "aac_adtstoasc",
+            "-movflags", "+faststart",
+            mp4Path
+        ];
+    }
+
+    private static string[] LogLevel(string logLevel) => ["-loglevel", logLevel];
+
+    private static string[] Input(ChannelDto channel, bool useMultiCast)
+    {
+        if (!useMultiCast)
         {
-            args.AddRange(["-fflags", "+genpts+discardcorrupt"]);
+            return ["-i", channel.HlsSource];
+        }
+
+        return
+        [
+            "-fflags", "+genpts+discardcorrupt",
 
             // no -flags low_delay. It tells the decoder to assume frames need no
             // reordering, and these sources are MPEG-2 with B frames, so it
@@ -38,16 +142,20 @@ public static class FfmpegArguments
             // 5.4s at the old window against 3.1s at this one, and nothing below
             // this is faster because the floor is how fast udp delivers. Verified
             // that the later audio tracks are still found and mappable.
-            args.AddRange(["-analyzeduration", "1000000"]);
-            args.AddRange(["-probesize", "2000000"]);
-            args.AddRange(["-i", $"{channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1"]);
-        }
-        else
-        {
-            args.AddRange(["-i", channel.HlsSource]);
-        }
+            "-analyzeduration", "1000000",
+            "-probesize", "2000000",
+            "-i", $"{channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1"
+        ];
+    }
 
-        args.AddRange(["-map", "0:v:0"]);
+    private static string[] Transcode(
+        string preset,
+        FfprobeRoot streamInfo,
+        int audioStreamIndex,
+        int keyframeSeconds
+    )
+    {
+        var args = new List<string> { "-map", "0:v:0" };
 
         // A keyframe exactly every segment and nothing else, because segments are
         // cut on keyframes. force_key_frames is a time expression so it does not
@@ -55,12 +163,12 @@ public static class FfmpegArguments
         // put a keyframe every 12s on 25fps channels while segments were 6s.
         // Derived from the measured rate and doubled, so it can never fire before
         // the forced keyframe does. scenecut would add unforced ones.
-        args.AddRange(["-force_key_frames", $"expr:gte(t,n_forced*{segmentSeconds})"]);
-        args.AddRange(["-g", KeyframeInterval(streamInfo, segmentSeconds).ToString(CultureInfo.InvariantCulture)]);
+        args.AddRange(["-force_key_frames", $"expr:gte(t,n_forced*{keyframeSeconds})"]);
+        args.AddRange(["-g", KeyframeInterval(streamInfo, keyframeSeconds).ToString(CultureInfo.InvariantCulture)]);
         args.AddRange(["-x264-params", "scenecut=0"]);
 
         args.AddRange(["-c:v", "libx264"]);
-        args.AddRange(["-preset", appSettings.FfmpegPreset]);
+        args.AddRange(["-preset", preset]);
 
         if (streamInfo.IsInterlaced)
         {
@@ -79,19 +187,17 @@ public static class FfmpegArguments
         args.AddRange(["-b:a", "128k"]);
         args.AddRange(["-ac", "2"]);
         args.AddRange(["-ar", "48000"]);
-        args.AddRange(["-f", "mpegts"]);
-        args.Add("pipe:1");
 
         return args.ToArray();
     }
 
-    private static int KeyframeInterval(FfprobeRoot streamInfo, int segmentSeconds)
+    private static int KeyframeInterval(FfprobeRoot streamInfo, int keyframeSeconds)
     {
         var frameRate = streamInfo.GetFrameRate;
 
         // a rate we could not measure should not shorten the interval
         return frameRate > 0
-            ? (int)Math.Round(frameRate * segmentSeconds * 2)
+            ? (int)Math.Round(frameRate * keyframeSeconds * 2)
             : 600;
     }
 }

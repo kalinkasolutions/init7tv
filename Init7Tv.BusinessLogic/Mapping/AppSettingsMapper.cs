@@ -25,7 +25,10 @@ public static class AppSettingsMapper
         {
             BaseDomain = appSettings.BaseDomain,
             FfmpegPreset = appSettings.FfmpegPreset,
-            FfmpegLogLevel = appSettings.FfmpegLogLevel
+            FfmpegLogLevel = appSettings.FfmpegLogLevel,
+            RecordingPreset = appSettings.RecordingPreset,
+            RecordingPreRollMinutes = appSettings.RecordingPreRollMinutes,
+            RecordingPostRollMinutes = appSettings.RecordingPostRollMinutes
         };
     }
 
@@ -36,6 +39,9 @@ public static class AppSettingsMapper
             BaseDomain = appSettingsDto.BaseDomain,
             FfmpegLogLevel = appSettingsDto.FfmpegLogLevel,
             FfmpegPreset =  appSettingsDto.FfmpegPreset,
+            RecordingPreset = appSettingsDto.RecordingPreset,
+            RecordingPreRollMinutes = appSettingsDto.RecordingPreRollMinutes,
+            RecordingPostRollMinutes = appSettingsDto.RecordingPostRollMinutes,
         };
     }
 
