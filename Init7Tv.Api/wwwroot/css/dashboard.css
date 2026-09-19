@@ -40,3 +40,23 @@
     align-items: center;
     border-bottom: 1px solid #ffffff80;
 }
+
+/* a card says more than a stream's does, so its lines sit closer together */
+#dashboard ul > li.recording {
+    gap: 0.4rem;
+}
+
+#dashboard ul > li.recording .dashcard-title {
+    margin-bottom: 0.6rem;
+}
+
+#dashboard .dashcard-sub,
+#dashboard .dashcard-note {
+    font-size: 0.85em;
+    color: #ffffffb0;
+}
+
+#dashboard .dashcard-note {
+    color: #2fb12f;
+    font-variant-numeric: tabular-nums;
+}

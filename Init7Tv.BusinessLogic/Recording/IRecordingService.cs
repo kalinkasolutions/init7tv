@@ -11,4 +11,10 @@ public interface IRecordingService
     Task<OperationResult<RecordingFileDto>> GetFileAsync(Guid recordingId, string userName, bool isAdmin);
 
     Task<OperationResult<bool>> DeleteAsync(Guid recordingId, string userName, bool isAdmin);
+
+    /// <summary>
+    /// What is recording right now, for the dashboard. Everybody's, because that is a question about
+    /// the machine rather than about one viewer.
+    /// </summary>
+    Task<CurrentRecordingDto[]> GetCurrentAsync();
 }

@@ -1,3 +1,4 @@
+using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.Dal.Entities;
 using Init7Tv.Dal.Repositories;
 using Init7Tv.Dto;
@@ -12,18 +13,21 @@ public sealed class RecordingService : IRecordingService
 {
     private readonly IRecordingRepository m_repository;
     private readonly IRecordingEngine m_engine;
+    private readonly IChannelService m_channelService;
     private readonly ILogger<RecordingService> m_logger;
     private readonly Init7TvOptions m_options;
 
     public RecordingService(
         IRecordingRepository repository,
         IRecordingEngine engine,
+        IChannelService channelService,
         ILogger<RecordingService> logger,
         IOptions<Init7TvOptions> options
     )
     {
         m_repository = repository;
         m_engine = engine;
+        m_channelService = channelService;
         m_logger = logger;
         m_options = options.Value;
     }
@@ -98,6 +102,37 @@ public sealed class RecordingService : IRecordingService
         }
 
         return OperationResult<bool>.Success(true);
+    }
+
+    public async Task<CurrentRecordingDto[]> GetCurrentAsync()
+    {
+        var running = (await m_repository.GetUnfinishedAsync())
+            .Where(x => x.State == RecordingState.Recording)
+            .ToArray();
+
+        var current = new List<CurrentRecordingDto>();
+
+        // one capture serves everybody who picked it, so the rows sharing a directory are one entry
+        foreach (var group in running.GroupBy(x => x.Directory))
+        {
+            var row = group.First();
+            var channel = await m_channelService.GetChannelById(row.ChannelId);
+
+            current.Add(new CurrentRecordingDto
+            {
+                RecordingId = row.RecordingId,
+                ChannelId = row.ChannelId,
+                ChannelDisplayName = row.ChannelName,
+                ChannelLogo = channel.IsSuccess ? channel.Value.Logo : [],
+                Title = row.Title,
+                SubTitle = row.SubTitle,
+                UserNames = group.Select(x => x.UserName).Order().ToArray(),
+                StartedAt = row.StartedAt ?? row.ScheduledStart,
+                ScheduledEnd = row.ScheduledEnd
+            });
+        }
+
+        return current.OrderBy(x => x.ScheduledEnd).ToArray();
     }
 
     private static bool MayTouch(RecordingRow recording, string userName, bool isAdmin) =>

@@ -73,6 +73,7 @@ builder.Services.AddSingleton<IFfprobeService, FfprobeService>();
 // that ring it are scoped, and a field there would die with the request
 builder.Services.AddSingleton<RecordingSignal>();
 builder.Services.AddSingleton<IRecordingEngine, RecordingEngine>();
+builder.Services.AddSingleton<IRecordingEventBus, RecordingEventBus>();
 
 builder.Services.AddHostedService<DashboardNotifier>();
 builder.Services.AddHostedService<RecordingScheduler>();

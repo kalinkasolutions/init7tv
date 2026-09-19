@@ -41,6 +41,8 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
     private readonly IChannelService m_channelService;
     private readonly IAppSettingsService m_appSettingsService;
     private readonly IRecordingEngine m_engine;
+    private readonly IRecordingService m_recordingService;
+    private readonly IRecordingEventBus m_eventBus;
     private readonly Init7TvOptions m_options;
 
     public RecordingCoordinator(
@@ -50,6 +52,8 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         IChannelService channelService,
         IAppSettingsService appSettingsService,
         IRecordingEngine engine,
+        IRecordingService recordingService,
+        IRecordingEventBus eventBus,
         IOptions<Init7TvOptions> options
     )
     {
@@ -59,6 +63,8 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         m_channelService = channelService;
         m_appSettingsService = appSettingsService;
         m_engine = engine;
+        m_recordingService = recordingService;
+        m_eventBus = eventBus;
         m_options = options.Value;
     }
 
@@ -94,6 +100,8 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
 
             await FinalizeGroupAsync(rows, settings, cutShort: true);
         }
+
+        m_eventBus.Publish(await m_recordingService.GetCurrentAsync());
     }
 
     public async Task<RecordingSweepResult> SweepAsync(DateTime now)
@@ -120,6 +128,10 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
 
         m_logger.LogDebug(
             "Swept the recording schedule at {Now} out to {Horizon}, next due {Next}", now, horizon, next);
+
+        // A pass only runs when something could have changed, so this is where the dashboard hears
+        // about it rather than on a poll of its own.
+        m_eventBus.Publish(await m_recordingService.GetCurrentAsync());
 
         return new RecordingSweepResult(next, horizon);
     }

@@ -72,6 +72,8 @@ public class RecordingCoordinatorTest
             channelService.Object,
             appSettings.Object,
             m_engine.Object,
+            Mock.Of<IRecordingService>(x => x.GetCurrentAsync() == Task.FromResult(Array.Empty<CurrentRecordingDto>())),
+            Mock.Of<IRecordingEventBus>(),
             Options.Create(new Init7TvOptions { RecordingPath = m_root, MaxConcurrentRecordings = 2 }));
     }
 

@@ -1,3 +1,4 @@
+using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.Recording;
 using Init7Tv.Dal.Entities;
 using Init7Tv.Dal.Repositories;
@@ -34,6 +35,7 @@ public class RecordingServiceTest
         m_service = new RecordingService(
             m_repository.Object,
             m_engine.Object,
+            Mock.Of<IChannelService>(),
             NullLogger<RecordingService>.Instance,
             Options.Create(new Init7TvOptions { RecordingPath = m_root }));
     }

@@ -17,4 +17,27 @@
     <template x-if="!streams.length">
         <h3>No activity...</h3>
     </template>
+
+    <h2 class="text-xl font-bold mb-2">Current recordings</h2>
+    <template x-if="recordings.length">
+        <ul>
+            <template x-for="recording in recordings" :key="recording.recordingId">
+                <li class="recording">
+                    <div class="dashcard-title">
+                        <img alt="tv-logo" :src="`data:image/png;base64,${recording.channelLogo}`">
+                        <h3 x-text="recording.channelDisplayName"></h3>
+                    </div>
+                    <h4 x-text="recording.title"></h4>
+                    <div class="dashcard-sub" x-show="recording.subTitle" x-text="recording.subTitle"></div>
+                    <div class="dashcard-note"
+                         x-text="`${progress(recording)}, until ${until(recording)}`"></div>
+                    <h4>Recording for</h4>
+                    <div x-text="recording.userNames.join(', ')"></div>
+                </li>
+            </template>
+        </ul>
+    </template>
+    <template x-if="!recordings.length">
+        <h3>Nothing recording...</h3>
+    </template>
 </div>
