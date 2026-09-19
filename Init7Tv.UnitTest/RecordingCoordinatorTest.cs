@@ -248,8 +248,7 @@ public class RecordingCoordinatorTest
         await m_coordinator.ReconcileAsync();
 
         m_engine.Verify(x => x.StartAsync(It.IsAny<RecordingRequest>()), Times.Once);
-        m_engine.Verify(x => x.FinalizeAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-        Assert.That(row.State, Is.EqualTo(RecordingState.Recording));
+        Assert.That(row.State, Is.EqualTo(RecordingState.Recording), "carried on rather than wrapped up");
     }
 
     /// <summary>Past the window there is nothing left to catch, so keep what there is.</summary>
@@ -258,15 +257,13 @@ public class RecordingCoordinatorTest
     {
         var row = Leftover(DateTime.UtcNow.AddMinutes(-5));
         m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
-        m_engine.Setup(x => x.FinalizeAsync(row.Directory, It.IsAny<string>()))
-            .ReturnsAsync(OperationResult<long>.Success(1234));
 
         await m_coordinator.ReconcileAsync();
 
         m_engine.Verify(x => x.StartAsync(It.IsAny<RecordingRequest>()), Times.Never);
 
         Assert.That(row.State, Is.EqualTo(RecordingState.Interrupted));
-        Assert.That(row.FileSizeBytes, Is.EqualTo(1234));
+        Assert.That(row.FileSizeBytes, Is.EqualTo(4096), "what was captured, as it stands on disk");
     }
 
     [Test]
@@ -274,8 +271,9 @@ public class RecordingCoordinatorTest
     {
         var row = Leftover(DateTime.UtcNow.AddMinutes(-5));
         m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
-        m_engine.Setup(x => x.FinalizeAsync(row.Directory, It.IsAny<string>()))
-            .ReturnsAsync(OperationResult<long>.NotFound("Nothing was captured"));
+
+        // it never got as far as writing anything
+        File.Delete(RecordingFiles.CapturePath(row.Directory, 1));
 
         await m_coordinator.ReconcileAsync();
 
@@ -291,8 +289,6 @@ public class RecordingCoordinatorTest
         var row = Leftover(DateTime.UtcNow.AddSeconds(-10), RecordingState.Recording);
         m_recordings.Setup(x => x.GetByDirectoryAsync(row.Directory)).ReturnsAsync([row]);
         m_engine.Setup(x => x.TakeFinished()).Returns([Finished(row, exitCode: 0)]);
-        m_engine.Setup(x => x.FinalizeAsync(row.Directory, It.IsAny<string>()))
-            .ReturnsAsync(OperationResult<long>.Success(99));
 
         await m_coordinator.SweepAsync(DateTime.UtcNow);
 
@@ -312,7 +308,6 @@ public class RecordingCoordinatorTest
         await m_coordinator.SweepAsync(DateTime.UtcNow);
 
         m_engine.Verify(x => x.StartAsync(It.IsAny<RecordingRequest>()), Times.Once);
-        m_engine.Verify(x => x.FinalizeAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>One we stopped on purpose is finished where it is rather than restarted.</summary>
@@ -322,8 +317,6 @@ public class RecordingCoordinatorTest
         var row = Leftover(DateTime.UtcNow.AddMinutes(20), RecordingState.Recording);
         m_recordings.Setup(x => x.GetByDirectoryAsync(row.Directory)).ReturnsAsync([row]);
         m_engine.Setup(x => x.TakeFinished()).Returns([Finished(row, exitCode: 255, stopped: true)]);
-        m_engine.Setup(x => x.FinalizeAsync(row.Directory, It.IsAny<string>()))
-            .ReturnsAsync(OperationResult<long>.Success(42));
 
         await m_coordinator.SweepAsync(DateTime.UtcNow);
 
@@ -429,7 +422,7 @@ public class RecordingCoordinatorTest
         var captureId = RecordingFiles.CaptureIdOf(row.Directory);
         m_engine.Setup(x => x.IsRunning(captureId)).Returns(true);
         m_engine
-            .Setup(x => x.ForkAsync(row.Directory, It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<string>()))
+            .Setup(x => x.ForkAsync(row.Directory, It.IsAny<string>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync(OperationResult<long>.Success(4242));
 
         var theirs = row.Directory;
@@ -437,7 +430,7 @@ public class RecordingCoordinatorTest
         await m_coordinator.SweepAsync(DateTime.UtcNow);
 
         m_engine.Verify(
-            x => x.ForkAsync(theirs, It.IsAny<string>(), It.Is<TimeSpan>(t => t.TotalMinutes > 19), It.IsAny<string>()),
+            x => x.ForkAsync(theirs, It.IsAny<string>(), It.Is<TimeSpan>(t => t.TotalMinutes > 19)),
             Times.Once);
         m_engine.Verify(x => x.Stop(It.IsAny<Guid>()), Times.Never);
 
@@ -452,13 +445,11 @@ public class RecordingCoordinatorTest
     {
         var row = Leftover(DateTime.UtcNow.AddMinutes(-5), RecordingState.Finalizing);
         m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
-        m_engine.Setup(x => x.FinalizeAsync(row.Directory, It.IsAny<string>()))
-            .ReturnsAsync(OperationResult<long>.Success(1));
 
         await m_coordinator.SweepAsync(DateTime.UtcNow);
 
         m_engine.Verify(
-            x => x.ForkAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<string>()),
+            x => x.ForkAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -581,9 +572,18 @@ public class RecordingCoordinatorTest
         ScheduledStart = scheduledEnd.AddHours(-1),
         ScheduledEnd = scheduledEnd,
         State = state,
-        Directory = RecordingFiles.DirectoryFor(m_root, Guid.NewGuid()),
+        Directory = Captured(RecordingFiles.DirectoryFor(m_root, Guid.NewGuid())),
         CreatedAt = DateTime.UtcNow
     };
+
+    /// <summary>Finishing reads the transport stream on disk, so there has to be one.</summary>
+    private static string Captured(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        File.WriteAllBytes(RecordingFiles.CapturePath(directory, 1), new byte[4096]);
+
+        return directory;
+    }
 
     private static FinishedCapture Finished(RecordingRow row, int exitCode, bool stopped = false) => new()
     {

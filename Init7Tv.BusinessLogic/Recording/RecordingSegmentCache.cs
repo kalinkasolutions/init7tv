@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Init7Tv.Dto;
 
 namespace Init7Tv.BusinessLogic.Recording;
 
@@ -21,6 +22,19 @@ public sealed class RecordingSegmentCache : IRecordingSegmentCache
             index.Extend(parts, finished);
 
             return index.Segments.ToArray();
+        }
+    }
+
+    public IReadOnlyList<AdBreakMark> Breaks(string directory)
+    {
+        if (!m_indexes.TryGetValue(directory, out var index))
+        {
+            return [];
+        }
+
+        lock (index)
+        {
+            return index.Breaks;
         }
     }
 

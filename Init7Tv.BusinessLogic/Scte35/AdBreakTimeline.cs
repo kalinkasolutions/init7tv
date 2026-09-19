@@ -63,6 +63,9 @@ public sealed class AdBreakTimeline
         }
     }
 
+    /// <summary>Every break announced so far, for reading a whole recording rather than a moment of one.</summary>
+    public IReadOnlyCollection<AdBreak> Breaks => m_breaks.Values;
+
     /// <summary>What the stream has announced, seen from <paramref name="currentPts"/>.</summary>
     public AdBreakForecast Forecast(ulong currentPts)
     {

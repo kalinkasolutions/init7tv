@@ -45,15 +45,13 @@ public interface IRecordingEngine
     /// <summary>Hands back the captures that have exited since the last call, and forgets them.</summary>
     FinishedCapture[] TakeFinished();
 
-    /// <summary>Turns the captures in a directory into the mp4 that is kept, and returns its size.</summary>
-    Task<OperationResult<long>> FinalizeAsync(string directory, string logLevel);
-
     /// <summary>
-    /// Writes somebody's share of a capture into a file of its own: everything up to the moment they
-    /// let go of it. The capture is left alone, because whoever is still waiting for it is having it
-    /// written as this runs.
+    /// Copies somebody's share of a capture into a directory of its own: whole segments up to the
+    /// moment they let go of it. The capture itself is left alone, because whoever is still waiting
+    /// for it is having it written as this runs. A copy of the bytes, so it costs no encode and no
+    /// conversion.
     /// </summary>
-    Task<OperationResult<long>> ForkAsync(string fromDirectory, string intoDirectory, TimeSpan upTo, string logLevel);
+    Task<OperationResult<long>> ForkAsync(string fromDirectory, string intoDirectory, TimeSpan upTo);
 
     void StopAll();
 }

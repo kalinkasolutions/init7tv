@@ -58,10 +58,18 @@ public static class FfmpegArguments
     {
         // without -nostdin an existing output file makes ffmpeg ask on stdin and
         // wait for an answer that is never coming
-        var args = new List<string> { "-nostdin", "-y" };
+        // the cue messages are a data stream ffmpeg has no decoder for, and without this it refuses
+        // to carry one at all
+        var args = new List<string> { "-nostdin", "-y", "-copy_unknown" };
         args.AddRange(LogLevel(logLevel));
         args.AddRange(Input(channel, useMultiCast));
         args.AddRange(Transcode(preset, streamInfo, audioStreamIndex, keyframeSeconds));
+
+        // The advertising cues the channel already carries, copied in beside the pictures so that a
+        // cue and what it refers to end up on the same clock. Read from the source separately they
+        // would have to be lined up against a transcode that starts whenever it starts. Optional,
+        // because a channel that carries none should still record.
+        args.AddRange(["-map", "0:d:0?", "-c:d", "copy"]);
         args.AddRange(["-t", ((int)duration.TotalSeconds).ToString(CultureInfo.InvariantCulture)]);
         args.AddRange(["-f", "mpegts"]);
         args.Add(capturePath);
@@ -74,60 +82,31 @@ public static class FfmpegArguments
     /// it. A stream copy, so this costs no encode and runs far faster than real
     /// time.
     /// </summary>
-    /// <param name="upTo">
-    /// Bounds the output, for taking somebody's share of a capture that is still being written. Left
-    /// null the whole of it is wrapped.
-    /// </param>
-    public static string[] BuildRemux(string capturePath, string mp4Path, string logLevel, TimeSpan? upTo = null)
+    /// <summary>
+    /// Wraps a transport stream arriving on stdin as an mp4 going out on stdout. A stream copy, so
+    /// it costs no encode: the capture is already H.264 and AAC and only the box around it changes.
+    ///
+    /// Fragmented, because an ordinary mp4 keeps its index at one end or the other and cannot be
+    /// written to something that cannot be seeked back into. It plays everywhere the other one does.
+    /// </summary>
+    public static string[] BuildDownload(string logLevel)
     {
         return
         [
-            "-nostdin", "-y",
+            "-nostdin",
             .. LogLevel(logLevel),
-            // a capture that was cut mid-packet can start without timestamps
+            // the pieces are cut at segment boundaries, so what arrives may start anywhere
             "-fflags", "+genpts",
-            "-i", capturePath,
+            "-f", "mpegts", "-i", "pipe:0",
             "-map", "0:v:0",
             "-map", "0:a:0",
             "-c", "copy",
-            // aac leaves a transport stream as ADTS and mp4 wants it as ASC.
-            // Recent ffmpeg inserts this itself; saying it keeps the command from
-            // depending on which ffmpeg the image happens to ship.
+            // aac leaves a transport stream as ADTS and mp4 wants it as ASC
             "-bsf:a", "aac_adtstoasc",
-            .. Limit(upTo),
-            // moves the index to the front, without which a browser downloads the
-            // whole file before it can play a second of it
-            "-movflags", "+faststart",
-            mp4Path
+            "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+            "-f", "mp4", "pipe:1"
         ];
     }
-
-    /// <summary>Joins the parts of a recording that ffmpeg had to be restarted for.</summary>
-    public static string[] BuildConcat(string listPath, string mp4Path, string logLevel, TimeSpan? upTo = null)
-    {
-        return
-        [
-            "-nostdin", "-y",
-            .. LogLevel(logLevel),
-            "-f", "concat",
-            // the list names files this process wrote, so it is not reading
-            // anywhere the caller did not intend
-            "-safe", "0",
-            "-i", listPath,
-            "-map", "0:v:0",
-            "-map", "0:a:0",
-            "-c", "copy",
-            "-bsf:a", "aac_adtstoasc",
-            .. Limit(upTo),
-            "-movflags", "+faststart",
-            mp4Path
-        ];
-    }
-
-    private static string[] Limit(TimeSpan? upTo) =>
-        upTo is { } limit
-            ? ["-t", ((int)limit.TotalSeconds).ToString(CultureInfo.InvariantCulture)]
-            : [];
 
     private static string[] LogLevel(string logLevel) => ["-loglevel", logLevel];
 

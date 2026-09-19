@@ -13,12 +13,20 @@ public interface IRecordingService
     /// </summary>
     Task<OperationResult<string>> GetPlaylistAsync(Guid recordingId, string userName, bool isAdmin);
 
+    /// <summary>Where the advertising falls in one recording, in seconds from its start.</summary>
+    Task<OperationResult<AdBreakMark[]>> GetAdBreaksAsync(Guid recordingId, string userName, bool isAdmin);
+
     /// <summary>One of the captures the playlist points into, served with ranges.</summary>
     Task<OperationResult<RecordingFileDto>> GetPartAsync(
         Guid recordingId, int part, string userName, bool isAdmin);
 
-    /// <summary>Where the file is and what to call it, never the file itself.</summary>
-    Task<OperationResult<RecordingFileDto>> GetFileAsync(Guid recordingId, string userName, bool isAdmin);
+    /// <summary>
+    /// What to hand over for a download: the captures and which stretches of them to send. An mp4
+    /// is made out of those as it is written to the response, because a recording is kept as the
+    /// transport stream it was captured as and converting one is only worth doing when asked.
+    /// </summary>
+    Task<OperationResult<RecordingDownloadDto>> GetDownloadAsync(
+        Guid recordingId, bool withoutAds, string userName, bool isAdmin);
 
     /// <summary>
     /// Ends one that is running and keeps what it caught, which is the difference between this and

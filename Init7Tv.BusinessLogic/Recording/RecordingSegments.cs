@@ -1,4 +1,6 @@
+using Init7Tv.BusinessLogic.Scte35;
 using Init7Tv.BusinessLogic.StreamManager;
+using Init7Tv.Dto;
 
 namespace Init7Tv.BusinessLogic.Recording;
 
@@ -42,6 +44,54 @@ public sealed class RecordingSegments
     public IReadOnlyList<RecordingSegment> Segments => m_segments;
 
     /// <summary>
+    /// Where the advertising falls, in seconds from the start of the recording.
+    ///
+    /// The cue messages are carried in the capture itself rather than read from the source
+    /// separately, so a cue and the pictures it refers to are already on the same clock: what is
+    /// left is the offset between that clock and the start of each part, which restarts whenever
+    /// the capture had to.
+    /// </summary>
+    public IReadOnlyList<AdBreakMark> Breaks
+    {
+        get
+        {
+            var marks = new List<AdBreakMark>();
+
+            foreach (var (part, scan) in m_parts.OrderBy(x => x.Key))
+            {
+                if (scan.FirstPts == null)
+                {
+                    continue;
+                }
+
+                foreach (var found in scan.Timeline.Breaks)
+                {
+                    var starts = scan.StartsAt + Seconds(found.StartPts, scan.FirstPts.Value);
+                    var length = found.Duration ?? AdBreakTimeline.UnknownBreakLength;
+
+                    if (starts >= 0)
+                    {
+                        marks.Add(new AdBreakMark { StartsAt = starts, EndsAt = starts + length.TotalSeconds });
+                    }
+                }
+            }
+
+            return marks.OrderBy(x => x.StartsAt).ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Distance between two timestamps on the stream's 90 kHz clock, which is 33 bits wide and so
+    /// starts again roughly every twenty six hours.
+    /// </summary>
+    private static double Seconds(ulong pts, ulong from)
+    {
+        const ulong wrap = 1UL << 33;
+
+        return (double)((pts + wrap - from) % wrap) / 90000.0;
+    }
+
+    /// <summary>
     /// Reads whatever has been appended since the last time and adds the segments it completes.
     /// Only the new bytes are read, so keeping a playlist current costs the same however long the
     /// recording has been running.
@@ -60,7 +110,10 @@ public sealed class RecordingSegments
                 continue;
             }
 
-            var scan = m_parts.TryGetValue(part, out var existing) ? existing : m_parts[part] = new PartScan();
+            var scan = m_parts.TryGetValue(part, out var existing) ? existing : m_parts[part] = new PartScan
+            {
+                StartsAt = m_segments.Sum(segment => segment.Seconds)
+            };
             var length = new FileInfo(path).Length;
 
             // whole packets only: the tail of a half written one says nothing yet
@@ -113,6 +166,19 @@ public sealed class RecordingSegments
                     scan.LastTables = at + i;
                 }
 
+                // the cue messages the channel carries, now inside the recording rather than only
+                // in the source it came from
+                if (scan.Cues.TryRead(packet, out var cue))
+                {
+                    scan.Timeline.Observe(cue, scan.LastPts);
+                }
+
+                if (payloadStart && ReadPts(packet) is { } pts)
+                {
+                    scan.LastPts = pts;
+                    scan.FirstPts ??= pts;
+                }
+
                 if (scan.Detector.IsKeyframeStart(packet) && scan.LastTables >= 0)
                 {
                     if (scan.Cuts.Count == 0 || scan.Cuts[^1] < scan.LastTables)
@@ -147,9 +213,46 @@ public sealed class RecordingSegments
         scan.Published = Math.Max(scan.Published, available);
     }
 
+    /// <summary>
+    /// The presentation timestamp of a packet that begins one, which is what puts a cue message and
+    /// the pictures it refers to on the same clock.
+    /// </summary>
+    private static ulong? ReadPts(ReadOnlySpan<byte> packet)
+    {
+        var adaptation = (packet[3] >> 4) & 0x3;
+        var offset = 4 + (adaptation is 2 or 3 ? packet[4] + 1 : 0);
+
+        // a PES packet starts 00 00 01, and only some of them carry a timestamp
+        if (offset + 14 > packet.Length || packet[offset] != 0 || packet[offset + 1] != 0 || packet[offset + 2] != 1)
+        {
+            return null;
+        }
+
+        if ((packet[offset + 7] & 0x80) == 0)
+        {
+            return null;
+        }
+
+        var at = offset + 9;
+
+        return ((ulong)(packet[at] & 0x0E) << 29)
+               | ((ulong)packet[at + 1] << 22)
+               | ((ulong)(packet[at + 2] & 0xFE) << 14)
+               | ((ulong)packet[at + 3] << 7)
+               | ((ulong)packet[at + 4] >> 1);
+    }
+
     private sealed class PartScan
     {
         public TsKeyframeDetector Detector { get; } = new();
+        public Scte35CueExtractor Cues { get; } = new();
+        public AdBreakTimeline Timeline { get; } = new();
+
+        /// <summary>Where this part begins in the recording as a whole.</summary>
+        public double StartsAt { get; set; }
+
+        public ulong? FirstPts { get; set; }
+        public ulong LastPts { get; set; }
         public List<long> Cuts { get; } = [];
         public long Scanned { get; set; }
         public long End { get; set; }

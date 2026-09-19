@@ -203,7 +203,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
             m_logger.LogInformation("Cutting {UserName}'s {Length} of {Title} out of {Directory}",
                 row.UserName, upTo, row.Title, row.Directory);
 
-            var forked = await m_engine.ForkAsync(row.Directory, theirs, upTo, settings.FfmpegLogLevel);
+            var forked = await m_engine.ForkAsync(row.Directory, theirs, upTo);
 
             await UpdateAsync([row], x =>
             {
@@ -273,23 +273,27 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         }
     }
 
+    /// <summary>
+    /// Ends a recording. Nothing is converted and nothing is deleted: the transport stream on disk
+    /// is what is kept, and it is what gets played, so a viewer part way through one is not cut off
+    /// the moment it stops being written. Turning it into an mp4 is the download's business, and
+    /// only if somebody asks for one.
+    /// </summary>
     private async Task FinalizeGroupAsync(RecordingRow[] rows, GeneralAppSettingsDto settings, bool cutShort)
     {
         var directory = rows[0].Directory;
-
-        await UpdateAsync(rows, row => row.State = RecordingState.Finalizing);
-
-        var finalized = await m_engine.FinalizeAsync(directory, settings.FfmpegLogLevel);
+        var captured = RecordingFiles.Captures(directory).Sum(path => new FileInfo(path).Length);
         var now = DateTime.UtcNow;
 
-        if (!finalized.IsSuccess)
+        if (captured == 0)
         {
-            m_logger.LogError("Could not finalize {Directory}: {Error}", directory, finalized.ErrorMessage);
+            m_logger.LogError("Nothing was captured in {Directory}", directory);
+
             await UpdateAsync(rows, row =>
             {
                 row.State = RecordingState.Failed;
                 row.EndedAt = now;
-                row.ErrorMessage = finalized.ErrorMessage ?? "The recording could not be finished";
+                row.ErrorMessage = "Nothing was recorded";
             });
 
             await ForgetPicksAsync(rows);
@@ -297,13 +301,13 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         }
 
         m_logger.LogInformation("Finished {Directory}, {Bytes} bytes{CutShort}",
-            directory, finalized.Value, cutShort ? " (cut short)" : string.Empty);
+            directory, captured, cutShort ? " (cut short)" : string.Empty);
 
         await UpdateAsync(rows, row =>
         {
             row.State = cutShort ? RecordingState.Interrupted : RecordingState.Completed;
             row.EndedAt = now;
-            row.FileSizeBytes = finalized.Value;
+            row.FileSizeBytes = captured;
             row.ErrorMessage = cutShort ? "Part of the programme is missing" : string.Empty;
         });
 

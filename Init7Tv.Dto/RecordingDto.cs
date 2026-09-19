@@ -32,6 +32,9 @@ public sealed record RecordingDto
     /// somebody else is still filling, so the page says so before it lets go of it.
     /// </summary>
     public string[] SharedWith { get; init; } = [];
+
+    /// <summary>Where the advertising falls, for the skip button and for leaving it out of a download.</summary>
+    public AdBreakMark[] AdBreaks { get; init; } = [];
 }
 
 /// <summary>

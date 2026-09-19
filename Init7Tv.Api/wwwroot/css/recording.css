@@ -338,6 +338,64 @@
 
 /* something is happening to this one right now */
 
+#recording .download-pair {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+}
+
+/* the second download is the same action with the advertising left out, so it is the same button
+   with a word on it rather than a different one */
+#recording .no-ads {
+    font-size: 0.6em;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-left: 0.25em;
+}
+
+#recording .download-pair .icon-button:last-child {
+    width: auto;
+    padding: 0 0.5em;
+}
+
+#recording .skip-break {
+    position: absolute;
+    right: 2.5em;
+    bottom: 5.5em;
+    display: flex;
+    align-items: stretch;
+    z-index: 21;
+}
+
+#recording .skip-break .skip {
+    background: #1c2420e0;
+    border: 1px solid #2fb12f;
+    border-right: none;
+    color: #2fb12f;
+    font: inherit;
+    padding: 0.5em 1em;
+    cursor: pointer;
+}
+
+#recording .skip-break .skip:hover {
+    background: #2fb12f;
+    color: #1c2420;
+}
+
+/* the x sits on the corner of the button it removes */
+#recording .skip-break .skip-dismiss {
+    background: #1c2420e0;
+    border: 1px solid #2fb12f;
+    color: #2fb12f80;
+    cursor: pointer;
+    padding: 0 0.5em;
+    font-size: 0.8em;
+}
+
+#recording .skip-break .skip-dismiss:hover {
+    color: #2fb12f;
+}
+
 #recording .player-overlay {
     position: fixed;
     inset: 0;
@@ -350,6 +408,7 @@
 }
 
 #recording .player-box {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.5em;

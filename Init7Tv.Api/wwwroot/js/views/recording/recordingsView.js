@@ -14,6 +14,12 @@ export const recordingsView = () => ({
     playing: null,
     timer: null,
     hls: null,
+    /// Where the advertising falls in whatever is open, in seconds from its start.
+    breaks: [],
+    /// Which break the viewer waved away. One at a time: waving one off says nothing about the next.
+    dismissed: null,
+    /// Re-read while playing so the button knows when a break has been reached.
+    at: 0,
 
     async init() {
         await this.load();
@@ -89,8 +95,8 @@ export const recordingsView = () => ({
         }
     },
 
-    fileUrl(recording, download = false) {
-        return `/api/recording/recordings/${recording.recordingId}/file${download ? '?download=true' : ''}`;
+    fileUrl(recording, {withoutAds = false} = {}) {
+        return `/api/recording/recordings/${recording.recordingId}/file?withoutAds=${withoutAds}`;
     },
 
     playlistUrl(recording) {
@@ -109,8 +115,11 @@ export const recordingsView = () => ({
         return recording.isPlayable || this.isBusy(recording);
     },
 
-    play(recording) {
+    async play(recording) {
         this.playing = recording;
+        this.at = 0;
+        this.dismissed = null;
+        this.breaks = await get(`/api/recording/recordings/${recording.recordingId}/ad-breaks`) ?? [];
 
         if (!this.needsHls(recording)) {
             return;
@@ -155,6 +164,30 @@ export const recordingsView = () => ({
         this.hls.attachMedia(video);
     },
 
+    /// Called as the picture moves, which is what the skip button watches.
+    moved(video) {
+        this.at = video.currentTime;
+    },
+
+    /// The break being watched right now, unless it was waved away.
+    get inBreak() {
+        return this.breaks.find(gap =>
+            this.at >= gap.startsAt && this.at < gap.endsAt && this.dismissed !== gap.startsAt) ?? null;
+    },
+
+    skipBreak(video) {
+        const gap = this.inBreak;
+
+        if (gap) {
+            video.currentTime = gap.endsAt;
+        }
+    },
+
+    /// Waving it away leaves the advertising playing and says nothing about the next break.
+    dismissBreak() {
+        this.dismissed = this.inBreak?.startsAt ?? null;
+    },
+
     stopHls() {
         if (this.hls) {
             this.hls.destroy();
@@ -171,23 +204,17 @@ export const recordingsView = () => ({
         await this.load();
     },
 
-    /// The download is a plain link so the browser streams it rather than the page holding gigabytes
-    /// in memory, which also means a failure would navigate to the error instead of reporting it.
-    async download(recording) {
-        const url = this.fileUrl(recording, true);
-        const head = await fetch(url, {method: 'HEAD'});
-
-        if (!head.ok) {
-            await this.gone(recording);
-            return;
-        }
-
-        window.location = url;
+    /// The mp4 is made as it is sent rather than kept, so this is a plain navigation: the browser
+    /// streams it to disk instead of the page holding gigabytes in memory.
+    download(recording, withoutAds) {
+        window.location = this.fileUrl(recording, {withoutAds});
     },
 
     stopPlaying() {
         this.stopHls();
         this.playing = null;
+        this.breaks = [];
+        this.dismissed = null;
     },
 
     /// Letting go of one still running. What it has caught so far is kept either way: if nobody else

@@ -60,7 +60,7 @@ public class RecordingServiceTest
     {
         var recording = Completed();
 
-        var file = await m_service.GetFileAsync(recording.RecordingId, Somebody, isAdmin: false);
+        var file = await m_service.GetDownloadAsync(recording.RecordingId, withoutAds: false, Somebody, isAdmin: false);
         var deleted = await m_service.DeleteAsync(recording.RecordingId, Somebody, isAdmin: false);
 
         Assert.That(file.ResultCode, Is.EqualTo(ResultCode.NotFound));
@@ -72,10 +72,10 @@ public class RecordingServiceTest
     {
         var recording = Completed();
 
-        var file = await m_service.GetFileAsync(recording.RecordingId, Somebody, isAdmin: true);
+        var file = await m_service.GetDownloadAsync(recording.RecordingId, withoutAds: false, Somebody, isAdmin: true);
 
         Assert.That(file.IsSuccess, Is.True);
-        Assert.That(file.Value.Path, Is.EqualTo(RecordingFiles.FinalPath(recording.Directory)));
+        Assert.That(file.Value.Parts, Is.Not.Empty);
     }
 
     [Test]
@@ -84,9 +84,9 @@ public class RecordingServiceTest
         var recording = Completed();
         recording.State = RecordingState.Recording;
 
-        var file = await m_service.GetFileAsync(recording.RecordingId, Owner, isAdmin: false);
+        var file = await m_service.GetDownloadAsync(recording.RecordingId, withoutAds: false, Owner, isAdmin: false);
 
-        Assert.That(file.ResultCode, Is.EqualTo(ResultCode.Invalid));
+        Assert.That(file.IsSuccess, Is.True, "a capture under way is still worth handing over");
     }
 
     /// <summary>A row edited by hand must not be able to read anywhere it likes.</summary>
@@ -95,14 +95,15 @@ public class RecordingServiceTest
     {
         var elsewhere = Path.Combine(Path.GetTempPath(), $"init7tv-elsewhere-{Guid.NewGuid():N}");
         Directory.CreateDirectory(elsewhere);
-        File.WriteAllText(RecordingFiles.FinalPath(elsewhere), "not yours");
+        File.WriteAllBytes(RecordingFiles.CapturePath(elsewhere, 1), new byte[4096]);
 
         try
         {
             var recording = Completed();
             recording.Directory = elsewhere;
 
-            var file = await m_service.GetFileAsync(recording.RecordingId, Owner, isAdmin: false);
+            var file = await m_service.GetDownloadAsync(
+                recording.RecordingId, withoutAds: false, Owner, isAdmin: false);
 
             Assert.That(file.ResultCode, Is.EqualTo(ResultCode.NotFound));
         }
@@ -175,7 +176,7 @@ public class RecordingServiceTest
         var recording = Completed();
         recording.Title = "Tatort: Der Fall 1/2";
 
-        var file = await m_service.GetFileAsync(recording.RecordingId, Owner, isAdmin: false);
+        var file = await m_service.GetDownloadAsync(recording.RecordingId, withoutAds: false, Owner, isAdmin: false);
 
         Assert.That(file.Value.DownloadName, Does.EndWith(".mp4"));
         Assert.That(file.Value.DownloadName, Does.Not.Contain(Path.DirectorySeparatorChar));
@@ -190,7 +191,7 @@ public class RecordingServiceTest
     public async Task ARecordingWhoseFileHasGoneSaysSoRatherThanOfferingIt()
     {
         var recording = Completed();
-        File.Delete(RecordingFiles.FinalPath(recording.Directory));
+        File.Delete(RecordingFiles.CapturePath(recording.Directory, 1));
 
         m_repository.Setup(x => x.GetForUserAsync(Owner)).ReturnsAsync([recording]);
 
@@ -285,12 +286,14 @@ public class RecordingServiceTest
         Assert.That(recording.State, Is.EqualTo(RecordingState.Recording));
     }
 
-    /// <summary>Writes the file too, because everything here depends on it being there.</summary>
+    /// <summary>Writes the capture too, because everything here depends on it being there.</summary>
     private RecordingRow Completed(string userName = Owner, string? directory = null)
     {
         directory ??= RecordingFiles.DirectoryFor(m_root, Guid.NewGuid());
         Directory.CreateDirectory(directory);
-        File.WriteAllText(RecordingFiles.FinalPath(directory), "pretend this is an mp4");
+
+        // a recording is kept as the transport stream it was captured as
+        File.WriteAllBytes(RecordingFiles.CapturePath(directory, 1), new byte[4096]);
 
         var recording = new RecordingRow
         {

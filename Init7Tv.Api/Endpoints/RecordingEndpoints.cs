@@ -26,6 +26,7 @@ public static class RecordingEndpoints
         // before it starts is entitled to an answer
         group.MapMethods("/recordings/{recordingId:guid}/file", ["GET", "HEAD"], GetRecordingFile);
         group.MapGet("/recordings/{recordingId:guid}/playlist.m3u8", GetPlaylist);
+        group.MapGet("/recordings/{recordingId:guid}/ad-breaks", GetAdBreaks);
         group.MapMethods("/recordings/{recordingId:guid}/part/{part:int}.ts", ["GET", "HEAD"], GetPart);
         group.MapPost("/recordings/{recordingId:guid}/stop", StopRecording);
         group.MapDelete("/recordings/{recordingId:guid}", DeleteRecording);
@@ -40,35 +41,46 @@ public static class RecordingEndpoints
     }
 
     /// <summary>
-    /// Served from the path rather than through OperationResult, whose file case
-    /// hands Results.File a byte array: a recording is gigabytes, and reading one
-    /// into memory per request would be the end of the process. The path overload
-    /// also brings range requests, which is what lets a browser seek.
+    /// Writes the recording out as an mp4 as it goes, rather than turning it into one first.
+    ///
+    /// The transport stream on disk is already H.264 and AAC, so this is a change of wrapper and
+    /// nothing is decoded or encoded. Nothing is kept either: a copy would cost as much disk again
+    /// for something most recordings never need, and making it takes about as long as sending it.
     /// </summary>
     private static async Task<IResult> GetRecordingFile(
         Guid recordingId,
-        bool? download,
+        bool? withoutAds,
         IRecordingService service,
+        IRecordingDownloadWriter writer,
         IUserIdentityProvider userIdentityProvider
     )
     {
-        var result = await service.GetFileAsync(
-            recordingId, userIdentityProvider.UserName, userIdentityProvider.IsAdmin);
+        var result = await service.GetDownloadAsync(
+            recordingId, withoutAds == true, userIdentityProvider.UserName, userIdentityProvider.IsAdmin);
 
         if (!result.IsSuccess)
         {
             return result.ToHttpResult();
         }
 
-        var file = result.Value;
+        var download = result.Value;
 
-        return Results.File(
-            file.Path,
+        // no length: how long an mp4 of these ranges comes out is not known until it has been
+        // written, and guessing would break the download rather than the progress bar
+        return Results.Stream(
+            stream => writer.WriteAsync(download, stream),
             "video/mp4",
-            fileDownloadName: download == true ? file.DownloadName : null,
-            lastModified: file.LastModified,
-            entityTag: null,
-            enableRangeProcessing: true);
+            fileDownloadName: download.DownloadName);
+    }
+
+    private static async Task<IResult> GetAdBreaks(
+        Guid recordingId,
+        IRecordingService service,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        return (await service.GetAdBreaksAsync(
+            recordingId, userIdentityProvider.UserName, userIdentityProvider.IsAdmin)).ToHttpResult();
     }
 
     private static async Task<IResult> GetPlaylist(

@@ -203,20 +203,37 @@ Users with the **Recording** role, and admins, get a recording page: pick a prog
 application records it when the time comes, whether or not anybody is watching.
 
 Recordings are written to `/var/srv/recordings`, one directory per recording, inside the same `./data` volume as the
-database. They are captured as a transport stream and wrapped as MP4 when they finish, so a crash costs the tail of a
-recording rather than all of it, and the finished file plays and seeks in the browser.
+database. They are kept as the transport stream they were captured as, which is what everything else is built on.
 
-A few things worth knowing:
-
+- **Watch one while it is still recording.** Sit down at seven having started at six and you can watch the hour that
+  has already gone by, seek anywhere in it, and run on into what is still being written. Nothing is converted to do
+  this: the capture is already H.264 and AAC, so the playlist describes byte ranges of the file FFmpeg is writing and
+  the browser fetches the stretch it wants.
 - **Each recording is an encode.** With the default `veryfast` preset expect roughly 2.5 GB per hour on an HD channel
-  and about a core per recording, on top of whatever live viewers are using. `Init7TvOptions__MaxConcurrentRecordings` is the ceiling;
-  anything over it is skipped with a reason shown on the page.
+  and about a core per recording, on top of whatever live viewers are using.
+  `Init7TvOptions__MaxConcurrentRecordings` is the ceiling; anything over it waits, and is only given up on once its
+  programme has run out.
 - **The database shares the volume.** The recorder refuses to start with less than 5 GB free, because filling the disk
   would take the database with it.
-- **Two people picking the same programme get one recording**, one encode and one file, listed for each of them. The
-  file goes when the last of them deletes it.
+- **Two people picking the same programme get one recording**, one encode and one file, listed for each of them. One
+  of them stopping gets their part of it cut out of what is on disk while the rest keeps being written for the others.
 - **A restart is survivable.** Anything that was recording is picked up again on the next start, and either continues
-  or is wrapped up as a partial recording.
+  or is kept as the partial recording it is.
+- **Stopping keeps what it caught.** The difference between stopping a recording and deleting it is that stopping
+  leaves you the clip.
+
+### Advertising
+
+The channels announce their own advertising breaks, and those announcements are copied into the recording alongside
+the pictures, so a break is known exactly where it falls rather than guessed at.
+
+Nothing is cut. During a break a **skip** button appears over the picture, with an **×** to wave it away and leave the
+advertising playing; waving one off says nothing about the next. A break that was announced wrongly therefore costs a
+button that does nothing rather than content that is gone for good.
+
+Downloading offers the recording as it is or with the advertising left out. Either way the MP4 is written as it is
+sent rather than kept: the transport stream on disk is already H.264 and AAC, so only the wrapper changes, and cutting
+between the parts worth keeping is free because each one begins on a keyframe.
 
 ---
 

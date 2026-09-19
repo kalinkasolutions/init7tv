@@ -319,32 +319,36 @@ public class FfmpegArgumentsTest
         Assert.That(BuildRecording(interlaced: false), Does.Not.Contain("-vf"));
     }
 
+    /// <summary>
+    /// Read from the source separately they would have to be lined up against a transcode that
+    /// starts whenever it starts; carried in beside the pictures they are already on the same clock.
+    /// </summary>
     [Test]
-    public void Remux_CopiesAndMovesTheIndexToTheFront()
+    public void Recording_CarriesTheAdvertisingCuesIntoTheCapture()
     {
-        var args = FfmpegArguments.BuildRemux(CapturePath, "/var/srv/recordings/abc/recording.mp4", "warning");
+        var args = BuildRecording();
 
         Assert.Multiple(() =>
         {
-            Assert.That(ValueOf(args, "-c"), Is.EqualTo("copy"));
-            Assert.That(ValueOf(args, "-movflags"), Is.EqualTo("+faststart"));
-            Assert.That(ValueOf(args, "-bsf:a"), Is.EqualTo("aac_adtstoasc"));
-            Assert.That(args, Does.Not.Contain("libx264"));
-            Assert.That(args[^1], Is.EqualTo("/var/srv/recordings/abc/recording.mp4"));
+            Assert.That(args, Does.Contain("-copy_unknown"));
+            Assert.That(args, Does.Contain("0:d:0?"), "optional, so a channel carrying none still records");
+            Assert.That(ValueOf(args, "-c:d"), Is.EqualTo("copy"), "copied, never decoded");
         });
     }
 
     [Test]
-    public void Concat_ReadsThePartListWithoutReEncoding()
+    public void Download_CopiesRatherThanEncodes()
     {
-        var args = FfmpegArguments.BuildConcat("/var/srv/recordings/abc/parts.txt", "/tmp/out.mp4", "warning");
+        var args = FfmpegArguments.BuildDownload("error");
 
         Assert.Multiple(() =>
         {
-            Assert.That(ValueOf(args, "-f"), Is.EqualTo("concat"));
-            Assert.That(ValueOf(args, "-safe"), Is.EqualTo("0"));
             Assert.That(ValueOf(args, "-c"), Is.EqualTo("copy"));
             Assert.That(args, Does.Not.Contain("libx264"));
+            Assert.That(ValueOf(args, "-bsf:a"), Is.EqualTo("aac_adtstoasc"));
+            Assert.That(args[^1], Is.EqualTo("pipe:1"), "written as it is sent rather than kept");
+            Assert.That(ValueOf(args, "-movflags"), Does.Contain("frag_keyframe"),
+                "an ordinary mp4 cannot be written to something that cannot be seeked back into");
         });
     }
 }

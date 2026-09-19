@@ -29,6 +29,7 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
 
     private readonly ILogger<RecordingEngine> m_logger;
     private readonly IFfprobeService m_ffprobeService;
+    private readonly IRecordingSegmentCache m_segments;
     private readonly RecordingSignal m_signal;
     private readonly Init7TvOptions m_options;
 
@@ -40,12 +41,14 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
     public RecordingEngine(
         ILogger<RecordingEngine> logger,
         IFfprobeService ffprobeService,
+        IRecordingSegmentCache segments,
         RecordingSignal signal,
         IOptions<Init7TvOptions> options
     )
     {
         m_logger = logger;
         m_ffprobeService = ffprobeService;
+        m_segments = segments;
         m_signal = signal;
         m_options = options.Value;
     }
@@ -166,87 +169,78 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         }
     }
 
-    public Task<OperationResult<long>> ForkAsync(
-        string fromDirectory,
-        string intoDirectory,
-        TimeSpan upTo,
-        string logLevel
-    )
+    public async Task<OperationResult<long>> ForkAsync(string fromDirectory, string intoDirectory, TimeSpan upTo)
     {
-        Directory.CreateDirectory(intoDirectory);
+        var parts = RecordingFiles.Captures(fromDirectory);
+        var segments = m_segments.Segments(fromDirectory, parts, finished: false);
 
-        // -t is what makes this safe against a file being appended to as it is read: the output is
-        // bounded by how much programme they had, not by wherever the writer happens to have got to
-        return WrapAsync(fromDirectory, RecordingFiles.FinalPath(intoDirectory), logLevel, upTo, keepCaptures: true);
-    }
+        // whole segments only: half of one starts nowhere a player can begin
+        var theirs = new List<RecordingSegment>();
+        var seconds = 0.0;
 
-    public Task<OperationResult<long>> FinalizeAsync(string directory, string logLevel)
-    {
-        return WrapAsync(directory, RecordingFiles.FinalPath(directory), logLevel, upTo: null, keepCaptures: false);
-    }
-
-    private async Task<OperationResult<long>> WrapAsync(
-        string directory,
-        string finalPath,
-        string logLevel,
-        TimeSpan? upTo,
-        bool keepCaptures
-    )
-    {
-        var captures = RecordingFiles.Captures(directory);
-        if (captures.Length == 0)
+        foreach (var segment in segments)
         {
-            return OperationResult<long>.NotFound("Nothing was captured");
-        }
-
-        // a capture that never got a byte is worse than nothing: ffmpeg fails on
-        // it and the failure hides whatever the real cause was
-        captures = captures.Where(path => new FileInfo(path).Length > 0).ToArray();
-        if (captures.Length == 0)
-        {
-            return OperationResult<long>.Error("The capture was empty");
-        }
-
-        var listPath = Path.Combine(directory, RecordingFiles.PartListName);
-
-        string[] args;
-        if (captures.Length == 1)
-        {
-            args = FfmpegArguments.BuildRemux(captures[0], finalPath, logLevel, upTo);
-        }
-        else
-        {
-            // concat is safe here only because every part came out of the same
-            // encoder settings, which is true by construction
-            await File.WriteAllLinesAsync(listPath, captures.Select(path => $"file '{path}'"));
-            args = FfmpegArguments.BuildConcat(listPath, finalPath, logLevel, upTo);
-        }
-
-        m_logger.LogInformation("finalizing {Directory} from {Parts} part(s)", directory, captures.Length);
-
-        var remuxed = await RunToCompletion(args, directory);
-        if (remuxed.HasError)
-        {
-            return remuxed.MapError<long>();
-        }
-
-        var file = new FileInfo(finalPath);
-        if (!file.Exists || file.Length == 0)
-        {
-            return OperationResult<long>.Error("The recording could not be written");
-        }
-
-        if (!keepCaptures)
-        {
-            foreach (var capture in captures)
+            if (seconds >= upTo.TotalSeconds)
             {
-                TryDelete(capture);
+                break;
+            }
+
+            theirs.Add(segment);
+            seconds += segment.Seconds;
+        }
+
+        if (theirs.Count == 0)
+        {
+            return OperationResult<long>.Error("Nothing had been recorded yet");
+        }
+
+        Directory.CreateDirectory(intoDirectory);
+        var written = 0L;
+
+        try
+        {
+            // one file per part of the original, so the discontinuities line up the same way
+            foreach (var group in theirs.GroupBy(x => x.Part).OrderBy(x => x.Key))
+            {
+                var from = parts[group.Key];
+                var into = RecordingFiles.CapturePath(intoDirectory, group.Key + 1);
+
+                written += CopyRange(from, into, group.Min(x => x.Offset), group.Sum(x => x.Length));
             }
         }
+        catch (Exception ex)
+        {
+            m_logger.LogError(ex, "Failed to copy a share of {Directory}", fromDirectory);
+            return OperationResult<long>.Error("Your part of the recording could not be saved");
+        }
 
-        TryDelete(listPath);
+        return OperationResult<long>.Success(written);
+    }
 
-        return OperationResult<long>.Success(file.Length);
+    /// <summary>Copies a stretch of a file that is still being appended to.</summary>
+    private static long CopyRange(string from, string into, long offset, long length)
+    {
+        using var source = File.Open(from, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var target = File.Create(into);
+
+        source.Seek(offset, SeekOrigin.Begin);
+
+        var buffer = new byte[1024 * 1024];
+        var left = length;
+
+        while (left > 0)
+        {
+            var read = source.Read(buffer, 0, (int)Math.Min(buffer.Length, left));
+            if (read == 0)
+            {
+                break;
+            }
+
+            target.Write(buffer, 0, read);
+            left -= read;
+        }
+
+        return length - left;
     }
 
     public void Dispose()

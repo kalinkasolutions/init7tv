@@ -91,6 +91,7 @@ public sealed class RecordingService : IRecordingService
             return OperationResult<string>.Invalid("There is nothing to play yet");
         }
 
+
         return OperationResult<string>.Text(Playlist(segments, running), "application/vnd.apple.mpegurl");
     }
 
@@ -144,6 +145,36 @@ public sealed class RecordingService : IRecordingService
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Where the advertising falls in one recording. Scanning is what finds them, so the segments
+    /// are asked for first even when only the breaks are wanted.
+    /// </summary>
+    public async Task<OperationResult<AdBreakMark[]>> GetAdBreaksAsync(
+        Guid recordingId,
+        string userName,
+        bool isAdmin
+    )
+    {
+        var recording = await m_repository.GetByIdAsync(recordingId);
+        if (recording == null || !MayTouch(recording, userName, isAdmin))
+        {
+            return OperationResult<AdBreakMark[]>.NotFound("That recording was not found");
+        }
+
+        var directory = ResolveDirectory(recording);
+        if (directory == null)
+        {
+            return OperationResult<AdBreakMark[]>.Success([]);
+        }
+
+        var parts = RecordingFiles.Captures(directory);
+        var running = recording.State is RecordingState.Pending or RecordingState.Recording;
+
+        m_segments.Segments(directory, parts, finished: !running);
+
+        return OperationResult<AdBreakMark[]>.Success(m_segments.Breaks(directory).ToArray());
+    }
+
     public async Task<OperationResult<RecordingFileDto>> GetPartAsync(
         Guid recordingId,
         int part,
@@ -176,8 +207,9 @@ public sealed class RecordingService : IRecordingService
         });
     }
 
-    public async Task<OperationResult<RecordingFileDto>> GetFileAsync(
+    public async Task<OperationResult<RecordingDownloadDto>> GetDownloadAsync(
         Guid recordingId,
+        bool withoutAds,
         string userName,
         bool isAdmin
     )
@@ -185,30 +217,59 @@ public sealed class RecordingService : IRecordingService
         var recording = await m_repository.GetByIdAsync(recordingId);
         if (recording == null || !MayTouch(recording, userName, isAdmin))
         {
-            // saying "not yours" would say it exists, and there is nothing to gain by it
-            return OperationResult<RecordingFileDto>.NotFound("That recording was not found");
+            return OperationResult<RecordingDownloadDto>.NotFound("That recording was not found");
         }
 
-        if (!IsFinished(recording))
+        var directory = ResolveDirectory(recording);
+        var parts = directory == null ? [] : RecordingFiles.Captures(directory);
+
+        if (parts.Length == 0)
         {
-            return OperationResult<RecordingFileDto>.Invalid("That recording has nothing to play yet");
+            return OperationResult<RecordingDownloadDto>.NotFound("The recording is no longer on disk");
         }
 
-        var path = ResolveFinalPath(recording);
-        if (path == null)
-        {
-            return OperationResult<RecordingFileDto>.NotFound("The recording file is gone");
-        }
+        var segments = m_segments.Segments(directory!, parts, finished: IsFinished(recording));
+        var breaks = withoutAds ? m_segments.Breaks(directory!) : [];
 
-        var file = new FileInfo(path);
-
-        return OperationResult<RecordingFileDto>.Success(new RecordingFileDto
+        return OperationResult<RecordingDownloadDto>.Success(new RecordingDownloadDto
         {
-            Path = path,
-            DownloadName = DownloadName(recording),
-            LastModified = file.LastWriteTimeUtc,
-            Length = file.Length
+            Parts = parts,
+            Ranges = Wanted(segments, breaks),
+            DownloadName = DownloadName(recording, withoutAds)
         });
+    }
+
+    /// <summary>
+    /// The stretches worth handing over, which is all of them unless the advertising is being left
+    /// out. Cutting on segment boundaries is what makes it free: every one starts on a keyframe, so
+    /// the pieces join without anything being decoded or encoded.
+    /// </summary>
+    private static RecordingSegment[] Wanted(
+        IReadOnlyList<RecordingSegment> segments,
+        IReadOnlyList<AdBreakMark> breaks
+    )
+    {
+        if (breaks.Count == 0)
+        {
+            return segments.ToArray();
+        }
+
+        var wanted = new List<RecordingSegment>();
+        var at = 0.0;
+
+        foreach (var segment in segments)
+        {
+            var middle = at + segment.Seconds / 2;
+
+            if (!breaks.Any(gap => middle >= gap.StartsAt && middle < gap.EndsAt))
+            {
+                wanted.Add(segment);
+            }
+
+            at += segment.Seconds;
+        }
+
+        return wanted.ToArray();
     }
 
     public async Task<OperationResult<bool>> StopAsync(Guid recordingId, string userName, bool isAdmin)
@@ -317,12 +378,21 @@ public sealed class RecordingService : IRecordingService
         recording.State is RecordingState.Completed or RecordingState.Interrupted;
 
     /// <summary>
-    /// Whether the file is actually there. Asked of the disk rather than taken from the row, because
+    /// Whether anything is actually there. Asked of the disk rather than taken from the row, because
     /// files can go without the row hearing about it, and a row that says otherwise offers a play
     /// button that opens an empty player and a download that answers with an error page.
     /// </summary>
-    private bool HasFile(RecordingRow recording) =>
-        IsFinished(recording) && ResolveFinalPath(recording) != null;
+    private bool HasFile(RecordingRow recording)
+    {
+        if (!IsFinished(recording))
+        {
+            return false;
+        }
+
+        var directory = ResolveDirectory(recording);
+
+        return directory != null && RecordingFiles.Captures(directory).Length > 0;
+    }
 
     /// <summary>
     /// The stored path is only trusted after it is shown to sit under the root:
@@ -347,27 +417,6 @@ public sealed class RecordingService : IRecordingService
         }
 
         return Directory.Exists(directory) ? directory : null;
-    }
-
-    private string? ResolveFinalPath(RecordingRow recording)
-    {
-        if (string.IsNullOrEmpty(recording.Directory))
-        {
-            return null;
-        }
-
-        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(m_options.RecordingPath));
-        var directory = Path.GetFullPath(recording.Directory);
-
-        if (!directory.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-        {
-            m_logger.LogError("Recording {RecordingId} points outside the recording root: {Directory}",
-                recording.RecordingId, recording.Directory);
-            return null;
-        }
-
-        var path = RecordingFiles.FinalPath(directory);
-        return File.Exists(path) ? path : null;
     }
 
     private void DeleteDirectory(string directory)
@@ -395,7 +444,7 @@ public sealed class RecordingService : IRecordingService
     }
 
     /// <summary>What the browser saves it as. The only place the title becomes a file name.</summary>
-    private static string DownloadName(RecordingRow recording)
+    private static string DownloadName(RecordingRow recording, bool withoutAds)
     {
         var parts = new[] { recording.ChannelName, recording.Title, recording.SubTitle }
             .Where(part => !string.IsNullOrWhiteSpace(part));
@@ -408,9 +457,12 @@ public sealed class RecordingService : IRecordingService
 
         name = name.Trim();
 
-        return string.IsNullOrEmpty(name)
-            ? RecordingFiles.FinalName
-            : $"{name}.mp4";
+        if (string.IsNullOrEmpty(name))
+        {
+            return RecordingFiles.FinalName;
+        }
+
+        return withoutAds ? $"{name} (no ads).mp4" : $"{name}.mp4";
     }
 
     private static string[] Others(Dictionary<string, string[]> sharers, RecordingRow row) =>

@@ -152,10 +152,17 @@
                                 x-show="canPlay(recording)" @click="play(recording)">
                             <i class="bi bi-play-fill"></i>
                         </button>
-                        <button class="icon-button" title="Download" x-show="recording.isPlayable"
-                                @click="await download(recording)">
-                            <i class="bi bi-download"></i>
-                        </button>
+                        <span class="download-pair" x-show="recording.isPlayable" x-cloak>
+                            <button class="icon-button" title="Download"
+                                    @click="download(recording, false)">
+                                <i class="bi bi-download"></i>
+                            </button>
+                            <button class="icon-button" title="Download without the adverts"
+                                    x-show="recording.adBreaks.length"
+                                    @click="download(recording, true)">
+                                <i class="bi bi-download"></i><span class="no-ads">no ads</span>
+                            </button>
+                        </span>
                         <button class="icon-button" title="Stop and keep what is recorded"
                                 x-show="isBusy(recording)" @click="await stop(recording)">
                             <i class="bi bi-stop-fill"></i>
@@ -182,9 +189,20 @@
                     </div>
                     <template x-if="playing">
                         <video controls autoplay preload="metadata"
-                               :src="needsHls(playing) ? null : fileUrl(playing)"
+                               @timeupdate="moved($el)"
                                @error="if (!needsHls(playing)) await gone(playing)"></video>
                     </template>
+
+                    <!-- offered rather than taken: a break announced wrongly costs a button that
+                         does nothing instead of content that is gone -->
+                    <div class="skip-break" x-show="inBreak" x-cloak>
+                        <button class="skip" @click="skipBreak($root.querySelector('.player-box video'))">
+                            Skip the adverts
+                        </button>
+                        <button class="skip-dismiss" title="Leave it" @click="dismissBreak()">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
