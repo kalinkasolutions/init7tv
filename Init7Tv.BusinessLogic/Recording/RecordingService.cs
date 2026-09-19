@@ -12,6 +12,8 @@ namespace Init7Tv.BusinessLogic.Recording;
 public sealed class RecordingService : IRecordingService
 {
     private readonly IRecordingRepository m_repository;
+    private readonly IPlannedRecordingRepository m_planned;
+    private readonly RecordingSignal m_signal;
     private readonly IRecordingEngine m_engine;
     private readonly IChannelService m_channelService;
     private readonly ILogger<RecordingService> m_logger;
@@ -19,6 +21,8 @@ public sealed class RecordingService : IRecordingService
 
     public RecordingService(
         IRecordingRepository repository,
+        IPlannedRecordingRepository planned,
+        RecordingSignal signal,
         IRecordingEngine engine,
         IChannelService channelService,
         ILogger<RecordingService> logger,
@@ -26,6 +30,8 @@ public sealed class RecordingService : IRecordingService
     )
     {
         m_repository = repository;
+        m_planned = planned;
+        m_signal = signal;
         m_engine = engine;
         m_channelService = channelService;
         m_logger = logger;
@@ -38,7 +44,22 @@ public sealed class RecordingService : IRecordingService
             ? await m_repository.GetAllAsync()
             : await m_repository.GetForUserAsync(userName);
 
-        return OperationResult<RecordingDto[]>.Success(recordings.Select(ToDto).ToArray());
+        // who else is on the same capture, and only for the ones still running: it is the one case
+        // where stopping cannot simply end it, and the page has to be able to say why
+        var running = recordings
+            .Where(x => x.State is RecordingState.Pending or RecordingState.Recording)
+            .Select(x => x.Directory)
+            .Distinct()
+            .ToArray();
+
+        var sharers = running.Length == 0
+            ? []
+            : (await m_repository.GetByDirectoriesAsync(running))
+            .GroupBy(x => x.Directory)
+            .ToDictionary(group => group.Key, group => group.Select(x => x.UserName).ToArray());
+
+        return OperationResult<RecordingDto[]>.Success(
+            recordings.Select(x => ToDto(x, Others(sharers, x), HasFile(x))).ToArray());
     }
 
     public async Task<OperationResult<RecordingFileDto>> GetFileAsync(
@@ -54,7 +75,7 @@ public sealed class RecordingService : IRecordingService
             return OperationResult<RecordingFileDto>.NotFound("That recording was not found");
         }
 
-        if (!IsPlayable(recording))
+        if (!IsFinished(recording))
         {
             return OperationResult<RecordingFileDto>.Invalid("That recording has nothing to play yet");
         }
@@ -76,6 +97,40 @@ public sealed class RecordingService : IRecordingService
         });
     }
 
+    public async Task<OperationResult<bool>> StopAsync(Guid recordingId, string userName, bool isAdmin)
+    {
+        var recording = await m_repository.GetByIdAsync(recordingId);
+        if (recording == null || !MayTouch(recording, userName, isAdmin))
+        {
+            return OperationResult<bool>.NotFound("That recording was not found");
+        }
+
+        if (recording.State is not (RecordingState.Pending or RecordingState.Recording))
+        {
+            return OperationResult<bool>.Invalid("That recording is not running");
+        }
+
+        // Taking the pick back is what stops it, rather than killing the process here: whether it
+        // really stops depends on nobody else still wanting it, and working that out from the
+        // database is the pass's job.
+        await m_planned.RemoveAsync(recording.UserName, recording.ProgrammeId);
+
+        // Somebody else is still waiting for it, so the capture is not this viewer's to end. Their
+        // share of it is cut from what is on disk instead, which the pass does because copying
+        // gigabytes is no business of a request. Finalizing against a capture still running is what
+        // says so: nothing else leaves a row in that state.
+        if (await m_planned.AnyForProgrammeAsync(recording.ProgrammeId))
+        {
+            recording.State = RecordingState.Finalizing;
+            recording.EndedAt = DateTime.UtcNow;
+            await m_repository.SaveAsync([recording]);
+        }
+
+        m_signal.Signal();
+
+        return OperationResult<bool>.Success(true);
+    }
+
     public async Task<OperationResult<bool>> DeleteAsync(Guid recordingId, string userName, bool isAdmin)
     {
         var recording = await m_repository.GetByIdAsync(recordingId);
@@ -85,6 +140,12 @@ public sealed class RecordingService : IRecordingService
         }
 
         var directory = recording.Directory;
+
+        // Deleting it is also saying you do not want it, and the pick has to go with it. Left behind,
+        // a pick still inside its window is simply due again with no attempt to show for it, and the
+        // next pass starts the whole thing over.
+        await m_planned.RemoveAsync(recording.UserName, recording.ProgrammeId);
+
         await m_repository.RemoveAsync(recording);
 
         // two people who picked the same programme share one capture, so it only
@@ -138,8 +199,16 @@ public sealed class RecordingService : IRecordingService
     private static bool MayTouch(RecordingRow recording, string userName, bool isAdmin) =>
         isAdmin || recording.UserName == userName;
 
-    private static bool IsPlayable(RecordingRow recording) =>
+    private static bool IsFinished(RecordingRow recording) =>
         recording.State is RecordingState.Completed or RecordingState.Interrupted;
+
+    /// <summary>
+    /// Whether the file is actually there. Asked of the disk rather than taken from the row, because
+    /// files can go without the row hearing about it, and a row that says otherwise offers a play
+    /// button that opens an empty player and a download that answers with an error page.
+    /// </summary>
+    private bool HasFile(RecordingRow recording) =>
+        IsFinished(recording) && ResolveFinalPath(recording) != null;
 
     /// <summary>
     /// The stored path is only trusted after it is shown to sit under the root:
@@ -209,7 +278,12 @@ public sealed class RecordingService : IRecordingService
             : $"{name}.mp4";
     }
 
-    private static RecordingDto ToDto(RecordingRow x) => new()
+    private static string[] Others(Dictionary<string, string[]> sharers, RecordingRow row) =>
+        sharers.TryGetValue(row.Directory, out var names)
+            ? names.Where(name => name != row.UserName).Order().ToArray()
+            : [];
+
+    private static RecordingDto ToDto(RecordingRow x, string[] sharedWith, bool hasFile) => new()
     {
         RecordingId = x.RecordingId,
         ProgrammeId = x.ProgrammeId,
@@ -221,10 +295,13 @@ public sealed class RecordingService : IRecordingService
         ScheduledEnd = x.ScheduledEnd,
         StartedAt = x.StartedAt,
         EndedAt = x.EndedAt,
-        State = x.State.ToString(),
-        IsPlayable = IsPlayable(x) && x.FileSizeBytes > 0,
-        FileSizeBytes = x.FileSizeBytes,
-        ErrorMessage = x.ErrorMessage,
-        UserName = x.UserName
+        // a finished recording whose file has gone is neither completed nor failed, it is simply
+        // not there any more, and saying so is more use than a size nothing backs up
+        State = IsFinished(x) && !hasFile ? "Missing" : x.State.ToString(),
+        IsPlayable = hasFile,
+        FileSizeBytes = hasFile ? x.FileSizeBytes : 0,
+        ErrorMessage = IsFinished(x) && !hasFile ? "The file is no longer on disk" : x.ErrorMessage,
+        UserName = x.UserName,
+        SharedWith = sharedWith
     };
 }

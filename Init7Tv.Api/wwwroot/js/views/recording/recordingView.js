@@ -36,9 +36,11 @@ export const recordingView = () => ({
         await this.loadPlanned();
         await this.adoptAnythingPickedBefore();
 
-        // the tab shows how many are waiting without having to be opened
-        this.$watch('planned', value => (this.$store.tabs.counts.planned = value.length));
-        this.$store.tabs.counts.planned = this.planned.length;
+        // the tab shows how many are waiting without having to be opened. Watching
+        // the count rather than the picks, because one starting to record changes it
+        // without the picks themselves changing at all.
+        this.$watch('waiting.length', value => (this.$store.tabs.counts.planned = value));
+        this.$store.tabs.counts.planned = this.waiting.length;
 
         // the channel list is the one from the tv page and announces itself the
         // same way; here it waits to be asked
@@ -171,6 +173,7 @@ export const recordingView = () => ({
 
     async loadPlanned() {
         this.planned = await get('/api/recording/planned') ?? [];
+        this.$store.filter.offer(this.planned.map(x => x.userName));
     },
 
     isPlanned(programme) {
@@ -256,9 +259,16 @@ export const recordingView = () => ({
         await this.loadPlanned();
     },
 
+    /// Still waiting their turn: one already being captured belongs under Recording.
+    get waiting() {
+        return this.planned.filter(x => !this.$store.recordings.underway.includes(x.programmeId));
+    },
+
     /// Soonest first, which is the order they will happen in.
     get plannedInOrder() {
-        return [...this.planned].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+        return this.waiting
+            .filter(x => this.$store.filter.matches(x))
+            .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
     },
 
     plannedMinutes(entry) {

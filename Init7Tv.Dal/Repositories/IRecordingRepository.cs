@@ -14,6 +14,9 @@ public interface IRecordingRepository
     /// <summary>The rows of one attempt, which is one row per person who picked it.</summary>
     Task<Recording[]> GetByDirectoryAsync(string directory);
 
+    /// <summary>The rows of several captures at once, for working out who shares one.</summary>
+    Task<Recording[]> GetByDirectoriesAsync(string[] directories);
+
     /// <summary>
     /// When each programme was last attempted, so a pass does not start one twice. Compared against
     /// when the pick was made rather than treated as a flat "already done": asking again after

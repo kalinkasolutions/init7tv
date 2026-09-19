@@ -28,6 +28,16 @@ public sealed class PlannedRecordingRepository : IPlannedRecordingRepository
             .ToArrayAsync();
     }
 
+    public async Task<PlannedRecording[]> GetAllAsync()
+    {
+        return await m_context.PlannedRecordings.OrderBy(x => x.StartsAt).ToArrayAsync();
+    }
+
+    public async Task<bool> AnyForProgrammeAsync(Guid programmeId)
+    {
+        return await m_context.PlannedRecordings.AnyAsync(x => x.ProgrammeId == programmeId);
+    }
+
     public async Task AddAsync(PlannedRecording recording)
     {
         var existing = await m_context.PlannedRecordings

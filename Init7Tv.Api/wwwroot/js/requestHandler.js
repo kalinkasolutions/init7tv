@@ -68,6 +68,10 @@ export function put(url) {
     return request(url, {method: "PUT"});
 }
 
+export function post(url) {
+    return request(url, {method: "POST"});
+}
+
 export function deleteItem(url) {
     return request(url, {method: "DELETE"});
 }

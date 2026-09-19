@@ -13,4 +13,7 @@ public sealed record PlannedRecordingDto
     public string SubTitle { get; init; } = string.Empty;
     public DateTime StartsAt { get; init; }
     public DateTime EndsAt { get; init; }
+
+    /// <summary>Whose pick it is, so an admin looking at everybody's can tell them apart.</summary>
+    public string UserName { get; init; } = string.Empty;
 }

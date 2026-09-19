@@ -26,6 +26,12 @@ public sealed record RecordingDto
 
     /// <summary>Whose pick this was, shown to admins looking at everybody's.</summary>
     public string UserName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Anybody else recording the same programme off the same capture. Stopping cannot cut a file
+    /// somebody else is still filling, so the page says so before it lets go of it.
+    /// </summary>
+    public string[] SharedWith { get; init; } = [];
 }
 
 /// <summary>

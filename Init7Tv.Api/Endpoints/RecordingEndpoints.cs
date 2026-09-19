@@ -25,6 +25,7 @@ public static class RecordingEndpoints
         // MapGet alone answers HEAD with 405, and a player checking the length
         // before it starts is entitled to an answer
         group.MapMethods("/recordings/{recordingId:guid}/file", ["GET", "HEAD"], GetRecordingFile);
+        group.MapPost("/recordings/{recordingId:guid}/stop", StopRecording);
         group.MapDelete("/recordings/{recordingId:guid}", DeleteRecording);
     }
 
@@ -68,6 +69,16 @@ public static class RecordingEndpoints
             enableRangeProcessing: true);
     }
 
+    private static async Task<IResult> StopRecording(
+        Guid recordingId,
+        IRecordingService service,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        return (await service.StopAsync(
+            recordingId, userIdentityProvider.UserName, userIdentityProvider.IsAdmin)).ToHttpResult();
+    }
+
     private static async Task<IResult> DeleteRecording(
         Guid recordingId,
         IRecordingService service,
@@ -83,7 +94,7 @@ public static class RecordingEndpoints
         IUserIdentityProvider userIdentityProvider
     )
     {
-        return (await service.GetAsync(userIdentityProvider.UserName)).ToHttpResult();
+        return (await service.GetAsync(userIdentityProvider.UserName, userIdentityProvider.IsAdmin)).ToHttpResult();
     }
 
     private static async Task<IResult> Plan(

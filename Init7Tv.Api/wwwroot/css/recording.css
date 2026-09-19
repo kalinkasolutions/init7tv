@@ -210,6 +210,42 @@
     scrollbar-width: thin;
 }
 
+#recording .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.6em 1em;
+    border-bottom: 1px solid #ffffff30;
+}
+
+#recording .filter-bar input[type="search"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 24em;
+    background: none;
+    border: 1px solid #ffffff30;
+    color: #ffffffcf;
+    padding: 0.35em 0.6em;
+    font: inherit;
+}
+
+#recording .filter-bar select {
+    background: #1c2420;
+    border: 1px solid #ffffff30;
+    color: #ffffffcf;
+    padding: 0.35em 0.6em;
+    font: inherit;
+}
+
+/* whose it is, which only matters once more than one household is in the list */
+#recording .entry-who {
+    color: #ffffff60;
+}
+
+#recording .entry-who::before {
+    content: " · ";
+}
+
 #recording .listing-actions {
     display: flex;
     justify-content: flex-end;
@@ -271,8 +307,16 @@
     flex-direction: column;
 }
 
+/* headings carry a global padding that the spans beside them do not, which left
+   every other line of the entry starting somewhere else */
+#recording .entry-what h4,
+#recording .entry-what h5 {
+    padding: 0;
+}
+
 #recording .entry-what h5 {
     color: #ffffffcf;
+    font-size: 0.85em;
 }
 
 #recording .entry-error {

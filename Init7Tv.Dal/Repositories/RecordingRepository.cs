@@ -50,6 +50,13 @@ public sealed class RecordingRepository : IRecordingRepository
             .ToArrayAsync();
     }
 
+    public async Task<Recording[]> GetByDirectoriesAsync(string[] directories)
+    {
+        return await m_context.Recordings
+            .Where(x => directories.Contains(x.Directory))
+            .ToArrayAsync();
+    }
+
     public async Task<Dictionary<Guid, DateTime>> GetLatestAttemptsAsync(Guid[] programmeIds)
     {
         var attempts = await m_context.Recordings

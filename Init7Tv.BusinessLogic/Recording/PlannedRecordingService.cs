@@ -23,9 +23,12 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
         m_signal = signal;
     }
 
-    public async Task<OperationResult<PlannedRecordingDto[]>> GetAsync(string userName)
+    public async Task<OperationResult<PlannedRecordingDto[]>> GetAsync(string userName, bool isAdmin)
     {
-        var planned = await m_repository.GetForUserAsync(userName);
+        // an admin is answering for the machine rather than for themselves
+        var planned = isAdmin
+            ? await m_repository.GetAllAsync()
+            : await m_repository.GetForUserAsync(userName);
 
         return OperationResult<PlannedRecordingDto[]>.Success(planned.Select(ToDto).ToArray());
     }
@@ -107,7 +110,8 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
         Title = x.Title,
         SubTitle = x.SubTitle,
         StartsAt = AsUtc(x.StartsAt),
-        EndsAt = AsUtc(x.EndsAt)
+        EndsAt = AsUtc(x.EndsAt),
+        UserName = x.UserName
     };
 
     /// These are stored in UTC, but the database hands them back with no kind at

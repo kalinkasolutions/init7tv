@@ -47,6 +47,55 @@ Alpine.store('tabs', {
     }
 });
 
+/// What the two lists have to know about each other. A pick whose capture has
+/// started has moved on from waiting, so the planned list leaves it out — but the
+/// pick itself stays, because the guide still has to show the programme as taken
+/// and pressing it again is what stops the recording.
+Alpine.store('recordings', {
+    underway: []
+});
+
+/// Narrowing the three lists. One store because the same filter applies to all of
+/// them, so switching tab keeps what you were looking for.
+Alpine.store('filter', {
+    text: '',
+    user: '',
+    /// Everybody with something in any of the lists, for the picker. Admins see
+    /// everybody's, so without this they cannot tell one household apart.
+    users: [],
+
+    get active() {
+        return this.text.trim() !== '' || this.user !== '';
+    },
+
+    clear() {
+        this.text = '';
+        this.user = '';
+    },
+
+    /// True when the entry should be shown. Takes the fields rather than an entry,
+    /// because a pick and a recording do not have the same shape.
+    matches({title, subTitle, channelName, userName}) {
+        if (this.user && userName !== this.user) {
+            return false;
+        }
+
+        const needle = this.text.trim().toLowerCase();
+        if (!needle) {
+            return true;
+        }
+
+        return [title, subTitle, channelName]
+            .some(field => (field ?? '').toLowerCase().includes(needle));
+    },
+
+    /// Called by whichever list loaded, so the picker offers who is actually there.
+    offer(names) {
+        const all = new Set([...this.users, ...names.filter(Boolean)]);
+        this.users = [...all].sort();
+    }
+});
+
 // the channel list is a drawer on narrow screens, the same as on the tv page
 Alpine.store('ui', {
     menuOpen: false,

@@ -163,7 +163,32 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         }
     }
 
-    public async Task<OperationResult<long>> FinalizeAsync(string directory, string logLevel)
+    public Task<OperationResult<long>> ForkAsync(
+        string fromDirectory,
+        string intoDirectory,
+        TimeSpan upTo,
+        string logLevel
+    )
+    {
+        Directory.CreateDirectory(intoDirectory);
+
+        // -t is what makes this safe against a file being appended to as it is read: the output is
+        // bounded by how much programme they had, not by wherever the writer happens to have got to
+        return WrapAsync(fromDirectory, RecordingFiles.FinalPath(intoDirectory), logLevel, upTo, keepCaptures: true);
+    }
+
+    public Task<OperationResult<long>> FinalizeAsync(string directory, string logLevel)
+    {
+        return WrapAsync(directory, RecordingFiles.FinalPath(directory), logLevel, upTo: null, keepCaptures: false);
+    }
+
+    private async Task<OperationResult<long>> WrapAsync(
+        string directory,
+        string finalPath,
+        string logLevel,
+        TimeSpan? upTo,
+        bool keepCaptures
+    )
     {
         var captures = RecordingFiles.Captures(directory);
         if (captures.Length == 0)
@@ -179,20 +204,19 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
             return OperationResult<long>.Error("The capture was empty");
         }
 
-        var finalPath = RecordingFiles.FinalPath(directory);
         var listPath = Path.Combine(directory, RecordingFiles.PartListName);
 
         string[] args;
         if (captures.Length == 1)
         {
-            args = FfmpegArguments.BuildRemux(captures[0], finalPath, logLevel);
+            args = FfmpegArguments.BuildRemux(captures[0], finalPath, logLevel, upTo);
         }
         else
         {
             // concat is safe here only because every part came out of the same
             // encoder settings, which is true by construction
             await File.WriteAllLinesAsync(listPath, captures.Select(path => $"file '{path}'"));
-            args = FfmpegArguments.BuildConcat(listPath, finalPath, logLevel);
+            args = FfmpegArguments.BuildConcat(listPath, finalPath, logLevel, upTo);
         }
 
         m_logger.LogInformation("finalizing {Directory} from {Parts} part(s)", directory, captures.Length);
@@ -209,9 +233,12 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
             return OperationResult<long>.Error("The recording could not be written");
         }
 
-        foreach (var capture in captures)
+        if (!keepCaptures)
         {
-            TryDelete(capture);
+            foreach (var capture in captures)
+            {
+                TryDelete(capture);
+            }
         }
 
         TryDelete(listPath);

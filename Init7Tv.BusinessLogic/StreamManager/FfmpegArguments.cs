@@ -74,7 +74,11 @@ public static class FfmpegArguments
     /// it. A stream copy, so this costs no encode and runs far faster than real
     /// time.
     /// </summary>
-    public static string[] BuildRemux(string capturePath, string mp4Path, string logLevel)
+    /// <param name="upTo">
+    /// Bounds the output, for taking somebody's share of a capture that is still being written. Left
+    /// null the whole of it is wrapped.
+    /// </param>
+    public static string[] BuildRemux(string capturePath, string mp4Path, string logLevel, TimeSpan? upTo = null)
     {
         return
         [
@@ -90,6 +94,7 @@ public static class FfmpegArguments
             // Recent ffmpeg inserts this itself; saying it keeps the command from
             // depending on which ffmpeg the image happens to ship.
             "-bsf:a", "aac_adtstoasc",
+            .. Limit(upTo),
             // moves the index to the front, without which a browser downloads the
             // whole file before it can play a second of it
             "-movflags", "+faststart",
@@ -98,7 +103,7 @@ public static class FfmpegArguments
     }
 
     /// <summary>Joins the parts of a recording that ffmpeg had to be restarted for.</summary>
-    public static string[] BuildConcat(string listPath, string mp4Path, string logLevel)
+    public static string[] BuildConcat(string listPath, string mp4Path, string logLevel, TimeSpan? upTo = null)
     {
         return
         [
@@ -113,10 +118,16 @@ public static class FfmpegArguments
             "-map", "0:a:0",
             "-c", "copy",
             "-bsf:a", "aac_adtstoasc",
+            .. Limit(upTo),
             "-movflags", "+faststart",
             mp4Path
         ];
     }
+
+    private static string[] Limit(TimeSpan? upTo) =>
+        upTo is { } limit
+            ? ["-t", ((int)limit.TotalSeconds).ToString(CultureInfo.InvariantCulture)]
+            : [];
 
     private static string[] LogLevel(string logLevel) => ["-loglevel", logLevel];
 

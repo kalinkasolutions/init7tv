@@ -48,5 +48,12 @@ public interface IRecordingEngine
     /// <summary>Turns the captures in a directory into the mp4 that is kept, and returns its size.</summary>
     Task<OperationResult<long>> FinalizeAsync(string directory, string logLevel);
 
+    /// <summary>
+    /// Writes somebody's share of a capture into a file of its own: everything up to the moment they
+    /// let go of it. The capture is left alone, because whoever is still waiting for it is having it
+    /// written as this runs.
+    /// </summary>
+    Task<OperationResult<long>> ForkAsync(string fromDirectory, string intoDirectory, TimeSpan upTo, string logLevel);
+
     void StopAll();
 }

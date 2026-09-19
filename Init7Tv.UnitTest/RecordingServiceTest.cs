@@ -17,6 +17,7 @@ public class RecordingServiceTest
 
     private string m_root = null!;
     private Mock<IRecordingRepository> m_repository = null!;
+    private Mock<IPlannedRecordingRepository> m_planned = null!;
     private Mock<IRecordingEngine> m_engine = null!;
     private RecordingService m_service = null!;
 
@@ -31,9 +32,12 @@ public class RecordingServiceTest
         m_repository.Setup(x => x.RemoveAsync(It.IsAny<RecordingRow>())).Returns(Task.CompletedTask);
 
         m_engine = new Mock<IRecordingEngine>();
+        m_planned = new Mock<IPlannedRecordingRepository>();
 
         m_service = new RecordingService(
             m_repository.Object,
+            m_planned.Object,
+            new RecordingSignal(),
             m_engine.Object,
             Mock.Of<IChannelService>(),
             NullLogger<RecordingService>.Instance,
@@ -177,19 +181,39 @@ public class RecordingServiceTest
         Assert.That(file.Value.DownloadName, Does.Not.Contain('/'));
     }
 
-    /// <summary>A row can say completed before the size is written back, and a
-    /// play button on a file of nothing only produces an error.</summary>
+    /// <summary>
+    /// Files can go without the row hearing about it. One that says otherwise offers a play button
+    /// that opens an empty player and a download that answers with an error page.
+    /// </summary>
     [Test]
-    public async Task ARecordingWithNoFileYetIsNotOfferedForPlaying()
+    public async Task ARecordingWhoseFileHasGoneSaysSoRatherThanOfferingIt()
     {
         var recording = Completed();
-        recording.FileSizeBytes = 0;
+        File.Delete(RecordingFiles.FinalPath(recording.Directory));
 
         m_repository.Setup(x => x.GetForUserAsync(Owner)).ReturnsAsync([recording]);
 
-        var listed = await m_service.GetAsync(Owner, isAdmin: false);
+        var listed = (await m_service.GetAsync(Owner, isAdmin: false)).Value.Single();
 
-        Assert.That(listed.Value.Single().IsPlayable, Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(listed.IsPlayable, Is.False);
+            Assert.That(listed.State, Is.EqualTo("Missing"));
+            Assert.That(listed.FileSizeBytes, Is.Zero, "a size nothing backs up is worse than none");
+            Assert.That(listed.ErrorMessage, Is.Not.Empty);
+        });
+    }
+
+    [Test]
+    public async Task ARecordingWhoseFileIsThereIsOfferedNormally()
+    {
+        var recording = Completed();
+        m_repository.Setup(x => x.GetForUserAsync(Owner)).ReturnsAsync([recording]);
+
+        var listed = (await m_service.GetAsync(Owner, isAdmin: false)).Value.Single();
+
+        Assert.That(listed.IsPlayable, Is.True);
+        Assert.That(listed.State, Is.EqualTo("Completed"));
     }
 
     [Test]
@@ -201,6 +225,63 @@ public class RecordingServiceTest
 
         Assert.That(listed.Value, Has.Length.EqualTo(2));
         m_repository.Verify(x => x.GetForUserAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Otherwise the pick is still inside its window with no attempt against it, and the next pass
+    /// starts the recording over.
+    /// </summary>
+    [Test]
+    public async Task DeletingAlsoTakesThePickBackSoItDoesNotStartAgain()
+    {
+        var recording = Completed();
+
+        await m_service.DeleteAsync(recording.RecordingId, Owner, isAdmin: false);
+
+        m_planned.Verify(x => x.RemoveAsync(Owner, recording.ProgrammeId), Times.Once);
+    }
+
+    /// <summary>Stopping is one viewer letting go, and must not take anybody else's pick with it.</summary>
+    [Test]
+    public async Task StoppingOnlyTakesBackYourOwnPick()
+    {
+        var recording = Completed();
+        recording.State = RecordingState.Recording;
+
+        // somebody else still wants it
+        m_planned.Setup(x => x.AnyForProgrammeAsync(recording.ProgrammeId)).ReturnsAsync(true);
+
+        await m_service.StopAsync(recording.RecordingId, Owner, isAdmin: false);
+
+        m_planned.Verify(x => x.RemoveAsync(Owner, recording.ProgrammeId), Times.Once);
+        m_planned.Verify(x => x.RemoveAsync(It.Is<string>(u => u != Owner), It.IsAny<Guid>()), Times.Never);
+    }
+
+    /// <summary>With somebody else still waiting it cannot simply end, so their share is cut instead.</summary>
+    [Test]
+    public async Task StoppingAShareLeavesItFinalizingForThePassToCut()
+    {
+        var recording = Completed();
+        recording.State = RecordingState.Recording;
+        m_planned.Setup(x => x.AnyForProgrammeAsync(recording.ProgrammeId)).ReturnsAsync(true);
+
+        await m_service.StopAsync(recording.RecordingId, Owner, isAdmin: false);
+
+        Assert.That(recording.State, Is.EqualTo(RecordingState.Finalizing));
+        Assert.That(recording.EndedAt, Is.Not.Null);
+    }
+
+    /// <summary>The last one out ends the capture, which the pass does when no pick is left.</summary>
+    [Test]
+    public async Task StoppingTheLastShareLeavesItRecordingForThePassToEnd()
+    {
+        var recording = Completed();
+        recording.State = RecordingState.Recording;
+        m_planned.Setup(x => x.AnyForProgrammeAsync(recording.ProgrammeId)).ReturnsAsync(false);
+
+        await m_service.StopAsync(recording.RecordingId, Owner, isAdmin: false);
+
+        Assert.That(recording.State, Is.EqualTo(RecordingState.Recording));
     }
 
     /// <summary>Writes the file too, because everything here depends on it being there.</summary>

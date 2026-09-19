@@ -116,6 +116,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         // is still beyond it when the window is redrawn on the next pass.
         var horizon = now + Horizon;
 
+        await ForkDroppedOutAsync(settings, now);
         await HandleFinishedCapturesAsync(settings);
         await StopUnwantedAsync(settings, now, horizon);
         await StartDueAsync(settings, preRoll, postRoll, now, horizon);
@@ -178,6 +179,49 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
 
     private static TimeSpan PostRoll(GeneralAppSettingsDto settings) =>
         TimeSpan.FromMinutes(Math.Max(settings.RecordingPostRollMinutes, 0));
+
+    /// <summary>
+    /// Gives whoever let go of a shared capture their share of it: everything up to the moment they
+    /// did, cut from the transport stream on disk while the rest of it keeps being written for the
+    /// people still waiting. A stream copy, so it costs no encode.
+    /// </summary>
+    private async Task ForkDroppedOutAsync(GeneralAppSettingsDto settings, DateTime now)
+    {
+        foreach (var row in await m_recordings.GetUnfinishedAsync())
+        {
+            var captureId = RecordingFiles.CaptureIdOf(row.Directory);
+
+            // only a viewer who dropped out leaves a row finalizing against a capture still running
+            if (row.State != RecordingState.Finalizing || !m_engine.IsRunning(captureId))
+            {
+                continue;
+            }
+
+            var theirs = RecordingFiles.DirectoryFor(m_options.RecordingPath, Guid.NewGuid());
+            var upTo = (row.EndedAt ?? now) - (row.StartedAt ?? row.ScheduledStart);
+
+            m_logger.LogInformation("Cutting {UserName}'s {Length} of {Title} out of {Directory}",
+                row.UserName, upTo, row.Title, row.Directory);
+
+            var forked = await m_engine.ForkAsync(row.Directory, theirs, upTo, settings.FfmpegLogLevel);
+
+            await UpdateAsync([row], x =>
+            {
+                if (forked.IsSuccess)
+                {
+                    x.Directory = theirs;
+                    x.FileSizeBytes = forked.Value;
+                    x.State = RecordingState.Interrupted;
+                    x.ErrorMessage = "Stopped while it was still recording for somebody else";
+                }
+                else
+                {
+                    x.State = RecordingState.Failed;
+                    x.ErrorMessage = forked.ErrorMessage ?? "Your part of the recording could not be saved";
+                }
+            });
+        }
+    }
 
     // --- what became of the captures that ended --------------------------
 
@@ -283,9 +327,11 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
             return;
         }
 
-        var wanted = (await m_planned.GetInWindowAsync(now - PostRoll(settings), horizon + PreRoll(settings)))
-            .Select(plan => plan.ProgrammeId)
-            .ToHashSet();
+        var picks = await m_planned.GetInWindowAsync(now - PostRoll(settings), horizon + PreRoll(settings));
+        var wanted = picks.Select(plan => plan.ProgrammeId).ToHashSet();
+
+        m_logger.LogDebug("{Running} recording(s) under way, {Picks} pick(s) still wanted: {Wanted}",
+            running.Length, picks.Length, string.Join(", ", picks.Select(x => $"{x.UserName}/{x.Title}")));
 
         foreach (var row in running)
         {
@@ -340,17 +386,72 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
 
         var attempts = await m_recordings.GetLatestAttemptsAsync(due.Select(x => x.ProgrammeId).ToArray());
 
+        var underway = (await m_recordings.GetUnfinishedAsync())
+            .Where(row => row.State is RecordingState.Pending or RecordingState.Recording)
+            .GroupBy(row => row.ProgrammeId)
+            .ToDictionary(group => group.Key, group => group.ToArray());
+
         // one capture per programme however many people asked for it
         var groups = due
             .GroupBy(plan => plan.ProgrammeId)
-            .Where(group => !AlreadyAttempted(attempts, group))
             .OrderBy(group => group.Min(plan => plan.StartsAt))
             .ToArray();
 
         foreach (var group in groups)
         {
+            // Somebody picking it after it started joins what is already running. Anything else
+            // would encode the same programme twice, which is the one thing sharing a capture
+            // exists to avoid.
+            if (underway.TryGetValue(group.Key, out var rows))
+            {
+                await JoinAsync(group.ToArray(), rows, now);
+                continue;
+            }
+
+            if (AlreadyAttempted(attempts, group))
+            {
+                continue;
+            }
+
             await StartGroupAsync(group.ToArray(), settings, preRoll, postRoll, now);
         }
+    }
+
+    /// <summary>Gives whoever has picked it since a row on the capture already running.</summary>
+    private async Task JoinAsync(PlannedRecording[] plans, RecordingRow[] rows, DateTime now)
+    {
+        var already = rows.Select(row => row.UserName).ToHashSet();
+        var newcomers = plans.Where(plan => !already.Contains(plan.UserName)).ToArray();
+
+        if (newcomers.Length == 0)
+        {
+            return;
+        }
+
+        var running = rows[0];
+
+        m_logger.LogInformation("{Names} joined the recording of {Title} already under way",
+            string.Join(", ", newcomers.Select(plan => plan.UserName)), running.Title);
+
+        // the same window, the same directory and the same state: it is one capture, and what they
+        // get is whatever it ends up holding
+        await m_recordings.AddRangeAsync(newcomers.Select(plan => new RecordingRow
+        {
+            RecordingId = Guid.NewGuid(),
+            ProgrammeId = running.ProgrammeId,
+            UserName = plan.UserName,
+            ChannelId = running.ChannelId,
+            ChannelName = running.ChannelName,
+            CanonicalName = running.CanonicalName,
+            Title = running.Title,
+            SubTitle = running.SubTitle,
+            ScheduledStart = running.ScheduledStart,
+            ScheduledEnd = running.ScheduledEnd,
+            StartedAt = running.StartedAt,
+            State = running.State,
+            Directory = running.Directory,
+            CreatedAt = now
+        }).ToArray());
     }
 
     /// <summary>

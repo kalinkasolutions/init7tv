@@ -24,6 +24,20 @@
         </template>
     </nav>
 
+            <div class="filter-bar" x-show="$store.tabs.current !== 'guide'" x-cloak>
+                <input type="search" placeholder="filter by title or channel"
+                       aria-label="Filter" x-model="$store.filter.text">
+                <select aria-label="Whose" x-model="$store.filter.user"
+                        x-show="$store.filter.users.length > 1">
+                    <option value="">everyone</option>
+                    <template x-for="name in $store.filter.users" :key="name">
+                        <option :value="name" x-text="name"></option>
+                    </template>
+                </select>
+                <button class="link-button" x-show="$store.filter.active"
+                        @click="$store.filter.clear()">clear filter</button>
+            </div>
+
     <div class="recording-body">
         <div class="schedule" x-show="$store.tabs.is('guide')">
             <p class="empty" x-show="!channel" x-cloak>Choose a channel to see what is on.</p>
@@ -81,7 +95,11 @@
                     <div class="entry-what">
                         <h4 x-text="entry.title"></h4>
                         <h5 x-show="entry.subTitle" x-text="entry.subTitle"></h5>
-                        <span class="entry-channel" x-text="entry.channelName"></span>
+                        <span class="entry-channel">
+                            <span x-text="entry.channelName"></span>
+                            <span class="entry-who" x-show="$store.filter.users.length > 1"
+                                  x-text="entry.userName"></span>
+                        </span>
                     </div>
 
                     <div class="entry-actions">
@@ -117,7 +135,13 @@
                     <div class="entry-what">
                         <h4 x-text="recording.title"></h4>
                         <h5 x-show="recording.subTitle" x-text="recording.subTitle"></h5>
-                        <span class="entry-channel" x-text="recording.channelName"></span>
+                        <span class="entry-channel">
+                            <span x-text="recording.channelName"></span>
+                            <span class="entry-who" x-show="$store.filter.users.length > 1"
+                                  x-text="recording.userName"></span>
+                            <span class="entry-who" x-show="recording.sharedWith.length"
+                                  x-text="`+ ${recording.sharedWith.join(', ')}`"></span>
+                        </span>
                         <span class="entry-error" x-show="recording.errorMessage"
                               x-text="recording.errorMessage"></span>
                     </div>
@@ -127,10 +151,14 @@
                                 @click="play(recording)">
                             <i class="bi bi-play-fill"></i>
                         </button>
-                        <a class="icon-button" title="Download" x-show="recording.isPlayable"
-                           :href="fileUrl(recording, true)">
+                        <button class="icon-button" title="Download" x-show="recording.isPlayable"
+                                @click="await download(recording)">
                             <i class="bi bi-download"></i>
-                        </a>
+                        </button>
+                        <button class="icon-button" title="Stop and keep what is recorded"
+                                x-show="isBusy(recording)" @click="await stop(recording)">
+                            <i class="bi bi-stop-fill"></i>
+                        </button>
                         <button class="icon-button danger-icon"
                                 :title="isBusy(recording) ? 'Stop and delete' : 'Delete'"
                                 @click="await remove(recording)">
@@ -152,7 +180,8 @@
                         </button>
                     </div>
                     <template x-if="playing">
-                        <video controls autoplay preload="metadata" :src="fileUrl(playing)"></video>
+                        <video controls autoplay preload="metadata" :src="fileUrl(playing)"
+                               @error="await gone(playing)"></video>
                     </template>
                 </div>
             </div>

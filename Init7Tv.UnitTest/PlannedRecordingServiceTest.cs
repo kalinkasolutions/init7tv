@@ -51,7 +51,7 @@ public class PlannedRecordingServiceTest
             .Setup(x => x.GetForUserAsync(UserName))
             .ReturnsAsync([Stored(lateAtNight, lateAtNight.AddMinutes(5))]);
 
-        var result = await m_service.GetAsync(UserName);
+        var result = await m_service.GetAsync(UserName, isAdmin: false);
 
         Assert.Multiple(() =>
         {
@@ -59,6 +59,18 @@ public class PlannedRecordingServiceTest
             Assert.That(result.Value.Single().EndsAt.Kind, Is.EqualTo(DateTimeKind.Utc));
             Assert.That(result.Value.Single().StartsAt, Is.EqualTo(lateAtNight));
         });
+    }
+
+    /// <summary>An admin is answering for the machine rather than for themselves.</summary>
+    [Test]
+    public async Task AnAdminSeesEverybodysPicks()
+    {
+        m_repository.Setup(x => x.GetAllAsync()).ReturnsAsync([Stored(DateTime.UtcNow, DateTime.UtcNow.AddHours(1))]);
+
+        var result = await m_service.GetAsync("somebody-else", isAdmin: true);
+
+        Assert.That(result.Value, Has.Length.EqualTo(1));
+        m_repository.Verify(x => x.GetForUserAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Test]

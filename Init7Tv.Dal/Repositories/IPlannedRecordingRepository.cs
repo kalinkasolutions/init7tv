@@ -12,6 +12,12 @@ public interface IPlannedRecordingRepository
     /// grows, and a pass reads it every time it wakes.
     /// </summary>
     Task<PlannedRecording[]> GetInWindowAsync(DateTime from, DateTime to);
+    /// <summary>Everybody's, for an admin looking over the lot.</summary>
+    Task<PlannedRecording[]> GetAllAsync();
+
+    /// <summary>Whether anybody at all is still waiting for this programme.</summary>
+    Task<bool> AnyForProgrammeAsync(Guid programmeId);
+
     Task AddAsync(PlannedRecording recording);
     Task<bool> RemoveAsync(string userName, Guid programmeId);
 }

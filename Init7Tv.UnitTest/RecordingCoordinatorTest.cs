@@ -384,6 +384,84 @@ public class RecordingCoordinatorTest
         m_engine.Verify(x => x.Stop(It.IsAny<Guid>()), Times.Never);
     }
 
+    /// <summary>
+    /// One picks it, the other picks the same programme once it is already recording. There is one
+    /// capture, so the second must join it rather than set off a second encode of the same thing.
+    /// </summary>
+    [Test]
+    public async Task PickingSomethingAlreadyRecordingJoinsIt()
+    {
+        var programmeId = Guid.NewGuid();
+        var starts = DateTime.UtcNow.AddMinutes(-5);
+
+        // niggi picked it first and it has been recording since
+        var running = Leftover(DateTime.UtcNow.AddHours(1), RecordingState.Recording);
+        running.ProgrammeId = programmeId;
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([running]);
+        m_engine.Setup(x => x.IsRunning(RecordingFiles.CaptureIdOf(running.Directory))).Returns(true);
+        Attempted(programmeId, running.CreatedAt);
+
+        PlanAll([
+            Planned(starts, starts.AddHours(1), "niggi", programmeId, running.CreatedAt.AddMinutes(-1)),
+            Planned(starts, starts.AddHours(1), "sami", programmeId, DateTime.UtcNow)
+        ]);
+
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        m_engine.Verify(x => x.StartAsync(It.IsAny<RecordingRequest>()), Times.Never);
+        Assert.That(m_added.Select(x => x.UserName), Is.EqualTo(new[] { "sami" }),
+            "the second viewer should get a row on the capture that is already running");
+        Assert.That(m_added.Select(x => x.Directory), Is.All.EqualTo(running.Directory));
+    }
+
+    /// <summary>
+    /// Letting go of a capture somebody else is still waiting for gives you what it held at that
+    /// moment, cut from the transport stream on disk. The capture itself is left alone.
+    /// </summary>
+    [Test]
+    public async Task LettingGoOfASharedCaptureStillGivesYouYourShare()
+    {
+        var row = Leftover(DateTime.UtcNow.AddHours(1), RecordingState.Finalizing);
+        row.StartedAt = DateTime.UtcNow.AddMinutes(-20);
+        row.EndedAt = DateTime.UtcNow;
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+
+        var captureId = RecordingFiles.CaptureIdOf(row.Directory);
+        m_engine.Setup(x => x.IsRunning(captureId)).Returns(true);
+        m_engine
+            .Setup(x => x.ForkAsync(row.Directory, It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<string>()))
+            .ReturnsAsync(OperationResult<long>.Success(4242));
+
+        var theirs = row.Directory;
+
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        m_engine.Verify(
+            x => x.ForkAsync(theirs, It.IsAny<string>(), It.Is<TimeSpan>(t => t.TotalMinutes > 19), It.IsAny<string>()),
+            Times.Once);
+        m_engine.Verify(x => x.Stop(It.IsAny<Guid>()), Times.Never);
+
+        Assert.That(row.State, Is.EqualTo(RecordingState.Interrupted));
+        Assert.That(row.FileSizeBytes, Is.EqualTo(4242));
+        Assert.That(row.Directory, Is.Not.EqualTo(theirs), "their share is a file of its own");
+    }
+
+    /// <summary>A capture that has exited is finished normally, not cut in two.</summary>
+    [Test]
+    public async Task AFinishedCaptureIsNotMistakenForSomebodyDroppingOut()
+    {
+        var row = Leftover(DateTime.UtcNow.AddMinutes(-5), RecordingState.Finalizing);
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+        m_engine.Setup(x => x.FinalizeAsync(row.Directory, It.IsAny<string>()))
+            .ReturnsAsync(OperationResult<long>.Success(1));
+
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        m_engine.Verify(
+            x => x.ForkAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
     // --- when to look again ----------------------------------------------
 
     /// <summary>The loop sleeps to this, so a pick still to come is what it sleeps to.</summary>

@@ -1,4 +1,5 @@
-import {get, deleteItem} from '../../requestHandler.js';
+import {get, post, deleteItem} from '../../requestHandler.js';
+import {notify} from '../../notification.js';
 
 /// States the scheduler is still working on, which is what decides how often
 /// this asks again.
@@ -24,8 +25,11 @@ export const recordingsView = () => ({
     /// The tabs say how many without having to be opened, which is the point of
     /// having one for what is under way.
     publishCounts() {
-        this.$store.tabs.counts.recording = this.inProgress.length;
+        const underway = this.inProgress;
+
+        this.$store.tabs.counts.recording = underway.length;
         this.$store.tabs.counts.recorded = this.finished.length;
+        this.$store.recordings.underway = underway.map(x => x.programmeId);
     },
 
     destroy() {
@@ -34,6 +38,7 @@ export const recordingsView = () => ({
 
     async load() {
         this.recordings = await get('/api/recording/recordings') ?? [];
+        this.$store.filter.offer(this.recordings.map(x => x.userName));
     },
 
     /// A pick turns into a recording with nobody touching this page, so the list
@@ -66,6 +71,8 @@ export const recordingsView = () => ({
                 return 'partial';
             case 'Skipped':
                 return 'skipped';
+            case 'Missing':
+                return 'file gone';
             default:
                 return 'failed';
         }
@@ -79,8 +86,53 @@ export const recordingsView = () => ({
         this.playing = recording;
     },
 
+    /// A file can go between the list being drawn and the button being pressed, and a video element
+    /// pointed at nothing just sits there looking broken.
+    async gone(recording) {
+        notify('Not there any more', `${recording.title} is no longer on disk.`, 'error');
+
+        this.stopPlaying();
+        await this.load();
+    },
+
+    /// The download is a plain link so the browser streams it rather than the page holding gigabytes
+    /// in memory, which also means a failure would navigate to the error instead of reporting it.
+    async download(recording) {
+        const url = this.fileUrl(recording, true);
+        const head = await fetch(url, {method: 'HEAD'});
+
+        if (!head.ok) {
+            await this.gone(recording);
+            return;
+        }
+
+        window.location = url;
+    },
+
     stopPlaying() {
         this.playing = null;
+    },
+
+    /// Letting go of one still running. What it has caught so far is kept either way: if nobody else
+    /// is waiting for it the capture ends, and if somebody is, their part carries on without you.
+    async stop(recording) {
+        const shared = recording.sharedWith.length
+            ? ` ${recording.sharedWith.join(' and ')} also asked for it, so it keeps recording for them.`
+            : '';
+
+        const confirmed = await Alpine.store('modal').show(
+            'Stop this recording?',
+            `${recording.title} will stop and what has been recorded so far is kept.${shared}`);
+
+        if (!confirmed) {
+            return;
+        }
+
+        if (await post(`/api/recording/recordings/${recording.recordingId}/stop`) === null) {
+            return;
+        }
+
+        await this.load();
     },
 
     async remove(recording) {
@@ -138,6 +190,8 @@ export const recordingsView = () => ({
 
     /// One component sits behind both tabs, so which list it shows is the tab.
     get visible() {
-        return this.$store.tabs.is('recording') ? this.inProgress : this.finished;
+        const shown = this.$store.tabs.is('recording') ? this.inProgress : this.finished;
+
+        return shown.filter(x => this.$store.filter.matches(x));
     }
 });
