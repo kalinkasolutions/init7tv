@@ -51,6 +51,41 @@ public class Scte35CueExtractorTest
         Assert.That(cues[0].SpliceInsert!.SpliceTime!.PtsTime, Is.EqualTo(Seconds(200)));
     }
 
+    /// <summary>
+    /// ffmpeg has no codec for a cue stream, so copying one into a capture declares it as plain
+    /// private data. Reading a recording strictly by 0x86 found no cue PID at all and every
+    /// recording reported no advertising.
+    /// </summary>
+    [Test]
+    public void ACueStreamDeclaredAsPrivateData_IsReadWhenAskedFor()
+    {
+        var extractor = new Scte35CueExtractor(privateDataMayCarryCues: true);
+
+        var cues = extractor.Read(Stream(
+            Scte35TestStream.Packet(0x0000, true, Scte35TestStream.Pat((ProgramNumber, PmtPid))),
+            Scte35TestStream.Packet(PmtPid, true, Scte35TestStream.Pmt(CuePid, cueStreamType: 0x06)),
+            Scte35TestStream.Packet(CuePid, true, Cue(eventId: 7)))).ToArray();
+
+        Assert.That(extractor.CuePids, Is.EqualTo(new[] { CuePid }));
+        Assert.That(cues, Has.Length.EqualTo(1));
+        Assert.That(cues[0].SpliceInsert!.SpliceEventId, Is.EqualTo(7));
+    }
+
+    /// <summary>A source declares AC-3 and teletext as private data too, so reading one is strict.</summary>
+    [Test]
+    public void ACueStreamDeclaredAsPrivateData_IsIgnoredByDefault()
+    {
+        var extractor = new Scte35CueExtractor();
+
+        var cues = extractor.Read(Stream(
+            Scte35TestStream.Packet(0x0000, true, Scte35TestStream.Pat((ProgramNumber, PmtPid))),
+            Scte35TestStream.Packet(PmtPid, true, Scte35TestStream.Pmt(CuePid, cueStreamType: 0x06)),
+            Scte35TestStream.Packet(CuePid, true, Cue(eventId: 7)))).ToArray();
+
+        Assert.That(extractor.CuePids, Is.Empty);
+        Assert.That(cues, Is.Empty);
+    }
+
     [Test]
     public void ACueMessageBeforeThePmtHasBeenSeen_IsNotRead()
     {

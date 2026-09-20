@@ -252,10 +252,15 @@ public class FfmpegArgumentsTest
 
     private const string CapturePath = "/var/srv/recordings/abc/capture-1.ts";
 
-    private static string[] BuildRecording(bool interlaced = true, bool multicast = true, params int[] audioStreams) =>
+    private static string[] BuildRecording(
+        bool interlaced = true,
+        bool multicast = true,
+        int? cueStream = 1,
+        params int[] audioStreams
+    ) =>
         FfmpegArguments.BuildRecording(
             Channel, audioStreams.Length == 0 ? [0] : audioStreams, "veryfast", "warning", Probe(interlaced),
-            multicast, keyframeSeconds: 4, TimeSpan.FromMinutes(65), CapturePath);
+            multicast, keyframeSeconds: 4, TimeSpan.FromMinutes(65), CapturePath, cueStream);
 
     /// <summary>
     /// A recording is kept for weeks and the choice cannot be revisited, so it carries every track
@@ -356,13 +361,28 @@ public class FfmpegArgumentsTest
     [Test]
     public void Recording_CarriesTheAdvertisingCuesIntoTheCapture()
     {
-        var args = BuildRecording();
+        var args = BuildRecording(cueStream: 1);
 
         Assert.Multiple(() =>
         {
             Assert.That(args, Does.Contain("-copy_unknown"));
-            Assert.That(args, Does.Contain("0:d:0?"), "optional, so a channel carrying none still records");
+            // the stream that carries them, not the first data stream, which on these channels is
+            // a different PID with nothing on it
+            Assert.That(args, Does.Contain("0:d:1?"), "optional, so a stream that goes still records");
             Assert.That(ValueOf(args, "-c:d"), Is.EqualTo("copy"), "copied, never decoded");
+        });
+    }
+
+    /// <summary>A channel announcing no advertising still records, with no cue track at all.</summary>
+    [Test]
+    public void Recording_MapsNoCueStreamWhenTheChannelCarriesNone()
+    {
+        var args = BuildRecording(cueStream: null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(args.Any(x => x.StartsWith("0:d:")), Is.False);
+            Assert.That(args, Does.Not.Contain("-c:d"));
         });
     }
 

@@ -53,7 +53,16 @@ internal static class Scte35TestStream
     }
 
     /// <summary>A PMT with the cue stream listed at stream_type 0x86, as 9.9.1 requires.</summary>
-    public static byte[] Pmt(int cuePid, bool includeCueStream = true, int programNumber = 1)
+    /// <param name="cueStreamType">
+    /// 0x86 as a broadcaster sends it, or 0x06 as ffmpeg declares it after copying one into a
+    /// capture.
+    /// </param>
+    public static byte[] Pmt(
+        int cuePid,
+        bool includeCueStream = true,
+        int programNumber = 1,
+        byte cueStreamType = 0x86
+    )
     {
         var body = new List<byte>
         {
@@ -70,7 +79,7 @@ internal static class Scte35TestStream
 
         if (includeCueStream)
         {
-            body.AddRange([0x86, (byte)(0xE0 | (cuePid >> 8)), (byte)(cuePid & 0xFF), 0xF0, 0x00]);
+            body.AddRange([cueStreamType, (byte)(0xE0 | (cuePid >> 8)), (byte)(cuePid & 0xFF), 0xF0, 0x00]);
         }
 
         return Section(body);

@@ -259,7 +259,8 @@ public sealed class RecordingSegments
     private sealed class PartScan
     {
         public TsKeyframeDetector Detector { get; } = new();
-        public Scte35CueExtractor Cues { get; } = new();
+        // a capture, not a source: the cue stream arrives declared as private data
+        public Scte35CueExtractor Cues { get; } = new(privateDataMayCarryCues: true);
         public AdBreakTimeline Timeline { get; } = new();
 
         /// <summary>Where this part begins in the recording as a whole.</summary>

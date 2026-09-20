@@ -138,6 +138,25 @@ public sealed class FfprobeRoot
     }
 
     /// <summary>
+    /// Which data stream carries the advertising cues, in ffmpeg's <c>-map 0:d:N</c> numbering, or
+    /// null when the channel announces none.
+    ///
+    /// Found by codec rather than taken as the first one. These channels carry another data stream
+    /// in front of it, so mapping 0:d:0 copied a PID with nothing on it: the capture ended up with a
+    /// cue track holding no packets, and every recording reported no advertising at all.
+    /// </summary>
+    public int? GetCueStream()
+    {
+        var data = Streams.Where(x => x.CodecType == "data").ToArray();
+        var cues = Array.FindIndex(data, x => x.CodecName == CueCodec);
+
+        return cues < 0 ? null : cues;
+    }
+
+    /// <summary>What ffprobe calls a SCTE 35 cue stream.</summary>
+    private const string CueCodec = "scte_35";
+
+    /// <summary>
     /// Every audio track, in the order a recording should carry them, using ffmpeg's
     /// <c>-map 0:a:N</c> numbering.
     ///

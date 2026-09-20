@@ -20,7 +20,11 @@ public sealed class Scte35CueExtractor
     private const int PatPid = 0x0000;
     private const byte Scte35StreamType = 0x86;
 
+    /// <summary>What ffmpeg declares a copied cue stream as, having no codec for it.</summary>
+    private const byte PrivateDataStreamType = 0x06;
+
     private readonly int? m_programNumber;
+    private readonly bool m_privateDataMayCarryCues;
     private readonly Dictionary<int, int> m_pmtPids = new();
     private readonly HashSet<int> m_cuePids = [];
     private readonly Dictionary<int, SectionBuffer> m_sections = new();
@@ -29,9 +33,18 @@ public sealed class Scte35CueExtractor
     /// Which programme of a multi programme stream to follow. Every programme is
     /// followed when this is null.
     /// </param>
-    public Scte35CueExtractor(int? programNumber = null)
+    /// <param name="privateDataMayCarryCues">
+    /// Also follow streams declared as private data. A recording has to be read this way: ffmpeg
+    /// has no codec for a cue stream, so copying one into the capture rebuilds the PMT around it as
+    /// plain private data and the 0x86 it arrived with is gone. A source must not be read this way,
+    /// because AC-3 and teletext are declared private data there too.
+    ///
+    /// Safe on either, in truth: a section is only taken once its table_id and its CRC agree.
+    /// </param>
+    public Scte35CueExtractor(int? programNumber = null, bool privateDataMayCarryCues = false)
     {
         m_programNumber = programNumber;
+        m_privateDataMayCarryCues = privateDataMayCarryCues;
     }
 
     /// <summary>The cue PIDs seen in a PMT so far.</summary>
@@ -177,7 +190,8 @@ public sealed class Scte35CueExtractor
             var elementaryPid = ((section[offset + 1] & 0x1F) << 8) | section[offset + 2];
             var esInfoLength = ((section[offset + 3] & 0x0F) << 8) | section[offset + 4];
 
-            if (streamType == Scte35StreamType)
+            if (streamType == Scte35StreamType
+                || (m_privateDataMayCarryCues && streamType == PrivateDataStreamType))
             {
                 m_cuePids.Add(elementaryPid);
             }

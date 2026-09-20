@@ -57,7 +57,8 @@ public static class FfmpegArguments
         bool useMultiCast,
         int keyframeSeconds,
         TimeSpan duration,
-        string capturePath
+        string capturePath,
+        int? cueStreamIndex
     )
     {
         // without -nostdin an existing output file makes ffmpeg ask on stdin and
@@ -71,9 +72,14 @@ public static class FfmpegArguments
 
         // The advertising cues the channel already carries, copied in beside the pictures so that a
         // cue and what it refers to end up on the same clock. Read from the source separately they
-        // would have to be lined up against a transcode that starts whenever it starts. Optional,
-        // because a channel that carries none should still record.
-        args.AddRange(["-map", "0:d:0?", "-c:d", "copy"]);
+        // would have to be lined up against a transcode that starts whenever it starts.
+        //
+        // Which data stream that is has to be said: these channels carry another one in front of
+        // it. Still optional, because a stream can go between the probe and the start.
+        if (cueStreamIndex is { } cues)
+        {
+            args.AddRange(["-map", $"0:d:{cues.ToString(CultureInfo.InvariantCulture)}?", "-c:d", "copy"]);
+        }
         args.AddRange(["-t", ((int)duration.TotalSeconds).ToString(CultureInfo.InvariantCulture)]);
         args.AddRange(["-f", "mpegts"]);
         args.Add(capturePath);

@@ -169,6 +169,42 @@ public class FfprobeRootTest
         Assert.That(new FfprobeRoot().GetAudioStreamsToRecord("de"), Is.Empty);
     }
 
+    /// <summary>
+    /// What the SRG channels actually carry: an unnamed data stream, then the cue stream. Taking the
+    /// first one copied a PID with nothing on it and no recording ever found any advertising.
+    /// </summary>
+    [Test]
+    public void TheCueStreamIsFoundByCodecRatherThanPosition()
+    {
+        var probe = new FfprobeRoot
+        {
+            Streams =
+            [
+                new StreamInfo { CodecType = "video", CodecName = "hevc" },
+                new StreamInfo { CodecType = "audio", CodecName = "ac3" },
+                new StreamInfo { CodecType = "data", CodecName = "unknown" },
+                new StreamInfo { CodecType = "data", CodecName = "scte_35" }
+            ]
+        };
+
+        Assert.That(probe.GetCueStream(), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void AChannelWithNoCueStreamHasNothingToMap()
+    {
+        var probe = new FfprobeRoot
+        {
+            Streams =
+            [
+                new StreamInfo { CodecType = "video", CodecName = "hevc" },
+                new StreamInfo { CodecType = "data", CodecName = "unknown" }
+            ]
+        };
+
+        Assert.That(probe.GetCueStream(), Is.Null);
+    }
+
     [Test]
     public void OneTrackIsTheOnlyChoice()
     {

@@ -92,7 +92,8 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
             m_options.UseMultiCast,
             KeyframeSeconds,
             request.Duration,
-            capturePath);
+            capturePath,
+            streamInfo.Value.GetCueStream());
 
         m_logger.LogInformation(
             "recording {CaptureId} ({Channel}) to {CapturePath} for {Duration}, ffmpeg args: {Args}",
