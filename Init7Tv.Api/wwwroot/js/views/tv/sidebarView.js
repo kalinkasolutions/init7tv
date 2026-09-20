@@ -1,50 +1,26 @@
-import {get} from '../../requestHandler.js';
-
+/// The channel list. It owns the search box and nothing else: the channels themselves, and which
+/// one the page is pointing at, belong to everybody.
 export const sidebarView = () => ({
-    channels: [],
-    allChannels: [],
-    selectedChannel: null,
+    search: '',
 
-    async init() {
-        this.channels = await get("/api/streaming/channels") ?? [];
-        this.allChannels = this.channels;
-        this.dispatchLastWatchedChannel();
+    init() {
+        this.$store.channels.load();
     },
 
-    searchChannel(event) {
-        this.channels = this.allChannels.filter(c => c.displayName.toLowerCase().includes(event.target.value.toLowerCase()));
+    /// Favourites first, then the order the channels came in, which is the order they are numbered
+    /// in. Sorting is stable, so within each group that order is kept, and it is always built from
+    /// the whole list rather than from what is on screen.
+    get channels() {
+        const needle = this.search.trim().toLowerCase();
+        const matching = needle
+            ? this.$store.channels.all.filter(c => c.displayName.toLowerCase().includes(needle))
+            : this.$store.channels.all;
+
+        return [...matching].sort((a, b) => Boolean(b.isFavourite) - Boolean(a.isFavourite));
     },
 
-    channelSelected(channel) {
-        if (this.selectedChannel) {
-            this.selectedChannel.selected = false;
-        }
-        this.selectedChannel = channel;
-        this.selectedChannel.selected = true;
-        this.dispatch();
-    },
-
-    dispatchLastWatchedChannel() {
-        const {channelId, audioStreamIndex} = this.getLastChannelInfo();
-        const channel = this.channels.find(ch => ch.channelId === channelId);
-
-        if (channel) {
-            this.selectedChannel = channel;
-            this.selectedChannel.selected = true;
-            this.dispatch(audioStreamIndex);
-        }
-    },
-
-    dispatch(audioStreamIndex = null) {
-        window.dispatchEvent(new CustomEvent('channel-selected', {
-            detail: {channel: this.selectedChannel, audioStreamIndex}
-        }));
-    },
-
-    getLastChannelInfo() {
-        return {
-            channelId: localStorage.getItem("channel-id"),
-            audioStreamIndex: Number(JSON.parse(localStorage.getItem("audio-stream-index")))
-        }
-    },
-})
+    choose(channel) {
+        this.$store.channels.select(channel);
+        this.$store.menu.close();
+    }
+});

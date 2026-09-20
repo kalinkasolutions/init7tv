@@ -48,7 +48,6 @@ services:
     environment:
       - ProxyAddress=10.10.0.1   # IP address of your nginx proxy
       - Init7TvOptions__UseMultiCast=true
-      - Init7TvOptions__FfmpegLogLevel=info
       - ASPNETCORE_HTTP_PORTS=8080
 ```
 
@@ -67,7 +66,6 @@ services:
     environment:
       - ProxyAddress=10.10.0.1   # IP address of your nginx proxy
       - Init7TvOptions__UseMultiCast=false
-      - Init7TvOptions__FfmpegLogLevel=info
 ```
 
 The `data` directory will be created automatically and contains the SQLite database.
@@ -96,7 +94,8 @@ server {
     proxy_set_header X-Forwarded-Proto   $scheme;
     proxy_set_header X-Forwarded-Host    $host;
 
-    # WebSocket support (required for live dashboard)
+    # WebSocket support (live dashboard) and unbuffered responses, which the
+    # player's server-sent event stream needs to receive updates promptly
     proxy_http_version  1.1;
     proxy_set_header    Upgrade     $http_upgrade;
     proxy_set_header    Connection  "upgrade";
@@ -135,8 +134,7 @@ services:
       - KESTREL__CERTIFICATES__DEFAULT__PATH=/var/certs/cert.pfx
       - KESTREL__CERTIFICATES__DEFAULT__PASSWORD=yourpassword
       - Init7TvOptions__UseMultiCast=true
-      - Init7TvOptions__FfmpegLogLevel=info
-      - ASPNETCORE_HTTP_PORTS=8080
+      - ASPNETCORE_HTTPS_PORTS=5001
 ```
 
 **With HLS (bridge networking):**
@@ -156,7 +154,7 @@ services:
       - KESTREL__CERTIFICATES__DEFAULT__PATH=/var/certs/cert.pfx
       - KESTREL__CERTIFICATES__DEFAULT__PASSWORD=yourpassword
       - Init7TvOptions__UseMultiCast=false
-      - Init7TvOptions__FfmpegLogLevel=info
+      - ASPNETCORE_HTTPS_PORTS=5001
 ```
 
 Place your `.pfx` certificate in the `./certs` directory. No `ProxyAddress` is needed since there is no proxy.
@@ -191,7 +189,51 @@ the password immediately after first login.
 | `KESTREL__CERTIFICATES__DEFAULT__PATH`     | Path to the `.pfx` certificate inside the container                                            | —         | Yes (Option B only) |
 | `KESTREL__CERTIFICATES__DEFAULT__PASSWORD` | Password for the `.pfx` certificate                                                            | —         | Yes (Option B only) |
 | `Init7TvOptions__UseMultiCast`             | Enable multicast stream reception. Requires `network_mode: host`. Set to `false` to use HLS.  | `true`    | No                  |
-| `Init7TvOptions__FfmpegLogLevel`           | FFmpeg log level                                                                               | `warning` | No                  |
+| `Init7TvOptions__RecordingPath`            | Where recordings are written. Keep it inside the data volume so they survive an update.        | `/var/srv/recordings` | No      |
+| `Init7TvOptions__MaxConcurrentRecordings`  | How many programmes may record at once. Each one is a separate FFmpeg encode.                  | `2`       | No                  |
+
+The FFmpeg preset and log level are not environment variables; they are configured at runtime under **admin → General
+Settings**, along with the recording preset and how many minutes to start early and keep going after.
+
+---
+
+## Recording
+
+Users with the **Recording** role, and admins, get a recording page: pick a programme from the guide and the
+application records it when the time comes, whether or not anybody is watching.
+
+Recordings are written to `/var/srv/recordings`, one directory per recording, inside the same `./data` volume as the
+database. They are kept as the transport stream they were captured as, which is what everything else is built on.
+
+- **Watch one while it is still recording.** Sit down at seven having started at six and you can watch the hour that
+  has already gone by, seek anywhere in it, and run on into what is still being written. Nothing is converted to do
+  this: the capture is already H.264 and AAC, so the playlist describes byte ranges of the file FFmpeg is writing and
+  the browser fetches the stretch it wants.
+- **Each recording is an encode.** With the default `veryfast` preset expect roughly 2.5 GB per hour on an HD channel
+  and about a core per recording, on top of whatever live viewers are using.
+  `Init7TvOptions__MaxConcurrentRecordings` is the ceiling; anything over it waits, and is only given up on once its
+  programme has run out.
+- **The database shares the volume.** The recorder refuses to start with less than 5 GB free, because filling the disk
+  would take the database with it.
+- **Two people picking the same programme get one recording**, one encode and one file, listed for each of them. One
+  of them stopping gets their part of it cut out of what is on disk while the rest keeps being written for the others.
+- **A restart is survivable.** Anything that was recording is picked up again on the next start, and either continues
+  or is kept as the partial recording it is.
+- **Stopping keeps what it caught.** The difference between stopping a recording and deleting it is that stopping
+  leaves you the clip.
+
+### Advertising
+
+The channels announce their own advertising breaks, and those announcements are copied into the recording alongside
+the pictures, so a break is known exactly where it falls rather than guessed at.
+
+Nothing is cut. During a break a **skip** button appears over the picture, with an **×** to wave it away and leave the
+advertising playing; waving one off says nothing about the next. A break that was announced wrongly therefore costs a
+button that does nothing rather than content that is gone for good.
+
+Downloading offers the recording as it is or with the advertising left out. Either way the MP4 is written as it is
+sent rather than kept: the transport stream on disk is already H.264 and AAC, so only the wrapper changes, and cutting
+between the parts worth keeping is free because each one begins on a keyframe.
 
 ---
 

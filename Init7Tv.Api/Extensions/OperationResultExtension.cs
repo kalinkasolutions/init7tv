@@ -8,9 +8,7 @@ public static class OperationResultExtension
     {
         return operationResult.ResultCode switch
         {
-            ResultCode.Success => operationResult.Value is not null
-                ? Results.Ok(operationResult.Value)
-                : Results.Ok(),
+            ResultCode.Success => Results.Ok(operationResult.Value),
 
             ResultCode.TextSuccess => Results.Text(
                 operationResult.Value as string ?? string.Empty,
@@ -22,7 +20,20 @@ public static class OperationResultExtension
                 operationResult.ContentType ?? "application/octet-stream"
             ),
 
-            ResultCode.NotFound => Results.NotFound(new { error = operationResult.ErrorMessage }),
+            ResultCode.NotFound => Results.Problem(
+                title: operationResult.ErrorMessage,
+                statusCode: StatusCodes.Status404NotFound
+            ),
+
+            ResultCode.Invalid => Results.Problem(
+                title: operationResult.ErrorMessage,
+                statusCode: StatusCodes.Status400BadRequest
+            ),
+
+            ResultCode.Conflict => Results.Problem(
+                title: operationResult.ErrorMessage,
+                statusCode: StatusCodes.Status409Conflict
+            ),
 
             ResultCode.BadGateway => Results.Problem(
                 title: operationResult.ErrorMessage,

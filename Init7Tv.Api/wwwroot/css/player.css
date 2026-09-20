@@ -1,7 +1,16 @@
+/* hide alpine-bound elements until alpine has initialised */
+[x-cloak] {
+    display: none !important;
+}
+
 #player-container {
     display: flex;
     flex-direction: column;
     margin-bottom: 1em;
+    /* Takes the height the guide does not need. No min-height override here: the
+       automatic min-content floor is what keeps the box from shrinking past the
+       video and letting the guide be drawn over the picture. */
+    flex: 1 1 auto;
 }
 
 #player-container .player-wrapper {
@@ -9,6 +18,7 @@
     flex-direction: column;
     align-items: center;
     width: 100%;
+    flex: 1 1 auto;
 }
 
 #player-container .player-title-wrapper {
@@ -27,7 +37,94 @@
     margin-left: auto;
 }
 
+#player-container .player-title-wrapper .menu-button {
+    padding-left: 0;
+    margin-right: 0.3em;
+}
+
+/* Out of flow, so a loaded element cannot report the picture's own size as the
+   minimum height of everything around it and push the guide off the screen.
+   The wrapper is the player's box; this just fills it. */
 #player-container .player-wrapper video {
-    height: 400px;
-    min-width: 700px;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background-color: #000000;
+}
+
+/* The player's box, and the only thing that decides its size. A definite width
+   rather than 100%: the percentage made it fill the row first and snap back once
+   the cap applied, which read as a huge player. The height is whatever the guide
+   leaves between these two bounds, because every guessed reserve was wrong for
+   some window height. */
+#player-container .video-wrapper {
+    position: relative;
+    flex: 1 1 auto;
+    width: 900px;
+    max-width: 100%;
+    min-height: 200px;
+    max-height: 506px;
+}
+
+#player-container .player-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    align-items: center;
+    justify-content: center;
+    /* opaque: the video element sits behind this and would otherwise show through */
+    background-color: #000000;
+    color: #ffffffcf;
+    font-size: 0.9em;
+}
+
+#player-container .spinner {
+    width: 2.5em;
+    height: 2.5em;
+    border: 3px solid #ffffff40;
+    border-top-color: #1e711e;
+    border-radius: 50%;
+    animation: player-spin 0.9s linear infinite;
+}
+
+@keyframes player-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1100px) {
+    #player-container .player-title-wrapper {
+        padding: 0.5em;
+        gap: 0.5em;
+        flex-wrap: wrap;
+    }
+
+    #player-container .player-title-wrapper img {
+        height: 44px;
+    }
+
+    #player-container .video-wrapper {
+        max-height: 40vh;
+    }
+
+    #player-container .lang-select-wrapper {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 0.4em;
+    }
+}
+
+@media (max-width: 600px) {
+    #player-container .player-title-wrapper h2 {
+        font-size: 1rem;
+        padding: 0.2em;
+    }
+
+    #player-container .player-title-wrapper img {
+        height: 32px;
+    }
 }

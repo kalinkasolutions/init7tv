@@ -3,17 +3,17 @@
         <h2>Add user</h2>
         <form class="user-form" @submit.prevent="await addUser()">
             <label for="username"></label>
-            <input x-model="addUserForm.userName" id="username" name="userName" placeholder="username" type="text"
+            <input x-model="addForm.userName" id="username" name="userName" placeholder="username" type="text"
                    required/>
             <label for="email"></label>
-            <input x-model="addUserForm.email" id="email" name="email" placeholder="email" type="email" required/>
+            <input x-model="addForm.email" id="email" name="email" placeholder="email" type="email" required/>
             <label for="password"></label>
-            <input x-model="addUserForm.password" id="password" name="password" placeholder="password" type="password"
+            <input x-model="addForm.password" id="password" name="password" placeholder="password" type="password"
                    required/>
             <div class="roles-container">
                 <template x-for="role in roles" :key="role">
                     <label class="roles">
-                        <input x-model="addUserForm.roles" type="checkbox" :value="role" name="roles">
+                        <input x-model="addForm.roles" type="checkbox" :value="role" name="roles">
                         <span x-text="role"></span>
                     </label>
                 </template>
@@ -39,7 +39,7 @@
                         <div class="actions">
                             <button class="icon-button" type="button" @click="await inviteUser(user)"><i class="bi bi-envelope"></i></button>
                             <button class="icon-button" @click="toggleEdit(user)"><i class="bi bi-pencil"></i></button>
-                            <button x-show="isDeleteAble(user.id)" class="icon-button danger-icon" @click="deleteUser(user)">
+                            <button x-show="canDelete(user)" class="icon-button danger-icon" @click="deleteUser(user)">
                                 <i class="bi bi-trash3"></i>
                             </button>
                         </div>
@@ -47,23 +47,23 @@
 
                     <form class="user-list-entry" @submit.prevent="await updateUser(user.id)" x-show="user.edit">
                         <label for="usernameUpdate"></label>
-                        <input x-model="editUserForm.userName" id="usernameUpdate" name="userName"
+                        <input x-model="editForm.userName" id="usernameUpdate" name="userName"
                                placeholder="username"
                                type="text"
                                required/>
                         <label for="emailUpdate"></label>
-                        <input x-model="editUserForm.email" id="emailUpdate" name="email" placeholder="email"
+                        <input x-model="editForm.email" id="emailUpdate" name="email" placeholder="email"
                                type="email"
                                required/>
                         <label for="passwordUpdate"></label>
-                        <input x-model="editUserForm.password" id="passwordUpdate" name="password"
+                        <input x-model="editForm.password" id="passwordUpdate" name="password"
                                placeholder="password"
                                type="password"
                         />
                         <div class="roles-container">
                             <template x-for="role in roles" :key="role">
                                 <label class="roles">
-                                    <input x-model="editUserForm.roles" type="checkbox" :value="role" name="roles">
+                                    <input x-model="editForm.roles" type="checkbox" :value="role" name="roles">
                                     <span x-text="role"></span>
                                 </label>
                             </template>

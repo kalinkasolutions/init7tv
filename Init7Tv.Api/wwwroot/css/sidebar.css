@@ -33,6 +33,7 @@
 }
 
 #sidebar .channels .channel {
+    position: relative;
     cursor: pointer;
     padding: 1em;
     display: flex;
@@ -40,6 +41,29 @@
     justify-content: center;
     border-bottom: 1px solid #ffffff80;
     border-right: 1px solid #ffffff80;
+}
+
+#sidebar .channels .favourite {
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: absolute;
+    top: 0.1em;
+    right: 0.2em;
+    /* a comfortable tap target without pushing the row taller */
+    padding: 0.3em;
+    line-height: 1;
+    font-size: 1.1rem;
+    color: #ffffff80;
+}
+
+/* not the green the selected channel uses, or the two read as the same thing */
+#sidebar .channels .favourite.is-favourite {
+    color: #e0b341;
+}
+
+#sidebar .channels .favourite:hover {
+    color: #ffffffcf;
 }
 
 #sidebar .channels .channel:hover {
@@ -57,5 +81,62 @@
 @-moz-document url-prefix() {
     #sidebar .channels {
         width: calc(200px + 6px)
+    }
+}
+
+/* A drawer on narrow screens rather than a column beside the player. It sits
+   off canvas and slides in, so the player keeps the whole width. */
+@media (max-width: 1100px) {
+    #sidebar {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 20;
+        width: min(82vw, 320px);
+        background-color: #1c2420;
+        border-right: 1px solid #ffffff80;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+    }
+
+    #sidebar.menu-open {
+        transform: translateX(0);
+        box-shadow: 0 0 2em rgba(0, 0, 0, 0.6);
+    }
+
+    #sidebar .channel-search {
+        width: 100%;
+        border-right: none;
+        padding: 0.5em;
+    }
+
+    #sidebar .channels {
+        width: 100%;
+        flex: 1;
+    }
+
+    #sidebar .channels .channel {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1em;
+        padding: 0.6em 1em;
+        border-right: none;
+    }
+
+    #sidebar .channels .channel img {
+        align-self: auto;
+        max-width: 56px;
+        max-height: 36px;
+        object-fit: contain;
+    }
+
+    /* the row runs left to right here, so the star takes its place at the end
+       rather than sitting on top of the logo */
+    #sidebar .channels .favourite {
+        position: static;
+        order: 3;
+        padding: 0.4em;
     }
 }

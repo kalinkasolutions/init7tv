@@ -4,6 +4,22 @@
     flex-direction: column;
 }
 
+#app-settings .form-group,
+#app-settings .actions {
+    padding: 0 var(--box-inset, 1rem);
+}
+
 #app-settings .icon-button {
     align-self: flex-end;
+}
+@media (max-width: 800px) {
+    #app-settings {
+        width: 100%;
+    }
+
+    /* stacked here rather than side by side, so it takes back the right margin
+       and lines up with the boxes above it */
+    .flex-row #app-settings {
+        margin-right: 1em;
+    }
 }

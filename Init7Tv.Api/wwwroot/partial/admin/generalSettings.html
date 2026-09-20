@@ -37,6 +37,34 @@
         </select>
     </div>
 
+    <div class="form-group">
+        <label for="recording-preset">Recording Preset:</label>
+        <select id="recording-preset" x-model="appSettings.recordingPreset">
+            <option value="ultrafast">ultrafast</option>
+            <option value="superfast">superfast</option>
+            <option value="veryfast">veryfast</option>
+            <option value="faster">faster</option>
+            <option value="fast">fast</option>
+            <option value="medium">medium</option>
+            <option value="slow">slow</option>
+            <option value="slower">slower</option>
+            <option value="veryslow">veryslow</option>
+            <option value="placebo">placebo</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="recording-pre-roll">Start recording early (minutes):</label>
+        <input id="recording-pre-roll" type="number" min="0" max="60"
+               x-model.number="appSettings.recordingPreRollMinutes"/>
+    </div>
+
+    <div class="form-group">
+        <label for="recording-post-roll">Keep recording after (minutes):</label>
+        <input id="recording-post-roll" type="number" min="0" max="120"
+               x-model.number="appSettings.recordingPostRollMinutes"/>
+    </div>
+
     <div class="actions">
         <button class="icon-button" @click="await update()" :disabled="saving"><i class="bi bi-check-lg"></i></button>
     </div>

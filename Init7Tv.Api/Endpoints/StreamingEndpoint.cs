@@ -1,13 +1,22 @@
+using System.Net.ServerSentEvents;
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Init7Tv.BusinessLogic;
 using Init7Tv.BusinessLogic.AppSettingsService;
 using Init7Tv.BusinessLogic.Init7Api;
+using Init7Tv.BusinessLogic.StreamEventBus;
 using Init7Tv.BusinessLogic.StreamManager;
+using Init7Tv.Dto;
 using Init7Tv.Extensions;
 
 namespace Init7Tv.Endpoints;
 
 public static class StreamingEndpoint
 {
+    // idle connections are dropped by proxies, and nothing else tells the
+    // server that a viewer's browser has gone away
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(25);
+
     public static void MapStreamingEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/streaming")
@@ -15,14 +24,140 @@ public static class StreamingEndpoint
             .RequireAuthorization();
 
         group.MapGet("/channels", Channels);
+        group.MapGet("/channels/{channelId:guid}/logo", GetLogo);
+        group.MapPut("/channels/{channelId:guid}/favourite", SetFavourite);
         group.MapGet("/start-stream", StartStream);
         group.MapGet("/playlist", GetPlaylist);
         group.MapGet("/segment/{streamId}/{name}", GetSegment);
+        group.MapGet("/events", GetEvents);
     }
 
-    private static async Task<IResult> Channels(IChannelService channelService)
+    /// <summary>
+    /// Tells the viewer which of their streams are still running, so the player
+    /// can say the stream ended instead of silently stalling.
+    /// </summary>
+    private static IResult GetEvents(
+        IStreamEventBus streamEventBus,
+        IStreamManager streamManager,
+        IUserIdentityProvider userIdentityProvider,
+        CancellationToken cancellationToken
+    )
     {
-        return (await channelService.GetChannelsAsync()).ToHttpResult();
+        return TypedResults.ServerSentEvents(
+            ViewerStreams(userIdentityProvider.UserName, streamEventBus, streamManager, cancellationToken));
+    }
+
+    private static async IAsyncEnumerable<SseItem<ViewerStreamsDto>> ViewerStreams(
+        string userName,
+        IStreamEventBus streamEventBus,
+        IStreamManager streamManager,
+        [EnumeratorCancellation] CancellationToken cancellationToken
+    )
+    {
+        // only the newest state matters, a slow reader should skip the rest
+        var updates = Channel.CreateBounded<CurrentStreamDto[]>(
+            new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
+
+        using var subscription = streamEventBus.Subscribe(streams => updates.Writer.TryWrite(streams));
+
+        // send the current state up front so a reconnecting client resyncs
+        var last = StreamIdsOf(userName, streamManager.GetCurrentStreams());
+        yield return Streams(last);
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            CurrentStreamDto[]? streams = null;
+
+            using (var heartbeat = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                heartbeat.CancelAfter(HeartbeatInterval);
+                try
+                {
+                    streams = await updates.Reader.ReadAsync(heartbeat.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // heartbeat elapsed, or the client disconnected
+                }
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                yield break;
+            }
+
+            if (streams == null)
+            {
+                yield return new SseItem<ViewerStreamsDto>(new ViewerStreamsDto(), "ping");
+                continue;
+            }
+
+            var current = StreamIdsOf(userName, streams);
+            if (current.SequenceEqual(last))
+            {
+                continue;
+            }
+
+            last = current;
+            yield return Streams(current);
+        }
+    }
+
+    private static SseItem<ViewerStreamsDto> Streams(string[] streamIds) =>
+        new(new ViewerStreamsDto { StreamIds = streamIds }, "streams");
+
+    private static string[] StreamIdsOf(string userName, CurrentStreamDto[] streams)
+    {
+        return streams
+            .Where(x => x.UserNames.Contains(userName))
+            .Select(x => x.StreamId)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static async Task<IResult> Channels(
+        IFavouriteChannelService favouriteChannelService,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        return (await favouriteChannelService.GetChannelsAsync(userIdentityProvider.UserName)).ToHttpResult();
+    }
+
+    /// <summary>
+    /// A channel's logo, at an address of its own so a browser can keep it rather than being sent
+    /// every logo again each time a page opens.
+    /// </summary>
+    private static async Task<IResult> GetLogo(
+        Guid channelId,
+        IChannelService channelService,
+        HttpResponse response
+    )
+    {
+        var channel = await channelService.GetChannelById(channelId);
+        if (!channel.IsSuccess || channel.Value.Logo.Length == 0)
+        {
+            return Results.NotFound();
+        }
+
+        // Said outright because signing in refreshes the cookie, and a response that carries one is
+        // marked no-store: without this the logos would come down again on every page after all.
+        // Private rather than public, since it is fetched with the viewer's own cookie.
+        response.Headers.CacheControl = "private,max-age=604800";
+        response.Headers.Remove("Pragma");
+        response.Headers.Expires = DateTimeOffset.UtcNow.AddDays(7).ToString("R");
+
+        return Results.File(channel.Value.Logo, "image/png", enableRangeProcessing: false);
+    }
+
+    private static async Task<IResult> SetFavourite(
+        Guid channelId,
+        bool isFavourite,
+        IFavouriteChannelService favouriteChannelService,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        return (await favouriteChannelService.SetFavouriteAsync(userIdentityProvider.UserName, channelId, isFavourite))
+            .ToHttpResult();
     }
 
     private static async Task<IResult> StartStream(Guid channelId,

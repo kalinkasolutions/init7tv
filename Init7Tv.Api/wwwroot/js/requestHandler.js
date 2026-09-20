@@ -1,6 +1,6 @@
 import {notify} from "./notification.js";
 
-async function request(url, options = {}) {
+async function request(url, {quietStatuses = [], ...options} = {}) {
     try {
         const res = await fetch(url, options);
 
@@ -13,28 +13,39 @@ async function request(url, options = {}) {
             return res.status !== 204 ? res.json() : null;
         }
 
-        if (res.status === 404) {
-            notify("Not Found", `${url} was not found.`, "error");
+        if (!quietStatuses.includes(res.status)) {
+            notify("Error", await errorMessage(res, url), "error");
+        }
+    } catch (e) {
+        // the caller gave up on this request on purpose
+        if (e.name === "AbortError") {
             return null;
         }
 
-        const error = await res.json();
-        notify(
-            "Error",
-            Array.isArray(error)
-                ? error.map(x => x.description).join(", ")
-                : error.title ?? "Request failed",
-            "error"
-        );
-    } catch (e) {
         notify("Error", e.message, "error");
     }
 
     return null;
 }
 
-export function get(url) {
-    return request(url);
+async function errorMessage(res, url) {
+    let body;
+    try {
+        body = await res.json();
+    } catch {
+        // not every failure comes from an endpoint, 404s on a bad path return html
+        return res.status === 404 ? `${url} was not found.` : `Request failed with status ${res.status}.`;
+    }
+
+    if (Array.isArray(body)) {
+        return body.map(x => x.description).join(", ");
+    }
+
+    return body.title ?? body.error ?? `Request failed with status ${res.status}.`;
+}
+
+export function get(url, options) {
+    return request(url, options);
 }
 
 export function postJson(url, body) {
@@ -51,6 +62,14 @@ export function putJson(url, body) {
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(body)
     });
+}
+
+export function put(url) {
+    return request(url, {method: "PUT"});
+}
+
+export function post(url) {
+    return request(url, {method: "POST"});
 }
 
 export function deleteItem(url) {

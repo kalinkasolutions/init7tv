@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Init7Tv.Dal.Repositories;
 using Init7Tv.Dto.Admin;
 using Init7Tv.Shared;
@@ -24,21 +25,15 @@ public sealed class IdentityService : IIdentityService
     {
         var users = await m_identityRepository.GetUsersAsync();
         var result = new List<GetUserDto>(users.Length);
+
         foreach (var user in users)
         {
             if (user.Email == null)
             {
                 m_logger.LogWarning("User {UserId} does not have an email", user.Id);
-                continue;
             }
 
-            var getUserResult = await GetUserByEmailAsync(user.Email);
-            if (!getUserResult.IsSuccess)
-            {
-                return getUserResult.MapError<GetUserDto[]>();
-            }
-
-            result.Add(getUserResult.Value);
+            result.Add(await ToGetUserDto(user));
         }
 
         return OperationResult<GetUserDto[]>.Success(result.ToArray());
@@ -51,6 +46,12 @@ public sealed class IdentityService : IIdentityService
 
     public async Task<OperationResult<GetUserDto>> AddUserAsync(AddUserDto addUserDto)
     {
+        var validation = Validate<GetUserDto>(addUserDto);
+        if (validation != null)
+        {
+            return validation;
+        }
+
         var addUserResult = await m_identityRepository.AddUserAsync(
             new IdentityUser
             {
@@ -70,6 +71,12 @@ public sealed class IdentityService : IIdentityService
 
     public async Task<OperationResult<GetUserDto>> UpdateUserAsync(string userId, UpdateUserDto updateUserDto)
     {
+        var validation = Validate<GetUserDto>(updateUserDto);
+        if (validation != null)
+        {
+            return validation;
+        }
+
         var updateResult = await m_identityRepository.UpdateUserAsync(
             new IdentityUser
             {
@@ -112,7 +119,7 @@ public sealed class IdentityService : IIdentityService
             return userResult.MapError<GetUserDto>();
         }
 
-        return await ToGetUserDto(userResult);
+        return OperationResult<GetUserDto>.Success(await ToGetUserDto(userResult.Value));
     }
 
     private async Task<OperationResult<GetUserDto>> GetUserById(string userId)
@@ -123,18 +130,32 @@ public sealed class IdentityService : IIdentityService
             return userResult.MapError<GetUserDto>();
         }
 
-        return await ToGetUserDto(userResult);
+        return OperationResult<GetUserDto>.Success(await ToGetUserDto(userResult.Value));
     }
 
-    private async Task<OperationResult<GetUserDto>> ToGetUserDto(OperationResult<IdentityUser> userResult)
+    /// <summary>Returns null when the payload is valid.</summary>
+    private static OperationResult<T>? Validate<T>(object dto)
     {
-        return OperationResult<GetUserDto>.Success(new GetUserDto
+        var results = new List<ValidationResult>();
+        if (Validator.TryValidateObject(dto, new ValidationContext(dto), results, validateAllProperties: true))
         {
-            Id = userResult.Value.Id,
-            UserName = userResult.Value.UserName,
-            Email = userResult.Value.Email,
-            Roles = await m_identityRepository.GetRolesForUserAsync(userResult.Value),
-            IsAdmin = await m_identityRepository.IsAdminAsync(userResult.Value)
-        });
+            return null;
+        }
+
+        return OperationResult<T>.Invalid(string.Join(", ", results.Select(x => x.ErrorMessage)));
+    }
+
+    private async Task<GetUserDto> ToGetUserDto(IdentityUser user)
+    {
+        var roles = await m_identityRepository.GetRolesForUserAsync(user);
+
+        return new GetUserDto
+        {
+            Id = user.Id,
+            UserName = user.UserName ?? string.Empty,
+            Email = user.Email ?? string.Empty,
+            Roles = roles,
+            IsAdmin = roles.Contains(Init7TvRoles.Admin)
+        };
     }
 }

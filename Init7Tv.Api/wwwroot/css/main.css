@@ -48,6 +48,8 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    /* the player must not scroll out of view, so nothing scrolls at this level */
+    overflow: hidden;
 }
 
 .link-button {
@@ -65,6 +67,9 @@ main {
     flex-direction: row;
     flex: 1;
     min-height: 0;
+    /* Nothing scrolls at a usable window size. In one too short for even the
+       smallest player and a card, scrolling beats hiding the rest for good. */
+    overflow: auto;
 }
 
 select {
@@ -79,6 +84,9 @@ select {
 .icon-button {
     color: rgba(47, 177, 47, 0.80);
     background: transparent;
+    /* the rule above lists elements rather than using *, and an anchor is not on
+       it: without this a link styled as one comes out two pixels larger */
+    box-sizing: border-box;
     width: 40px;
     height: 40px;
     border-radius: 2px;
@@ -129,9 +137,19 @@ i {
     height: 1em;
 }
 
-main.admin {
+/* a view that takes the page to itself, rather than sharing it with the channel list */
+main > .page {
+    flex: 1;
+    min-width: 0;
+    overflow: auto;
+}
+
+.admin-page {
+    display: flex;
     flex-direction: column;
-    flex: unset;
+    /* a row of a name, an address and two roles reads badly when it is stretched
+       the width of a large monitor */
+    max-width: 75rem;
 }
 
 main input {
@@ -159,10 +177,13 @@ main input:focus-visible {
 }
 
 main .stream-content {
-    width: 100%;
     display: flex;
     flex-direction: column;
+    /* takes the room the channel list leaves; a full width here made it that
+       much wider than the row and pushed a horizontal scrollbar out */
     flex: 1;
+    min-width: 0;
+    min-height: 0;
 }
 
 .form-group {
@@ -194,4 +215,94 @@ input[type=number] {
 .flex-row {
     display: flex;
     flex-direction: row;
+}
+/* ---------------------------------------------------------------------------
+   Narrow screens. The desktop layout puts the channel list beside the player,
+   which needs roughly 1200px. Below that the two stack, with the player first
+   because that is what the page is for.
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+    main {
+        flex-direction: column;
+    }
+
+    main .stream-content {
+        order: 1;
+    }
+
+    #sidebar {
+        order: 2;
+        height: auto;
+        width: 100%;
+    }
+
+    h1 {
+        font-size: 1.4rem;
+    }
+
+    h2 {
+        font-size: 1.1rem;
+    }
+
+    header {
+        padding: 0.5em;
+    }
+
+    header ul li {
+        margin-right: 0.6em;
+    }
+
+    /* settings boxes sit side by side on desktop */
+    .flex-row {
+        flex-wrap: wrap;
+        gap: 1em;
+    }
+}
+
+@media (max-width: 600px) {
+    h1 {
+        font-size: 1.2rem;
+    }
+
+    h1, h2, h3, h4, h5 {
+        padding: 0.3em;
+    }
+
+    main input {
+        max-width: none;
+    }
+}
+
+/* The drawer trigger, only where the channel list is off canvas. */
+.menu-button {
+    display: none;
+    font-size: 1.6rem;
+    line-height: 1;
+    padding: 0.2em 0.4em;
+    text-decoration: none;
+    color: #ffffffcf;
+}
+
+.menu-backdrop {
+    display: none;
+}
+
+@media (max-width: 1100px) {
+    .menu-button {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .menu-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 15;
+        background-color: rgba(0, 0, 0, 0.6);
+    }
+}
+
+[x-cloak] {
+    display: none !important;
 }

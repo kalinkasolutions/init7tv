@@ -1,0 +1,53 @@
+[
+  {
+    "pk": "b87abb69-d5ed-44c5-8cab-0f7be4ef51b1",
+    "name": "SRF 1",
+    "hd": true,
+    "src": "udp://@233.50.230.4:5000",
+    "canonical_name": "SRF1.ch",
+    "logo": "https://api.tv.init7.net/media/logos/1102_SRF1.ch.png",
+    "visible": true,
+    "ordernum": 1102,
+    "langordernum": 1,
+    "country": "ch",
+    "language": "de",
+    "has_replay": true,
+    "hls_src": "https://api.tv.init7.net/api/live/?channel=b87abb69-d5ed-44c5-8cab-0f7be4ef51b1",
+    "has_hls": true,
+    "changed": "2026-01-04T10:11:12Z"
+  },
+  {
+    "pk": "569da6ec-08a0-43c2-a2c1-35be5d3f08b5",
+    "name": "SRF zwei",
+    "hd": true,
+    "src": "udp://@233.50.230.5:5000",
+    "canonical_name": "SRFzwei.ch",
+    "logo": "https://api.tv.init7.net/media/logos/1104_SRFzwei.ch.png",
+    "visible": true,
+    "ordernum": 1104,
+    "langordernum": 2,
+    "country": "ch",
+    "language": "de",
+    "has_replay": true,
+    "hls_src": "https://api.tv.init7.net/api/live/?channel=569da6ec-08a0-43c2-a2c1-35be5d3f08b5",
+    "has_hls": true,
+    "changed": "2026-01-04T10:11:12Z"
+  },
+  {
+    "pk": "3f2d1c4b-5a6e-4f7a-8b9c-0d1e2f3a4b5c",
+    "name": "Arte",
+    "hd": false,
+    "src": "udp://@233.50.230.60:5000",
+    "canonical_name": "Arte.fr",
+    "logo": "https://api.tv.init7.net/media/logos/5101_Arte.fr.png",
+    "visible": true,
+    "ordernum": 5101,
+    "langordernum": 9,
+    "country": "fr",
+    "language": "fr",
+    "has_replay": false,
+    "hls_src": "https://api.tv.init7.net/api/live/?channel=3f2d1c4b-5a6e-4f7a-8b9c-0d1e2f3a4b5c",
+    "has_hls": true,
+    "changed": "2026-01-04T10:11:12Z"
+  }
+]

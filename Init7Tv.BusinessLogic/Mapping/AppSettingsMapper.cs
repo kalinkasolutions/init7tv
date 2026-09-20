@@ -13,8 +13,8 @@ public static class AppSettingsMapper
             Port = appSettings.Port,
             SmtpHost = appSettings.SmtpHost,
             Username = appSettings.Username,
-            Password = appSettings.Password,
-            EnableSsl = appSettings.EnableSsl,
+            // write-only: never sent back to the browser, blank on update means "keep"
+            Password = string.Empty,
             SecureSocketOptions = appSettings.SecureSocketOptions,
         };
     }
@@ -25,7 +25,10 @@ public static class AppSettingsMapper
         {
             BaseDomain = appSettings.BaseDomain,
             FfmpegPreset = appSettings.FfmpegPreset,
-            FfmpegLogLevel = appSettings.FfmpegLogLevel
+            FfmpegLogLevel = appSettings.FfmpegLogLevel,
+            RecordingPreset = appSettings.RecordingPreset,
+            RecordingPreRollMinutes = appSettings.RecordingPreRollMinutes,
+            RecordingPostRollMinutes = appSettings.RecordingPostRollMinutes
         };
     }
 
@@ -36,6 +39,9 @@ public static class AppSettingsMapper
             BaseDomain = appSettingsDto.BaseDomain,
             FfmpegLogLevel = appSettingsDto.FfmpegLogLevel,
             FfmpegPreset =  appSettingsDto.FfmpegPreset,
+            RecordingPreset = appSettingsDto.RecordingPreset,
+            RecordingPreRollMinutes = appSettingsDto.RecordingPreRollMinutes,
+            RecordingPostRollMinutes = appSettingsDto.RecordingPostRollMinutes,
         };
     }
 
@@ -48,7 +54,6 @@ public static class AppSettingsMapper
             SmtpHost = emailAppSettingsDto.SmtpHost,
             Username = emailAppSettingsDto.Username,
             Password = emailAppSettingsDto.Password,
-            EnableSsl = emailAppSettingsDto.EnableSsl,
             SecureSocketOptions = emailAppSettingsDto.SecureSocketOptions,
         };
     }

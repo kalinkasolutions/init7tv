@@ -3,22 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>Init7TV</title>
-    <link rel="icon" href="/assets/favicon.ico" type="image/x-icon">
-
-    <link rel="stylesheet" href="css/bundle.css">
+    <!-- dashboard used to be a page of its own; it is a view of the front one now, and anything
+         pointing here still arrives where it meant to -->
+    <script>location.replace('/#dashboard');</script>
 </head>
-<body>
-
-<div x-init="$el.outerHTML = await loadPartialView('partial/header.html')"></div>
-
-<main>
-    <div x-init="$el.outerHTML = await loadPartialView('partial/dashboard/dashboard.html')"></div>
-</main>
-
-<div x-init="$el.outerHTML = await loadPartialView('partial/notification.html')"></div>
-
-<script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@7.0.5/dist/browser/signalr.min.js"></script>
-<script type="module" src="js/dashboard.js"></script>
-
-</body>
+<body></body>
 </html>

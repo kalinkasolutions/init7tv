@@ -7,7 +7,6 @@ public interface IIdentityRepository
 {
     Task<IdentityUser[]> GetUsersAsync();
     Task<string[]> GetRolesForUserAsync(IdentityUser user);
-    Task<bool> IsAdminAsync(IdentityUser user);
     Task<string[]> GetRoleNamesAsync();
     Task<OperationResult<IdentityUser>> AddUserAsync(IdentityUser user, string[] roles, string password);
     Task<OperationResult<IdentityUser>> UpdateUserAsync(IdentityUser updateUser, string[] roles, string? password);

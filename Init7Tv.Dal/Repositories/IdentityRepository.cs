@@ -33,11 +33,6 @@ public sealed class IdentityRepository : IIdentityRepository
         return (await m_userManager.GetRolesAsync(user)).ToArray();
     }
 
-    public Task<bool> IsAdminAsync(IdentityUser user)
-    {
-        return m_userManager.IsInRoleAsync(user, Init7TvRoles.Admin);
-    }
-
     public async Task<string[]> GetRoleNamesAsync()
     {
         return await m_roleManager.Roles
@@ -82,28 +77,50 @@ public sealed class IdentityRepository : IIdentityRepository
             (await m_userManager.GetUsersInRoleAsync(Init7TvRoles.Admin)).Count <= 1 &&
             !roles.Contains(Init7TvRoles.Admin))
         {
-            return OperationResult<IdentityUser>.NotFound("Unable to remove last admin role");
+            return OperationResult<IdentityUser>.Conflict("Unable to remove the last admin role");
         }
 
-        var currentRoles = await m_userManager.GetRolesAsync(userToUpdate);
-        var removeRoleResults = await m_userManager.RemoveFromRolesAsync(userToUpdate, currentRoles);
-        if (!removeRoleResults.Succeeded)
-        {
-            return OperationResult<IdentityUser>.Error(removeRoleResults.ToErrorString());
-        }
-
+        // Checked before anything is removed. Skipping a role that does not exist would strip it
+        // silently, and an "Admin" that is not a real role would walk straight past the guard above
+        // and leave nobody able to administer anything.
+        var unknown = new List<string>();
         foreach (var role in roles)
         {
             if (!await m_roleManager.RoleExistsAsync(role))
             {
-                m_logger.LogError("Role {Role} does not exist", role);
-                continue;
+                unknown.Add(role);
             }
+        }
 
-            var addToRoleResult = await m_userManager.AddToRoleAsync(userToUpdate, role);
-            if (!addToRoleResult.Succeeded)
+        if (unknown.Count > 0)
+        {
+            m_logger.LogError("Refusing to update {UserId}: no such role(s) {Roles}",
+                updateUser.Id, string.Join(", ", unknown));
+
+            return OperationResult<IdentityUser>.Invalid($"No such role(s): {string.Join(", ", unknown)}");
+        }
+
+        // Only what actually changes is touched. Removing the lot and adding them back would leave
+        // the user with none of them for a moment, and with none of them for good if an add failed.
+        var currentRoles = await m_userManager.GetRolesAsync(userToUpdate);
+        var going = currentRoles.Except(roles).ToArray();
+        var coming = roles.Except(currentRoles).ToArray();
+
+        if (going.Length > 0)
+        {
+            var removed = await m_userManager.RemoveFromRolesAsync(userToUpdate, going);
+            if (!removed.Succeeded)
             {
-                return OperationResult<IdentityUser>.Error(addToRoleResult.ToErrorString());
+                return OperationResult<IdentityUser>.Error(removed.ToErrorString());
+            }
+        }
+
+        if (coming.Length > 0)
+        {
+            var added = await m_userManager.AddToRolesAsync(userToUpdate, coming);
+            if (!added.Succeeded)
+            {
+                return OperationResult<IdentityUser>.Error(added.ToErrorString());
             }
         }
 
@@ -135,13 +152,13 @@ public sealed class IdentityRepository : IIdentityRepository
         var deleteUser = await m_userManager.FindByIdAsync(userId);
         if (deleteUser == null)
         {
-            return OperationResult<string>.Error("User not found");
+            return OperationResult<string>.NotFound("User not found");
         }
 
         if (await m_userManager.IsInRoleAsync(deleteUser, Init7TvRoles.Admin) &&
             (await m_userManager.GetUsersInRoleAsync(Init7TvRoles.Admin)).Count <= 1)
         {
-            return OperationResult<string>.Error("Unable to delete last admin");
+            return OperationResult<string>.Conflict("Unable to delete the last admin");
         }
 
         var deleteResult = await m_userManager.DeleteAsync(deleteUser);
@@ -158,7 +175,7 @@ public sealed class IdentityRepository : IIdentityRepository
         var user = await m_userManager.FindByEmailAsync(email);
         if (user == null)
         {
-            return OperationResult<IdentityUser>.Error($"User not found with email: {email}");
+            return OperationResult<IdentityUser>.NotFound($"User not found with email: {email}");
         }
 
         return OperationResult<IdentityUser>.Success(user);
@@ -169,7 +186,7 @@ public sealed class IdentityRepository : IIdentityRepository
         var user = await m_userManager.FindByIdAsync(userId);
         if (user == null)
         {
-            return OperationResult<IdentityUser>.Error($"User not found with userId: {userId}");
+            return OperationResult<IdentityUser>.NotFound($"User not found with userId: {userId}");
         }
 
         return OperationResult<IdentityUser>.Success(user);

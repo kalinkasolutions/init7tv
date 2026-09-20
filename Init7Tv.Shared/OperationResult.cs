@@ -8,7 +8,9 @@ public sealed class OperationResult<T>
     public string ErrorMessage { get; }
     public ResultCode ResultCode { get; }
 
-    public T Value => m_value ?? throw new InvalidOperationException($"Cannot access Value when operation failed with {ResultCode}: {ErrorMessage}");
+    public T Value => m_value
+        ?? throw new InvalidOperationException(
+            $"Cannot access Value when operation failed with {ResultCode}: {ErrorMessage}");
     public bool HasError => ResultCode.IsError();
     public bool IsSuccess => !HasError;
 
@@ -31,6 +33,8 @@ public sealed class OperationResult<T>
         {
             ResultCode.NotFound => OperationResult<TNew>.NotFound(ErrorMessage),
             ResultCode.BadGateway => OperationResult<TNew>.BadGateway(ErrorMessage),
+            ResultCode.Conflict => OperationResult<TNew>.Conflict(ErrorMessage),
+            ResultCode.Invalid => OperationResult<TNew>.Invalid(ErrorMessage),
             _ => OperationResult<TNew>.Error(ErrorMessage)
         };
     }
@@ -65,6 +69,20 @@ public sealed class OperationResult<T>
         return new OperationResult<T>(default, null, message, ResultCode.BadGateway);
     }
 
+    /// <summary>The request payload itself is not acceptable.</summary>
+    public static OperationResult<T> Invalid(string message)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        return new OperationResult<T>(default, null, message, ResultCode.Invalid);
+    }
+
+    /// <summary>The request was understood but conflicts with the current state.</summary>
+    public static OperationResult<T> Conflict(string message)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        return new OperationResult<T>(default, null, message, ResultCode.Conflict);
+    }
+
     public static OperationResult<T> Error(string message)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
@@ -79,16 +97,22 @@ public enum ResultCode
     FileResult,
     NotFound,
     BadGateway,
+    Conflict,
+    Invalid,
     Error
 }
 
 public static class ResultCodeExtensions
 {
+    /// <summary>
+    /// Listed the other way round on purpose: a code added later and forgotten here reads as an
+    /// error, which surfaces at once, rather than as a success whose Value then throws.
+    /// </summary>
     public static bool IsError(this ResultCode code) => code switch
     {
-        ResultCode.NotFound => true,
-        ResultCode.BadGateway => true,
-        ResultCode.Error => true,
-        _ => false
+        ResultCode.Success => false,
+        ResultCode.TextSuccess => false,
+        ResultCode.FileResult => false,
+        _ => true
     };
 }

@@ -15,13 +15,26 @@ public sealed class AppSettingsRepository : IAppSettingsRepository
 
     public async Task CreateAppSettingsAsync()
     {
-        await m_context.AppSettings.AddAsync(new AppSettings());
-        await m_context.SaveChangesAsync();
+        var existing = await m_context.AppSettings.OrderBy(x => x.Id).ToArrayAsync();
+
+        if (existing.Length == 0)
+        {
+            m_context.AppSettings.Add(new AppSettings());
+            await m_context.SaveChangesAsync();
+            return;
+        }
+
+        // earlier versions appended a blank row on every startup
+        if (existing.Length > 1)
+        {
+            m_context.AppSettings.RemoveRange(existing.Skip(1));
+            await m_context.SaveChangesAsync();
+        }
     }
 
     public async Task<OperationResult<AppSettings>> GetAppSettingsAsync()
     {
-        var appSettings = await m_context.AppSettings.FirstOrDefaultAsync();
+        var appSettings = await m_context.AppSettings.OrderBy(x => x.Id).FirstOrDefaultAsync();
         if (appSettings == null)
         {
             return OperationResult<AppSettings>.NotFound("Failed to find app settings");
@@ -44,8 +57,12 @@ public sealed class AppSettingsRepository : IAppSettingsRepository
         existing.SmtpHost = update.SmtpHost;
         existing.Port = update.Port;
         existing.Username = update.Username;
-        existing.Password = update.Password;
-        existing.EnableSsl = update.EnableSsl;
+
+        if (!string.IsNullOrEmpty(update.Password))
+        {
+            existing.Password = update.Password;
+        }
+
         existing.SecureSocketOptions = update.SecureSocketOptions;
 
         await m_context.SaveChangesAsync();
@@ -66,6 +83,9 @@ public sealed class AppSettingsRepository : IAppSettingsRepository
         existing.BaseDomain = update.BaseDomain;
         existing.FfmpegPreset = update.FfmpegPreset;
         existing.FfmpegLogLevel = update.FfmpegLogLevel;
+        existing.RecordingPreset = update.RecordingPreset;
+        existing.RecordingPreRollMinutes = update.RecordingPreRollMinutes;
+        existing.RecordingPostRollMinutes = update.RecordingPostRollMinutes;
 
         await m_context.SaveChangesAsync();
 

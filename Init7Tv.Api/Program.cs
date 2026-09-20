@@ -4,8 +4,10 @@ using Init7Tv;
 using Init7Tv.BusinessLogic;
 using Init7Tv.BusinessLogic.AppSettingsService;
 using Init7Tv.BusinessLogic.Email;
+using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.HttpClientWrapper;
 using Init7Tv.BusinessLogic.Init7Api;
+using Init7Tv.BusinessLogic.Recording;
 using Init7Tv.BusinessLogic.StreamEventBus;
 using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.BusinessLogic.User;
@@ -14,9 +16,9 @@ using Init7Tv.Dal.Repositories;
 using Init7Tv.Endpoints;
 using Init7Tv.Services;
 using Init7Tv.Shared;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -38,6 +40,9 @@ builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequireUppercase = false;
         options.Password.RequiredLength = 4;
+
+        options.Lockout.MaxFailedAccessAttempts = 10;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
     })
     .AddEntityFrameworkStores<Init7TvContext>()
     .AddDefaultTokenProviders();
@@ -57,30 +62,39 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/login.html";
-        options.ExpireTimeSpan = TimeSpan.FromHours(8);
-    });
-
 builder.Services.AddAuthorization();
 
 builder.Services.AddHttpClient<IHttpClientWrapper, HttpClientWrapper>();
 
 builder.Services.AddSingleton<IStreamManager, StreamManager>();
 builder.Services.AddSingleton<IStreamEventBus, StreamEventBus>();
+builder.Services.AddSingleton<IFfprobeService, FfprobeService>();
+// the doorbell, and the only thing the scheduler keeps in memory. A singleton because the services
+// that ring it are scoped, and a field there would die with the request
+builder.Services.AddSingleton<RecordingSignal>();
+builder.Services.AddSingleton<IRecordingEngine, RecordingEngine>();
+builder.Services.AddSingleton<IRecordingEventBus, RecordingEventBus>();
+builder.Services.AddSingleton<IRecordingSegmentCache, RecordingSegmentCache>();
+builder.Services.AddSingleton<IRecordingDownloadWriter, RecordingDownloadWriter>();
 
 builder.Services.AddHostedService<DashboardNotifier>();
+builder.Services.AddHostedService<RecordingScheduler>();
 
 builder.Services.AddScoped<IUserIdentityProvider, UserIdentityProvider>();
 builder.Services.AddScoped<IIdentityRepository, IdentityRepository>();
 builder.Services.AddScoped<IAppSettingsRepository, AppSettingsRepository>();
+builder.Services.AddScoped<IFavouriteChannelRepository, FavouriteChannelRepository>();
+builder.Services.AddScoped<IPlannedRecordingRepository, PlannedRecordingRepository>();
+builder.Services.AddScoped<IRecordingRepository, RecordingRepository>();
 builder.Services.AddScoped<IIdentityService, IdentityService>();
 builder.Services.AddScoped<IAppSettingsService, AppSettingsService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 
 builder.Services.AddTransient<IChannelService, ChannelService>();
+builder.Services.AddScoped<IFavouriteChannelService, FavouriteChannelService>();
+builder.Services.AddScoped<IPlannedRecordingService, PlannedRecordingService>();
+builder.Services.AddScoped<IRecordingService, RecordingService>();
+builder.Services.AddScoped<IRecordingCoordinator, RecordingCoordinator>();
 builder.Services.AddTransient<IEpgService, EpgService>();
 
 var proxyAddress = builder.Configuration["ProxyAddress"];
@@ -115,7 +129,21 @@ app.Use(async (context, next) =>
 });
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+
+// the static file middleware refuses to serve extensions it has no mime type
+// for, which silently 404s hls playlists and fragmented mp4 segments
+var contentTypes = new FileExtensionContentTypeProvider();
+contentTypes.Mappings[".m3u8"] = "application/vnd.apple.mpegurl";
+contentTypes.Mappings[".m4s"] = "video/iso.segment";
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = contentTypes,
+    // the frontend carries no version in its urls, so without this a browser
+    // keeps serving the bundle it cached before an upgrade. no-cache still
+    // allows caching, it just forces a revalidation that answers 304.
+    OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "no-cache"
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -126,6 +154,7 @@ app.MapUserEndpoints();
 app.MapAdminEndpoint();
 app.MapDashboardEndpoints();
 app.MapEpgEndpoints();
+app.MapRecordingEndpoints();
 
 await Seed.InitializeAsync(app);
 

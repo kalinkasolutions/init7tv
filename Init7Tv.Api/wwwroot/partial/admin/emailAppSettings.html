@@ -22,12 +22,8 @@
 
     <div class="form-group">
         <label for="password"></label>
-        <input id="password" placeholder="password" type="password" x-model="appSettings.password"/>
-    </div>
-
-    <div class="form-group checkbox">
-        <label for="enable-ssl">Enable SSL </label>
-        <input id="enable-ssl" type="checkbox" x-model="appSettings.enableSsl"/>
+        <input id="password" placeholder="password (leave blank to keep)" type="password"
+               x-model="appSettings.password" autocomplete="new-password"/>
     </div>
 
     <div class="form-group">

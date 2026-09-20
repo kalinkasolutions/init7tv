@@ -15,7 +15,7 @@ namespace Init7Tv.Dal.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.3");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
             modelBuilder.Entity("Init7Tv.Dal.Entities.AppSettings", b =>
                 {
@@ -32,9 +32,6 @@ namespace Init7Tv.Dal.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
-
-                    b.Property<bool>("EnableSsl")
-                        .HasColumnType("INTEGER");
 
                     b.Property<string>("FfmpegLogLevel")
                         .IsRequired()
@@ -54,6 +51,17 @@ namespace Init7Tv.Dal.Migrations
                     b.Property<int>("Port")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("RecordingPostRollMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RecordingPreRollMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RecordingPreset")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("SecureSocketOptions")
                         .HasColumnType("INTEGER");
 
@@ -70,6 +78,148 @@ namespace Init7Tv.Dal.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("AppSettings");
+                });
+
+            modelBuilder.Entity("Init7Tv.Dal.Entities.FavouriteChannel", b =>
+                {
+                    b.Property<string>("UserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserName", "ChannelId");
+
+                    b.ToTable("FavouriteChannels");
+                });
+
+            modelBuilder.Entity("Init7Tv.Dal.Entities.PlannedRecording", b =>
+                {
+                    b.Property<string>("UserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProgrammeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CanonicalName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChannelName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("EndsAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("PlannedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubTitle")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserName", "ProgrammeId");
+
+                    b.ToTable("PlannedRecordings");
+                });
+
+            modelBuilder.Entity("Init7Tv.Dal.Entities.Recording", b =>
+                {
+                    b.Property<Guid>("RecordingId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AdBreakCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CanonicalName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChannelName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Directory")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorMessage")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ProgrammeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ScheduledEnd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ScheduledStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SubTitle")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("RecordingId");
+
+                    b.HasIndex("ProgrammeId");
+
+                    b.HasIndex("State");
+
+                    b.HasIndex("UserName", "State");
+
+                    b.ToTable("Recordings");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>

@@ -11,7 +11,7 @@ public sealed class ChannelService : IChannelService
     private const string CacheKey = "channels";
     private const string ChannelEndpoint = "https://api.tv.init7.net/api/v4/tvchannel/";
 
-    private readonly Dictionary<string, int> ChannelPrioritry = new Dictionary<string, int>
+    private static readonly Dictionary<string, int> ChannelPriority = new()
     {
         ["SRFinfo.ch"] = 0,
         ["SRF1.ch"] = 1,
@@ -43,7 +43,7 @@ public sealed class ChannelService : IChannelService
         channelResult = await GetChannelDtos(FullHdSrg.FullHdChannels.Concat(channels).ToArray());
 
         channelResult = channelResult
-            .OrderBy(x => ChannelPrioritry.TryGetValue(x.CanonicalName, out var p) ? p : int.MaxValue)
+            .OrderBy(x => ChannelPriority.TryGetValue(x.CanonicalName, out var p) ? p : int.MaxValue)
             .ToArray();
 
         m_cache.Set(CacheKey, channelResult, m_cacheDuration);
@@ -101,7 +101,7 @@ public sealed class ChannelService : IChannelService
                 DisplayName = channel.Name,
                 Logo = await m_httpClient.GetByteArrayAsync(channel.Logo),
                 HlsSource = channel.HlsSrc,
-                MainLaunguage = channel.Language,
+                MainLanguage = channel.Language,
                 CanonicalName = channel.CanonicalName,
                 ManuallyAdded = channel.ManuallyAdded,
                 UdpSource = channel.Src

@@ -16,7 +16,7 @@
 .user-list-entry {
     display: flex;
     gap: 1rem;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem var(--box-inset, 1rem);
 }
 
 .user-list-item:not(:last-child) {
@@ -35,9 +35,24 @@
     background: #262e26;
 }
 
+/* A name is short, an address is long, and the buttons are as wide as they are.
+   Four equal columns left the icons stranded in the middle of the last one. */
 .user-list-header > div,
 .user-list-entry > div {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.user-list-header > div:nth-child(2),
+.user-list-entry > div:nth-child(2) {
+    flex-grow: 2;
+}
+
+/* a fixed width on both, or the heading of a column sits beside its own data:
+   the buttons are as wide as they are and the blank heading cell is not */
+.user-list-header > div:last-child,
+.user-list-entry > .actions {
+    flex: 0 0 8.5rem;
 }
 
 .user-form {
@@ -45,18 +60,27 @@
     justify-content: flex-start;
     align-items: center;
     gap: 1rem;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem var(--box-inset, 1rem);
 }
 
 .roles input {
     margin: 0;
 }
 
+/* The row squeezes every column to nothing and lets the contents decide, so a
+   column told never to wrap simply hangs out of the box. Three roles already
+   did; any further one would too. */
 .roles-container {
     display: flex;
-    flex-wrap: nowrap;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
     align-items: center;
+}
+
+.user-list-entry > .roles-container,
+.user-form > .roles-container {
+    flex: 1 1 14em;
+    min-width: 10em;
 }
 
 .roles {
@@ -67,4 +91,38 @@
 
 .add-user {
     margin-left: auto;
+}
+
+/* The user rows are a flex table, which collapses illegibly on a phone.
+   Below this they become stacked cards instead. */
+@media (max-width: 800px) {
+    .user-list-header {
+        display: none;
+    }
+
+    .user-list-entry {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+
+    .user-form {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .roles-container {
+        flex-wrap: wrap;
+    }
+
+    .user-list-entry .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
+
+    .add-user {
+        margin-left: 0;
+        align-self: flex-end;
+    }
 }

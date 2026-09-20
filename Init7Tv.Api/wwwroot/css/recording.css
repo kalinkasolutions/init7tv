@@ -1,0 +1,455 @@
+#recording {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+
+#recording .recording-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.6em 1em;
+    border-bottom: 1px solid #ffffff80;
+}
+
+#recording .recording-header h2 {
+    margin-right: auto;
+}
+
+#recording .day-picker {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.4em;
+}
+
+#recording .day-picker button {
+    background: none;
+    border: 1px solid #ffffff80;
+    color: #ffffffcf;
+    padding: 0.3em 0.8em;
+    cursor: pointer;
+    font: inherit;
+}
+
+#recording .day-picker button.chosen {
+    border-color: #2fb12f;
+    color: #2fb12f;
+}
+
+/* one tab at a time, filling what is left under the tab bar */
+#recording .recording-body {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+
+#recording .schedule {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-y: auto;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    scrollbar-width: thin;
+}
+
+#recording .empty {
+    padding: 1.5em 1em;
+    color: #ffffff80;
+}
+
+#recording .programme {
+    display: flex;
+    gap: 1em;
+    align-items: flex-start;
+    padding: 0.7em 1em;
+    border-bottom: 1px solid #ffffff30;
+    /* held even when unmarked, so a row taking a marker does not shift sideways */
+    border-left: 3px solid transparent;
+}
+
+#recording .programme:hover {
+    background-color: #36453e;
+}
+
+/* what has already finished cannot be recorded, and says so by fading */
+#recording .programme.ended {
+    opacity: 0.45;
+}
+
+#recording .programme.on-now {
+    border-left: 3px solid #2fb12f;
+}
+
+/* not "planned": that is the panel beside the guide, and the same class on a row
+   collapsed it to the panel's width */
+#recording .programme.picked {
+    background-color: #2a3a2a;
+}
+
+#recording .when {
+    display: flex;
+    flex-direction: column;
+    width: 7.5em;
+    flex: 0 0 auto;
+}
+
+#recording .when .span {
+    font-variant-numeric: tabular-nums;
+}
+
+#recording .when .length,
+#recording .programme .categories {
+    font-size: 0.8em;
+    color: #ffffff80;
+}
+
+#recording .when .now {
+    font-size: 0.8em;
+    color: #2fb12f;
+}
+
+#recording .what {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* headings carry a global padding that the paragraphs under them do not, which left the title and
+   sub-title of every programme starting somewhere else from its categories and description */
+#recording .what h4,
+#recording .what h5 {
+    padding: 0;
+}
+
+#recording .what h5 {
+    color: #ffffffcf;
+    font-size: 0.85em;
+}
+
+#recording .description {
+    font-size: 0.85em;
+    color: #ffffffb0;
+    margin-top: 0.3em;
+    /* enough to tell programmes apart without a wall of text */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+#recording .pick {
+    flex: 0 0 auto;
+}
+
+#recording .record-button {
+    background: none;
+    border: 1px solid #ffffff80;
+    color: #ffffffcf;
+    padding: 0.35em 0.9em;
+    cursor: pointer;
+    font: inherit;
+    white-space: nowrap;
+    /* it says more once picked, and without a floor under it the whole row
+       shifted sideways on every click */
+    min-width: 9.5em;
+    text-align: center;
+}
+
+#recording .programme.picked .record-button {
+    border-color: #2fb12f;
+    color: #2fb12f;
+}
+
+#recording .record-button:disabled {
+    cursor: default;
+    opacity: 0.4;
+}
+
+#recording .tabs {
+    display: flex;
+    border-bottom: 1px solid #ffffff80;
+    padding: 0 1em;
+    gap: 0.3em;
+}
+
+#recording .tabs button {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #ffffff80;
+    padding: 0.6em 1em;
+    cursor: pointer;
+    font: inherit;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+#recording .tabs button:hover {
+    color: #ffffffcf;
+}
+
+#recording .tabs button.chosen {
+    color: #2fb12f;
+    border-bottom-color: #2fb12f;
+}
+
+#recording .tabs .count {
+    font-size: 0.75em;
+    background: #ffffff20;
+    border-radius: 1em;
+    padding: 0.1em 0.5em;
+    font-variant-numeric: tabular-nums;
+}
+
+#recording .tabs button.chosen .count {
+    background: #2fb12f30;
+}
+
+/* a tab's content takes the whole area rather than a column beside the guide */
+#recording .listing {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-y: auto;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    scrollbar-width: thin;
+}
+
+#recording .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.6em 1em;
+    border-bottom: 1px solid #ffffff30;
+}
+
+#recording .filter-bar input[type="search"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 24em;
+    background: none;
+    border: 1px solid #ffffff30;
+    color: #ffffffcf;
+    padding: 0.35em 0.6em;
+    font: inherit;
+}
+
+#recording .filter-bar select {
+    background: #1c2420;
+    border: 1px solid #ffffff30;
+    color: #ffffffcf;
+    padding: 0.35em 0.6em;
+    font: inherit;
+}
+
+/* whose it is, which only matters once more than one household is in the list */
+#recording .entry-who {
+    color: #ffffff60;
+}
+
+#recording .entry-who::before {
+    content: " · ";
+}
+
+#recording .listing-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.6em 1em;
+}
+
+#recording .entry {
+    display: flex;
+    gap: 1em;
+    align-items: flex-start;
+    padding: 0.7em 1em;
+    border-bottom: 1px solid #ffffff30;
+    /* held even when unmarked, so a row taking a marker does not shift sideways */
+    border-left: 3px solid transparent;
+}
+
+#recording .entry:hover {
+    background-color: #36453e;
+}
+
+/* something is happening to this one right now */
+#recording .entry.busy {
+    border-left-color: #2fb12f;
+}
+
+#recording .entry-when {
+    display: flex;
+    flex-direction: column;
+    width: 11em;
+    flex: 0 0 auto;
+}
+
+#recording .entry-day {
+    color: #2fb12f;
+    font-variant-numeric: tabular-nums;
+}
+
+#recording .entry-length,
+#recording .entry-channel {
+    font-size: 0.8em;
+    color: #ffffff80;
+}
+
+#recording .entry-state {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #ffffff80;
+}
+
+#recording .entry.busy .entry-state {
+    color: #2fb12f;
+}
+
+#recording .entry-what {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* headings carry a global padding that the spans beside them do not, which left
+   every other line of the entry starting somewhere else */
+#recording .entry-what h4,
+#recording .entry-what h5 {
+    padding: 0;
+}
+
+#recording .entry-what h5 {
+    color: #ffffffcf;
+    font-size: 0.85em;
+}
+
+#recording .entry-error {
+    font-size: 0.8em;
+    color: #d98a8a;
+}
+
+#recording .entry-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    flex: 0 0 auto;
+}
+
+/* one row among forty, so it says which one was meant */
+#recording .programme.found {
+    border-left: 6px solid #2fb12f;
+}
+
+/* something is happening to this one right now */
+
+#recording .download-pair {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+}
+
+/* the second download is the same action with the advertising left out, so it is the same button
+   with a word on it rather than a different one */
+#recording .no-ads {
+    font-size: 0.6em;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-left: 0.25em;
+}
+
+#recording .download-pair .icon-button:last-child {
+    width: auto;
+    padding: 0 0.5em;
+}
+
+#recording .skip-break {
+    position: absolute;
+    right: 2.5em;
+    bottom: 5.5em;
+    display: flex;
+    align-items: stretch;
+    z-index: 21;
+}
+
+#recording .skip-break .skip {
+    background: #1c2420e0;
+    border: 1px solid #2fb12f;
+    border-right: none;
+    color: #2fb12f;
+    font: inherit;
+    padding: 0.5em 1em;
+    cursor: pointer;
+}
+
+#recording .skip-break .skip:hover {
+    background: #2fb12f;
+    color: #1c2420;
+}
+
+/* the x sits on the corner of the button it removes */
+#recording .skip-break .skip-dismiss {
+    background: #1c2420e0;
+    border: 1px solid #2fb12f;
+    color: #2fb12f80;
+    cursor: pointer;
+    padding: 0 0.5em;
+    font-size: 0.8em;
+}
+
+#recording .skip-break .skip-dismiss:hover {
+    color: #2fb12f;
+}
+
+#recording .player-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: #000000cc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2em;
+}
+
+#recording .player-box {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    width: min(1100px, 100%);
+    max-height: 100%;
+}
+
+#recording .player-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+}
+
+#recording .player-box video {
+    width: 100%;
+    min-height: 0;
+    background: #000;
+}
+
+@media (max-width: 1100px) {
+    #recording .when,
+    #recording .entry-when {
+        width: 6em;
+    }
+}
+
+@media (max-width: 600px) {
+    #recording .programme {
+        flex-wrap: wrap;
+    }
+
+    #recording .pick {
+        margin-left: auto;
+    }
+}

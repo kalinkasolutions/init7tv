@@ -1,21 +1,49 @@
 #epg {
+    --card-height: 200px;
     margin: 1em;
     display: flex;
     flex-direction: row;
     gap: 1em;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
+    align-content: flex-start;
+    flex-wrap: wrap;
+    /* Sized by its content, and never squeezed below a card: one cut across the
+       middle just reads as broken. Whatever is left over is the player's. */
+    flex: 0 0 auto;
+    min-height: var(--card-height);
+    overflow-y: auto;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    scrollbar-width: thin;
 }
 
 #epg .epg-data {
+    position: relative;
+    overflow: hidden;
     width: 320px;
+    max-width: 100%;
+    flex: 0 1 320px;
     border: 1px solid #ffffff80;
     padding: 0.5em;
-    background: linear-gradient(to right, rgba(81, 81, 138, 0.58) var(--progress, 0%), transparent 0%);
-    transition: background 0.3s linear;
-    height: 200px;
+    height: var(--card-height);
     display: flex;
     flex-direction: column;
+}
+
+#epg .epg-progress {
+    position: absolute;
+    inset: 0;
+    background: rgba(81, 81, 138, 0.58);
+    transform: scaleX(0);
+    transform-origin: left;
+}
+
+/* the fill is absolutely positioned, so the text needs to be positioned too or
+   it paints underneath. z-index -1 is not an option here: .epg-data is
+   transparent and creates no stacking context, so it hid the fill behind the
+   page background instead. */
+#epg .epg-data > *:not(.epg-progress) {
+    position: relative;
 }
 
 #epg .description {
@@ -30,6 +58,14 @@
     display: flex;
     flex-direction: row;
     align-items: baseline;
+    gap: 0.5em;
+}
+
+/* a title longer than the card is worth wrapping mid word; the card hides its
+   overflow, so the end of it would otherwise just be gone */
+#epg .title-wrapper h4 {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 #epg .title-wrapper h5 {
@@ -46,4 +82,35 @@
 #epg .ends-at,
 #epg .starts-at {
     white-space: nowrap;
+}
+/* Beside the player the guide stays on one row whatever the window: a second row
+   costs more height than the player can spare, and a narrower card only means
+   its text wraps. */
+@media (min-width: 1101px) {
+    #epg {
+        flex-wrap: nowrap;
+        /* Cards narrow to fit and then stop. Below that the row scrolls
+           sideways, which is what it already is: a strip of what comes next. */
+        overflow-x: auto;
+        /* room for that scrollbar where it is drawn inside the box, or it takes
+           its height from the cards and they gain a vertical scrollbar too */
+        min-height: calc(var(--card-height) + 0.75rem);
+    }
+
+    #epg .epg-data {
+        min-width: 15rem;
+    }
+}
+
+/* Short and narrow: the player has already given up what it can, so the guide
+   takes the remaining height and scrolls inside itself rather than pushing the
+   player off the screen. */
+@media (max-width: 1100px) {
+    #epg {
+        flex: 1 1 auto;
+        min-height: 6rem;
+        overflow-y: auto;
+        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+        scrollbar-width: thin;
+    }
 }

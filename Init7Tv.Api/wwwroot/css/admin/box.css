@@ -1,0 +1,32 @@
+/* The panels the admin page is made of. They were written inline in a bundle of its own, which is
+   what kept that page from being able to share one with everything else. */
+.box {
+    --box-inset: 1rem;
+    border: 1px solid #ffffff80;
+    margin: 1em 1em 0 1em;
+    /* Nothing at the sides: what is inside carries that, so a striped row can run
+       the full width of the box and still line its text up with the heading. */
+    padding: 0 0 0.5em;
+}
+
+.box > h2 {
+    padding: 0.5em var(--box-inset, 1rem);
+}
+
+/* they exist for the inputs that follow them and have nothing to say */
+.box label:empty {
+    display: none;
+}
+
+.flex-row .box {
+    margin-right: 0;
+}
+
+.actions {
+    display: flex;
+    gap: 0.25rem;
+    justify-content: flex-end;
+    margin-left: auto;
+    margin-top: auto;
+    align-self: flex-end;
+}

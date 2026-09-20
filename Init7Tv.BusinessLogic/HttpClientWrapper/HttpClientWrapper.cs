@@ -5,6 +5,8 @@ namespace Init7Tv.BusinessLogic.HttpClientWrapper;
 
 public sealed class HttpClientWrapper : IHttpClientWrapper
 {
+    private const int MaxPages = 100;
+
     private readonly HttpClient m_httpClient;
 
     public HttpClientWrapper(HttpClient httpClient)
@@ -12,9 +14,7 @@ public sealed class HttpClientWrapper : IHttpClientWrapper
         m_httpClient = httpClient;
     }
 
-    public Task<string> GetStringAsync(string url) => m_httpClient.GetStringAsync(url);
     public Task<byte[]> GetByteArrayAsync(string url) => m_httpClient.GetByteArrayAsync(url);
-    public Task<HttpResponseMessage> GetAsync(string url, HttpCompletionOption options) => m_httpClient.GetAsync(url, options);
     public Task<T?> GetJsonAsync<T>(string url) => m_httpClient.GetFromJsonAsync<T>(url);
 
     public async Task<T[]> GetInit7PagedResponseAsync<T>(string url)
@@ -22,7 +22,8 @@ public sealed class HttpClientWrapper : IHttpClientWrapper
         var results = new List<T>();
         var nextUrl = url;
 
-        while (!string.IsNullOrEmpty(nextUrl))
+        // a self referencing "next" would otherwise loop forever
+        for (var page = 0; page < MaxPages && !string.IsNullOrEmpty(nextUrl); page++)
         {
             var response = await GetJsonAsync<Init7PagedResponse<T>>(nextUrl);
             if (response == null)
@@ -35,7 +36,7 @@ public sealed class HttpClientWrapper : IHttpClientWrapper
                 results.AddRange(response.Results);
             }
 
-            nextUrl = response.Next;
+            nextUrl = response.Next == nextUrl ? null : response.Next;
         }
 
         return results.ToArray();

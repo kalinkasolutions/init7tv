@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
 using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.Mapping;
@@ -19,17 +17,38 @@ public sealed class StreamManager : IStreamManager, IDisposable
     private readonly ILogger<StreamManager> m_logger;
     private readonly IChannelService m_channelService;
     private readonly IStreamEventBus m_streamEventBus;
+    private readonly IFfprobeService m_ffprobeService;
     private readonly Init7TvOptions m_options;
 
     private readonly ConcurrentDictionary<string, TvStream> m_streams = new();
+    // one lock per channel + audio track, kept for the lifetime of the manager:
+    // removing entries would let two callers start the same stream at once
     private readonly ConcurrentDictionary<string, SemaphoreSlim> m_streamLocks = new();
 
     private readonly Timer m_cleanupTimer;
+    // HLS segments have to start on a keyframe, so the encoder is told to emit
+    // one exactly this often and the segmenter cuts on those keyframes
+    // Starting waits for SegmentsBeforeStart of media, and that wait is real
+    // time bound, so their product is the floor on how fast a channel can open.
+    // The segment length is also the playlist's target duration, which is how
+    // often a player reloads it, and shorter segments cost bitrate: one second
+    // measured 15% more than two.
+    /// <summary>Public so tests cannot drift from the value actually used.</summary>
+    public const int SegmentSeconds = 2;
+    private const int PlaylistLength = 20;
+
+    // Enough that the player has something to sit back into rather than riding
+    // the live edge with nothing in hand; hls.js is told to stay this far back.
+    private const int SegmentsBeforeStart = 2;
+    private static readonly TimeSpan SegmentDuration = TimeSpan.FromSeconds(SegmentSeconds);
+
     private readonly TimeSpan m_streamIdleTimeout = TimeSpan.FromSeconds(30);
+
+    // a player handed a playlist with no segments retries a couple of times and
+    // then gives up, so starting waits until there is something to play
+    private readonly TimeSpan m_firstSegmentTimeout = TimeSpan.FromSeconds(30);
     private readonly TimeSpan m_timerDueTime = TimeSpan.FromSeconds(10);
     private readonly TimeSpan m_timerPeriod = TimeSpan.FromSeconds(10);
-
-    private static readonly JsonSerializerOptions JsonSerializerOptions = new() { PropertyNameCaseInsensitive = true };
 
     private bool m_disposed;
 
@@ -38,12 +57,14 @@ public sealed class StreamManager : IStreamManager, IDisposable
         ILogger<StreamManager> logger,
         IChannelService channelService,
         IStreamEventBus streamEventBus,
+        IFfprobeService ffprobeService,
         IOptions<Init7TvOptions> options
     )
     {
         m_logger = logger;
         m_channelService = channelService;
         m_streamEventBus = streamEventBus;
+        m_ffprobeService = ffprobeService;
         m_options = options.Value;
         m_cleanupTimer = new Timer(
             _ => CleanupIdleStreams(),
@@ -64,8 +85,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
             throw new ObjectDisposedException(nameof(StreamManager));
         }
 
-        StopSingleUserStream(userName);
-
         var channelResult = await m_channelService.GetChannelById(channelId);
         if (!channelResult.IsSuccess)
         {
@@ -73,6 +92,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
 
         var streamId = GetStreamId($"{channelResult.Value.HlsSource}_{audioStreamIndex}");
+
+        // Leaving a channel stops it once nobody is left, but not when this is
+        // the same channel: a second start would otherwise find the caller
+        // listed as the only viewer of the stream the first start is still
+        // waiting on, stop it, and fail that first request.
+        StopSingleUserStream(userName, streamId);
         var startStreamLock = m_streamLocks.GetOrAdd(streamId, _ => new SemaphoreSlim(1, 1));
 
         await startStreamLock.WaitAsync();
@@ -81,12 +106,13 @@ public sealed class StreamManager : IStreamManager, IDisposable
         {
             if (m_streams.TryGetValue(streamId, out var existingStream))
             {
-                existingStream.Users.Add(userName);
+                existingStream.Viewers[userName] = DateTime.UtcNow;
                 m_streamEventBus.Publish(GetCurrentStreams());
                 return OperationResult<StreamDto>.Success(existingStream.ToDto());
             }
 
-            var streamInfo = await GetFfprobeInfo(channelResult.Value.HlsSource);
+            var streamInfo = await m_ffprobeService.ProbeAsync(
+                FfmpegArguments.SourceUrl(channelResult.Value, m_options.UseMultiCast));
 
             if (streamInfo.HasError)
             {
@@ -102,15 +128,20 @@ public sealed class StreamManager : IStreamManager, IDisposable
             {
                 StreamId = streamId,
                 AudioStreamIndex = audioStreamIndex,
-                Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex, appSettings),
+                Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex, appSettings, streamInfo.Value),
+                Segments = new SegmentWindow(PlaylistLength, SegmentDuration),
                 StreamInfo = streamInfo.Value,
-                Channel = channelResult.Value,
-                Users = [userName]
+                Channel = channelResult.Value
             };
+
+            // must be set before the stream is published, or the cleanup timer
+            // can reap it in the gap before the first playlist request
+            stream.Viewers[userName] = DateTime.UtcNow;
 
             try
             {
                 stream.Ffmpeg.Start();
+                stream.Ffmpeg.BeginErrorReadLine();
             }
             catch (Exception ex)
             {
@@ -118,9 +149,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 return OperationResult<StreamDto>.Error("Failed to start stream");
             }
 
-            m_streams.TryAdd(streamId, stream);
-
-            m_streamEventBus.Publish(GetCurrentStreams());
+            if (!m_streams.TryAdd(streamId, stream))
+            {
+                m_logger.LogError("Stream {StreamId} was registered concurrently, discarding it", streamId);
+                StopProcess(stream);
+                return OperationResult<StreamDto>.Error("Failed to start stream");
+            }
 
             _ = Task.Run(async () =>
             {
@@ -132,15 +166,40 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 {
                     m_logger.LogError(ex, "Failed to start stream: {StreamId}", streamId);
                 }
+                finally
+                {
+                    if (!stream.CancellationToken.IsCancellationRequested)
+                    {
+                        StopStream(streamId);
+                        m_streamEventBus.Publish(GetCurrentStreams());
+                    }
+                }
             });
 
+
+            if (!await WaitForInitialSegments(stream))
+            {
+                // Someone stopped it while it was starting, which happens when the
+                // viewer picks another channel before this one is up. Not a
+                // failure, and it is already gone, so leave it alone.
+                if (stream.CancellationToken.IsCancellationRequested)
+                {
+                    m_logger.LogInformation("Stream was stopped while starting: {StreamId}", streamId);
+                    return OperationResult<StreamDto>.Conflict("The channel was closed before it started");
+                }
+
+                m_logger.LogError("No segment was produced for stream: {StreamId}", streamId);
+                StopStream(streamId);
+                return OperationResult<StreamDto>.Error("The channel did not start streaming");
+            }
+
+            m_streamEventBus.Publish(GetCurrentStreams());
 
             return OperationResult<StreamDto>.Success(stream.ToDto());
         }
         finally
         {
             startStreamLock.Release();
-            m_streamLocks.TryRemove(streamId, out _);
         }
     }
 
@@ -148,33 +207,16 @@ public sealed class StreamManager : IStreamManager, IDisposable
     {
         if (!m_streams.TryGetValue(streamId, out var stream))
         {
-            return OperationResult<string>.Error($"Could not find stream while getting playlist: {streamId}");
+            return OperationResult<string>.NotFound($"Could not find stream while getting playlist: {streamId}");
         }
 
-        stream.LastAccess[userName] = DateTime.UtcNow;
+        stream.Viewers[userName] = DateTime.UtcNow;
 
-        var sb = new StringBuilder();
-        sb.AppendLine("#EXTM3U");
-        sb.AppendLine("#EXT-X-VERSION:6");
-        sb.AppendLine("#EXT-X-TARGETDURATION:6");
+        var (segments, mediaSequenceId) = stream.Segments.Snapshot();
 
-        string[] segments;
-        int mediaSequenceId;
-        lock (stream.PlaylistLock)
-        {
-            segments = stream.Playlist.ToArray();
-            mediaSequenceId = stream.MediaSequenceId;
-        }
-
-        sb.AppendLine($"#EXT-X-MEDIA-SEQUENCE:{mediaSequenceId}");
-
-        foreach (var segmentName in segments)
-        {
-            sb.AppendLine("#EXTINF:6.0,");
-            sb.AppendLine($"/api/streaming/segment/{stream.StreamId}/{segmentName}");
-        }
-
-        return OperationResult<string>.Text(sb.ToString(), "application/vnd.apple.mpegurl");
+        return OperationResult<string>.Text(
+            HlsPlaylist.Live(stream.StreamId, segments, mediaSequenceId, SegmentSeconds),
+            "application/vnd.apple.mpegurl");
     }
 
 
@@ -182,27 +224,37 @@ public sealed class StreamManager : IStreamManager, IDisposable
     {
         if (!m_streams.TryGetValue(streamId, out var stream))
         {
-            return OperationResult<byte[]>.Error($"Could not find stream: {streamId} for segment:  {name}");
+            return OperationResult<byte[]>.NotFound($"Could not find stream: {streamId} for segment: {name}");
         }
 
-        if (stream.TsSegments.TryGetValue(name, out var tsSegment))
-        {
-            return OperationResult<byte[]>.File(tsSegment, "video/MP2T");
-        }
+        var bytes = stream.Segments.Bytes(name);
 
-        return OperationResult<byte[]>.NotFound();
+        return bytes == null
+            ? OperationResult<byte[]>.NotFound()
+            : OperationResult<byte[]>.File(bytes, "video/MP2T");
     }
 
     public CurrentStreamDto[] GetCurrentStreams()
     {
         return m_streams.Values.ToArray().Select(stream => new CurrentStreamDto
         {
+            StreamId = stream.StreamId,
             ChannelId = stream.Channel.ChannelId,
             ChannelDisplayName = stream.Channel.DisplayName,
             ChannelLogo = stream.Channel.Logo,
             Language = stream.GetStreamedLanguage,
-            UserNames = stream.Users.ToArray(),
+            UserNames = stream.Viewers.Keys.ToArray(),
         }).ToArray();
+    }
+
+    public void StopAllStreams()
+    {
+        foreach (var streamId in m_streams.Keys.ToArray())
+        {
+            StopStream(streamId);
+        }
+
+        m_streamEventBus.Publish(GetCurrentStreams());
     }
 
     public void Dispose()
@@ -221,47 +273,55 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
     }
 
+    /// <summary>False if ffmpeg died or produced too little in time.</summary>
+    private async Task<bool> WaitForInitialSegments(TvStream stream)
+    {
+        var deadline = DateTime.UtcNow + m_firstSegmentTimeout;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            if (stream.Segments.Count >= SegmentsBeforeStart)
+            {
+                return true;
+            }
+
+            if (stream.CancellationToken.IsCancellationRequested || FfmpegProcess.HasExited(stream.Ffmpeg))
+            {
+                return false;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+
+        return false;
+    }
+
     private async Task StreamLoopAsync(TvStream stream, CancellationToken cancellationToken)
     {
         try
         {
-            var segmentStartTime = DateTime.UtcNow;
             var stdout = stream.Ffmpeg.StandardOutput.BaseStream;
-            var buffer = new byte[188 * 1024];
-            var segmentBuffer = new MemoryStream();
+            var buffer = new byte[TsKeyframeDetector.PacketSize * 1024];
+            var segmenter = new HlsSegmenter();
+            var carried = 0;
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var read = await stdout.ReadAsync(buffer, cancellationToken);
-                if (read <= 0)
+                var read = await stdout.ReadAsync(buffer.AsMemory(carried, buffer.Length - carried), cancellationToken);
+                if (read == 0)
                 {
-                    continue;
+                    // ffmpeg closed the pipe: the source is gone, retrying would just spin
+                    m_logger.LogWarning("ffmpeg output ended for stream: {StreamId}", stream.StreamId);
+                    return;
                 }
 
-                segmentBuffer.Write(buffer, 0, read);
-
-                if (!((DateTime.UtcNow - segmentStartTime).TotalSeconds >= 6) || segmentBuffer.Length <= 0)
+                var cuts = segmenter.Consume(buffer, carried + read);
+                foreach (var cut in cuts.Segments)
                 {
-                    continue;
+                    stream.Segments.Add(cut);
                 }
 
-                var name = $"seg{stream.SegmentIndex++}.ts";
-                stream.TsSegments[name] = segmentBuffer.ToArray();
-
-                lock (stream.PlaylistLock)
-                {
-                    stream.Playlist.Add(name);
-                    while (stream.Playlist.Count > 5)
-                    {
-                        var oldSegment = stream.Playlist[0];
-                        stream.Playlist.RemoveAt(0);
-                        stream.TsSegments.TryRemove(oldSegment, out _);
-                        stream.MediaSequenceId++;
-                    }
-                }
-
-                segmentBuffer = new MemoryStream();
-                segmentStartTime = DateTime.UtcNow;
+                carried = cuts.Carried;
             }
         }
         catch (OperationCanceledException)
@@ -274,85 +334,19 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
     }
 
-    private Process GetFfmpegProcess(ChannelDto channel, int audioStreamIndex, GeneralAppSettingsDto appSettings)
+    private Process GetFfmpegProcess(
+        ChannelDto channel,
+        int audioStreamIndex,
+        GeneralAppSettingsDto appSettings,
+        FfprobeRoot streamInfo
+    )
     {
-        var ffmpegArgs = GetFfmpegArgs(channel, audioStreamIndex, appSettings);
+        var ffmpegArgs = FfmpegArguments.Build(
+            channel, audioStreamIndex, appSettings, streamInfo, m_options.UseMultiCast, SegmentSeconds);
 
-        m_logger.LogInformation("starting ffmpeg with args: {FfmegArgs}", ffmpegArgs);
+        m_logger.LogInformation("starting ffmpeg with args: {FfmpegArgs}", string.Join(' ', ffmpegArgs));
 
-        return new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "ffmpeg",
-                Arguments = ffmpegArgs,
-                RedirectStandardOutput = true,
-                RedirectStandardError = false,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-    }
-
-    private string GetFfmpegArgs(ChannelDto channel, int audioStreamIndex, GeneralAppSettingsDto appSettings)
-    {
-        if (m_options.UseMultiCast)
-        {
-            return $"-loglevel {appSettings.FfmpegLogLevel} " +
-                   "-fflags +genpts+discardcorrupt " +
-                   "-flags low_delay " +
-                   "-analyzeduration 5000000 " +
-                   "-probesize 10000000 " +
-                   $"-i {channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1 " +
-                   "-map 0:v:0 " +
-                   "-g 300 " +
-                   $"-c:v libx264 -preset {appSettings.FfmpegPreset} -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
-                   $"-map 0:a:{audioStreamIndex} " +
-                   $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
-                   "-f mpegts " +
-                   "pipe:1";
-        }
-
-        return $"-loglevel {appSettings.FfmpegLogLevel} " +
-               $"-i {channel.HlsSource} " +
-               "-map 0:v:0 " +
-               $"-c:v libx264 -preset {appSettings.FfmpegPreset} -vf yadif=mode=send_frame:parity=auto -pix_fmt yuv420p " +
-               $"-map 0:a:{audioStreamIndex} " +
-               $"-c:a aac -b:a 128k -ac 2 -ar 48000 " +
-               "-f mpegts " +
-               "pipe:1";
-    }
-
-    private async Task<OperationResult<FfprobeRoot>> GetFfprobeInfo(string streamUrl)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "ffprobe",
-            Arguments = $"-v quiet -print_format json -show_format -show_streams \"{streamUrl}\"",
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = Process.Start(startInfo)!;
-        var output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-
-        try
-        {
-            var streamInfo = JsonSerializer.Deserialize<FfprobeRoot>(output, JsonSerializerOptions);
-            if (streamInfo == null)
-            {
-                return OperationResult<FfprobeRoot>.Error("Failed to parse ffprobe json");
-            }
-
-            return OperationResult<FfprobeRoot>.Success(streamInfo);
-        }
-        catch (Exception e)
-        {
-            m_logger.LogError(e, "Failed to parse ffprobe json for url: {StreamUrl}", streamUrl);
-            return OperationResult<FfprobeRoot>.Error("Failed to parse ffprobe json");
-        }
+        return FfmpegProcess.Logged(ffmpegArgs, m_logger, channel.CanonicalName, readOutput: true);
     }
 
     private static string GetStreamId(string input)
@@ -360,16 +354,16 @@ public sealed class StreamManager : IStreamManager, IDisposable
         return Hash.GetSha256(input);
     }
 
-    private void StopSingleUserStream(string userName)
+    private void StopSingleUserStream(string userName, string? keepStreamId = null)
     {
-        var stream = m_streams.Values.FirstOrDefault(s => s.Users.Contains(userName));
-        if (stream == null)
+        var stream = m_streams.Values.FirstOrDefault(s => s.Viewers.ContainsKey(userName));
+        if (stream == null || stream.StreamId == keepStreamId)
         {
             return;
         }
 
-        stream.Users.Remove(userName);
-        if (stream.Users.Count == 0)
+        stream.Viewers.TryRemove(userName, out _);
+        if (stream.Viewers.IsEmpty)
         {
             StopStream(stream.StreamId);
         }
@@ -379,21 +373,33 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
     private void CleanupIdleStreams()
     {
+        // runs on a timer thread, where an escaping exception would kill the process
+        try
+        {
+            RemoveIdleStreams();
+        }
+        catch (Exception ex)
+        {
+            m_logger.LogError(ex, "Failed to clean up idle streams");
+        }
+    }
+
+    private void RemoveIdleStreams()
+    {
         var now = DateTime.UtcNow;
 
         foreach (var (streamId, stream) in m_streams)
         {
-            foreach (var (userName, lastAccess) in stream.LastAccess)
+            foreach (var (userName, lastAccess) in stream.Viewers)
             {
                 if (now - lastAccess > m_streamIdleTimeout)
                 {
                     m_logger.LogInformation("User {UserName} stopped streaming", userName);
-                    stream.Users.Remove(userName);
-                    stream.LastAccess.TryRemove(userName, out _);
+                    stream.Viewers.TryRemove(userName, out _);
                 }
             }
 
-            if (!stream.LastAccess.IsEmpty)
+            if (!stream.Viewers.IsEmpty)
             {
                 continue;
             }
@@ -412,22 +418,21 @@ public sealed class StreamManager : IStreamManager, IDisposable
             return;
         }
 
+        m_logger.LogInformation("Stopping stream: {StreamId}", streamId);
+        StopProcess(stream);
+    }
+
+    private void StopProcess(TvStream stream)
+    {
         try
         {
-            m_logger.LogInformation("Stopping stream: {StreamId}", streamId);
-
             stream.CancellationToken.Cancel();
-
-            if (!stream.Ffmpeg.HasExited)
-            {
-                stream.Ffmpeg.Kill();
-            }
-
+            FfmpegProcess.Kill(stream.Ffmpeg, m_logger);
             stream.Ffmpeg.Dispose();
         }
         catch (Exception ex)
         {
-            m_logger.LogError(ex, "Failed to stop stream: {StreamId}", streamId);
+            m_logger.LogError(ex, "Failed to stop stream: {StreamId}", stream.StreamId);
         }
     }
 }
