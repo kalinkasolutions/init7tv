@@ -20,6 +20,84 @@ public class AdBreakTimelineTest
         m_timeline.Observe(parsed, arrivalPts);
     }
 
+    /// <summary>
+    /// A recording that starts part way through the advertising carries the cue that ends the break
+    /// and never the one that began it: that one went past before there was anything reading. The
+    /// end on its own is what says a break was running, and dropping it left the whole stretch
+    /// before it unmarked and so unskippable.
+    /// </summary>
+    [Test]
+    public void AnEndWithNoStart_IsABreakThatWasAlreadyRunning()
+    {
+        m_timeline.ReadingBeganAt(Seconds(10));
+
+        Observe(SpliceSectionBuilder.SpliceInsert(1, outOfNetwork: false, ptsTime: Seconds(70)).Build(),
+            arrivalPts: Seconds(70));
+
+        var found = m_timeline.Breaks.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(found.AlreadyInProgress, Is.True);
+            Assert.That(found.ArrivalPts, Is.EqualTo(Seconds(10)), "it starts where the reading did");
+            Assert.That(found.Duration, Is.EqualTo(TimeSpan.FromSeconds(60)));
+        });
+    }
+
+    [Test]
+    public void WithNothingReadYet_AnEndWithNoStartStartsAtTheFirstCue()
+    {
+        // live has nothing better to measure from than the first cue it saw
+        Observe(SpliceSectionBuilder.SpliceNull().Build(), arrivalPts: Seconds(10));
+        Observe(SpliceSectionBuilder.SpliceInsert(1, outOfNetwork: false, ptsTime: Seconds(40)).Build(),
+            arrivalPts: Seconds(40));
+
+        Assert.That(m_timeline.Breaks.Single().Duration, Is.EqualTo(TimeSpan.FromSeconds(30)));
+    }
+
+    [Test]
+    public void AnEndLongAfterReadingBegan_IsNotTakenForABreakWeJoined()
+    {
+        // breaks are minutes: an end arriving an hour in is a lost or cancelled
+        // announcement, and believing it would mark the whole hour as advertising
+        m_timeline.ReadingBeganAt(0);
+
+        Observe(SpliceSectionBuilder.SpliceInsert(1, outOfNetwork: false, ptsTime: Seconds(3600)).Build(),
+            arrivalPts: Seconds(3600));
+
+        Assert.That(m_timeline.Breaks, Is.Empty);
+    }
+
+    [Test]
+    public void AnEndThatClosesAKnownBreak_StillJustEndsIt()
+    {
+        m_timeline.ReadingBeganAt(0);
+
+        Observe(SpliceSectionBuilder.SpliceInsert(1, ptsTime: Seconds(20)).Build(), arrivalPts: Seconds(20));
+        Observe(SpliceSectionBuilder.SpliceInsert(1, outOfNetwork: false, ptsTime: Seconds(80)).Build(),
+            arrivalPts: Seconds(80));
+
+        var found = m_timeline.Breaks.Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(found.AlreadyInProgress, Is.False, "we watched this one start");
+            Assert.That(found.Duration, Is.EqualTo(TimeSpan.FromSeconds(60)));
+        });
+    }
+
+    [Test]
+    public void ReadingBeganAt_OnlyCountsTheFirstTime()
+    {
+        m_timeline.ReadingBeganAt(Seconds(10));
+        m_timeline.ReadingBeganAt(Seconds(50));
+
+        Observe(SpliceSectionBuilder.SpliceInsert(1, outOfNetwork: false, ptsTime: Seconds(70)).Build(),
+            arrivalPts: Seconds(70));
+
+        Assert.That(m_timeline.Breaks.Single().ArrivalPts, Is.EqualTo(Seconds(10)));
+    }
+
     [Test]
     public void NothingHasBeenSignalled()
     {

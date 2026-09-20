@@ -37,6 +37,17 @@ public sealed class AdBreakTimeline
 
     private readonly Dictionary<uint, AdBreak> m_breaks = new();
 
+    /// <summary>Where the reading began, which is where a break already running is taken to start.</summary>
+    private ulong? m_firstSeen;
+
+    /// <summary>
+    /// Says where the reading starts, for a reader that knows before the first cue arrives. A
+    /// recording does: its clock begins with the first picture, which is where a break already
+    /// running has to be measured from. Live has nothing better than the first cue, so it says
+    /// nothing and the first arrival stands.
+    /// </summary>
+    public void ReadingBeganAt(ulong pts) => m_firstSeen ??= pts;
+
     /// <summary>
     /// Takes in a cue message.
     /// </summary>
@@ -46,6 +57,8 @@ public sealed class AdBreakTimeline
     /// </param>
     public void Observe(SpliceInfoSection section, ulong arrivalPts)
     {
+        m_firstSeen ??= arrivalPts;
+
         if (section.Encrypted)
         {
             // the command never got decoded, so there is nothing to place
@@ -134,7 +147,11 @@ public sealed class AdBreakTimeline
         // break it ends is already on the timeline with its own event id.
         if (!insert.OutOfNetwork)
         {
-            EndBreakAt(insert.SpliceEventId, SpliceTimeOf(section, insert.SpliceTime, insert.SpliceImmediate, arrivalPts));
+            EndBreakAt(
+                insert.SpliceEventId,
+                SpliceTimeOf(section, insert.SpliceTime, insert.SpliceImmediate, arrivalPts),
+                arrivalPts,
+                AdBreakSignal.SpliceInsert);
             return;
         }
 
@@ -163,7 +180,7 @@ public sealed class AdBreakTimeline
 
         if (IsBreakEnd(descriptor.Type))
         {
-            EndBreakAt(descriptor.SegmentationEventId, at);
+            EndBreakAt(descriptor.SegmentationEventId, at, arrivalPts, AdBreakSignal.Segmentation);
             return;
         }
 
@@ -191,10 +208,11 @@ public sealed class AdBreakTimeline
     /// An end signal carries the same event id as the start it closes, so the
     /// break's length is what the two times say rather than what was predicted.
     /// </summary>
-    private void EndBreakAt(uint eventId, ulong endPts)
+    private void EndBreakAt(uint eventId, ulong endPts, ulong arrivalPts, AdBreakSignal signal)
     {
         if (!m_breaks.TryGetValue(eventId, out var adBreak))
         {
+            EndBreakThatWasAlreadyRunning(eventId, arrivalPts, signal);
             return;
         }
 
@@ -205,6 +223,38 @@ public sealed class AdBreakTimeline
         }
 
         m_breaks[eventId] = adBreak with { Duration = length, AutoReturn = false };
+    }
+
+    /// <summary>
+    /// An end with no start belongs to a break that was already running when the reading began: a
+    /// recording that starts part way through the advertising carries the cue that ends it and
+    /// never the one that began it. It runs from wherever the reading started up to this end.
+    ///
+    /// Only worth believing for a while. A break lasts minutes, so an unmatched end arriving long
+    /// after the start is a lost or cancelled announcement rather than a break we joined.
+    /// </summary>
+    private void EndBreakThatWasAlreadyRunning(uint eventId, ulong arrivalPts, AdBreakSignal signal)
+    {
+        if (m_firstSeen is not { } began)
+        {
+            return;
+        }
+
+        var ran = Behind(arrivalPts, began);
+        if (ran == null || ran > UnknownBreakLength)
+        {
+            return;
+        }
+
+        m_breaks[eventId] = new AdBreak
+        {
+            EventId = eventId,
+            Signal = signal,
+            StartPts = began,
+            ArrivalPts = began,
+            Duration = ran,
+            AlreadyInProgress = true
+        };
     }
 
     private void Forget(ulong currentPts)

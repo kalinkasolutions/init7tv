@@ -104,4 +104,77 @@ public class RecordingAdBreaksTest
 
         Assert.That(Read(), Is.Empty);
     }
+
+    /// <summary>
+    /// A recording that begins part way through the advertising. The cue that started the break
+    /// went past before the capture did, so all it holds is the one that ends it — which is exactly
+    /// the shape of a real SRF capture that began mid-break and offered nothing to skip.
+    /// </summary>
+    [Test]
+    public void ACaptureThatBeganInsideABreakMarksItFromTheStart()
+    {
+        var start = 1_000_000UL;
+
+        // returning to the network eight keyframes in, with no start to match it
+        var end = SpliceSectionBuilder
+            .SpliceInsert(1, outOfNetwork: false, ptsTime: start + 32 * Hz)
+            .Build();
+
+        WriteCapture(part: 0, keyframes: 15, firstPts: start, cue: (After: 8, Cue: end));
+
+        var breaks = Read();
+
+        Assert.That(breaks, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(breaks[0].StartsAt, Is.EqualTo(0).Within(0.5), "from the beginning of the recording");
+            Assert.That(breaks[0].EndsAt, Is.EqualTo(32).Within(0.5), "to where the break was announced over");
+        });
+    }
+
+    /// <summary>
+    /// A start whose end never arrived says where something begins and nothing about where it
+    /// stops. Assuming ten minutes marked the rest of a recording as advertising, which on a real
+    /// SRF capture covered the whole programme that followed the adverts — and these marks are what
+    /// the download without the advertising cuts out, so it would have dropped it.
+    /// </summary>
+    [Test]
+    public void ABreakWhoseEndWasNeverAnnouncedIsNotOffered()
+    {
+        var start = 1_000_000UL;
+
+        var open = SpliceSectionBuilder.SpliceInsert(2, ptsTime: start + 8 * Hz).Build();
+        WriteCapture(part: 0, keyframes: 10, firstPts: start, cue: (After: 1, Cue: open));
+
+        Assert.That(Read(), Is.Empty);
+    }
+
+    [Test]
+    public void AnAnnouncedLengthStillStopsAtTheEndOfWhatWasRecorded()
+    {
+        // a recording cut short can end inside a break it knows the length of
+        var start = 1_000_000UL;
+
+        var open = SpliceSectionBuilder
+            .SpliceInsert(3, ptsTime: start + 8 * Hz, durationTicks: 600 * Hz)
+            .Build();
+
+        // ten keyframes is forty seconds, far short of the ten minutes announced
+        WriteCapture(part: 0, keyframes: 10, firstPts: start, cue: (After: 1, Cue: open));
+
+        var breaks = Read();
+
+        Assert.That(breaks, Has.Count.EqualTo(1));
+        Assert.That(breaks[0].EndsAt, Is.EqualTo(40).Within(0.5));
+    }
+
+    [Test]
+    public void ABreakAnnouncedAfterEverythingRecordedIsNotOffered()
+    {
+        // clamping must drop it rather than leave a zero length mark the page would show
+        var start = 1_000_000UL;
+        WriteCapture(part: 0, keyframes: 4, firstPts: start);
+
+        Assert.That(Read(), Is.Empty);
+    }
 }

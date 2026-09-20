@@ -58,6 +58,10 @@ public sealed class RecordingSegments
         {
             var marks = new List<AdBreakMark>();
 
+            // an announced length can still overrun the end of a recording that was cut short, and
+            // nothing can be skipped past what was captured
+            var recorded = m_segments.Sum(segment => segment.Seconds);
+
             foreach (var (part, scan) in m_parts.OrderBy(x => x.Key))
             {
                 if (scan.FirstPts == null)
@@ -68,14 +72,26 @@ public sealed class RecordingSegments
 
                 foreach (var found in scan.Timeline.Breaks)
                 {
+                    // Only a break we know the extent of. A start whose end was never announced says
+                    // where something begins and nothing about where it stops, and the assumed ten
+                    // minutes is a guess that runs past the end of most recordings. Guessing is not
+                    // free here: these marks are what the download without the advertising cuts out,
+                    // so one break too many silently drops the programme it was covering. Live is
+                    // the other way round and may assume, because it only has to answer whether the
+                    // picture on screen right now is an advert.
+                    if (found.Duration is not { } length)
+                    {
+                        continue;
+                    }
+
                     // where the announcement went past, not the splice time it carries: that one is
                     // still on the clock of the source the capture was made from
                     var starts = scan.StartsAt + Seconds(found.ArrivalPts, scan.FirstPts.Value);
-                    var length = found.Duration ?? AdBreakTimeline.UnknownBreakLength;
+                    var ends = Math.Min(starts + length.TotalSeconds, recorded);
 
-                    if (starts >= 0)
+                    if (starts >= 0 && ends > starts)
                     {
-                        marks.Add(new AdBreakMark { StartsAt = starts, EndsAt = starts + length.TotalSeconds });
+                        marks.Add(new AdBreakMark { StartsAt = starts, EndsAt = ends });
                     }
                 }
             }
@@ -170,9 +186,10 @@ public sealed class RecordingSegments
                     scan.LastTables = at + i;
                 }
 
-                // the cue messages the channel carries, now inside the recording rather than only
-                // in the source it came from
-                if (scan.Cues.TryRead(packet, out var cue))
+                // The cue messages the channel carries, now inside the recording rather than only in
+                // the source it came from. Not before the first picture: a cue is placed by where
+                // the capture's clock had got to, and until one has been read there is no clock.
+                if (scan.FirstPts != null && scan.Cues.TryRead(packet, out var cue))
                 {
                     scan.Timeline.Observe(cue, scan.LastPts);
                 }
@@ -180,7 +197,12 @@ public sealed class RecordingSegments
                 if (payloadStart && ReadPts(packet) is { } pts)
                 {
                     scan.LastPts = pts;
-                    scan.FirstPts ??= pts;
+
+                    if (scan.FirstPts == null)
+                    {
+                        scan.FirstPts = pts;
+                        scan.Timeline.ReadingBeganAt(pts);
+                    }
                 }
 
                 if (scan.Detector.IsKeyframeStart(packet) && scan.LastTables >= 0)

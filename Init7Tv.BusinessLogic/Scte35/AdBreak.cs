@@ -45,6 +45,12 @@ public sealed record AdBreak
 
     /// <summary>Set when the signal said this content may not be delivered over the web.</summary>
     public bool WebDeliveryBlocked { get; init; }
+
+    /// <summary>
+    /// Set when the break was already running before there was anything to read: only its end was
+    /// announced here, so it starts wherever the reading does rather than where the break did.
+    /// </summary>
+    public bool AlreadyInProgress { get; init; }
 }
 
 /// <summary>What the cue messages say about a stream at a point in its timeline.</summary>
