@@ -5,9 +5,9 @@
 @import url('player.css');
 @import url('sidebar.css');
 @import url('admin/users.css');
+@import url('admin/appSettings.css');
+@import url('admin/box.css');
 @import url('modal.css');
 @import url('dashboard.css');
 @import url('egp.css');
 @import url('recording.css');
-
-

@@ -10,13 +10,18 @@ import {recordingsView} from './views/recording/recordingsView.js';
 import {notificationView} from './views/notificationView.js';
 import {headerView} from './views/headerView.js';
 import {modalView} from './modalView.js';
+import {usersView} from './views/admin/usersView.js';
+import {emailAppSettingsView} from './views/admin/emailAppSettingsView.js';
+import {generalSettingsView} from './views/admin/generalSettingsView.js';
+import {dashboardView} from './views/dashboard/dashboardView.js';
 import {loadPartial} from './loadPartial.js';
 import {viewStore} from './viewStore.js';
+import {lazyView} from './lazyView.js';
 
 Alpine.plugin(focus);
 
-// watching and choosing what to record are two halves of one page, so that the channel list, the
-// player and whatever is on stay where they are when you move between them
+// every view is part of one page, so the header and the channel list are built once and stay where
+// they are, and only the middle of the page changes
 Alpine.store('view', viewStore());
 Alpine.store('view').listen();
 
@@ -109,6 +114,11 @@ Alpine.data('playerView', playerView);
 Alpine.data('epgView', epgView);
 Alpine.data('recordingView', recordingView);
 Alpine.data('recordingsView', recordingsView);
+Alpine.data('usersView', usersView);
+Alpine.data('emailAppSettingsView', emailAppSettingsView);
+Alpine.data('generalSettingsView', generalSettingsView);
+Alpine.data('dashboardView', dashboardView);
+Alpine.data('lazyView', lazyView);
 
 window.loadPartialView = loadPartial;
 window.Alpine = Alpine;

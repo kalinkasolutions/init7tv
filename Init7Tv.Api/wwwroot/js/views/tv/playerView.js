@@ -12,13 +12,19 @@ export const playerView = () => ({
     pendingStart: null,
 
     init() {
-        // Choosing a channel while the recordings were in front does not start a stream, which
-        // would be an encode nobody is watching. It waits here instead until watching is what is
-        // being looked at.
+        // The player is hidden rather than taken down when the recordings come to the front, so
+        // left alone it would go on asking for segments and the server would go on transcoding for
+        // a picture nobody can see. Watching is the only half that streams, so leaving it stops.
         this.onViewChanged = async event => {
+            if (event.detail.view !== 'tv') {
+                this.stopPlayback();
+                return;
+            }
+
+            // back to watching: pick up whatever the channel list is pointing at
             const channel = this.$store.ui.channel;
 
-            if (event.detail.view === 'tv' && channel && channel.channelId !== this.currentChannel?.channelId) {
+            if (channel && !this.streamId && !this.pendingStart) {
                 await this.playChannel(channel, this.$store.ui.audioStreamIndex);
             }
         };
@@ -50,6 +56,12 @@ export const playerView = () => ({
     },
 
     stopPlayback() {
+        // A start still waiting for its first segments would otherwise arrive after this and play
+        // on over a channel that has been left, or a view that has been.
+        this.pendingStart?.abort();
+        this.pendingStart = null;
+        this.loading = false;
+
         this.streamId = null;
 
         // they describe the channel being left, and showing them against the one
@@ -86,10 +98,6 @@ export const playerView = () => ({
         // so keep the old player from polling a playlist that is already gone
         this.stopPlayback();
 
-        // A start still waiting for its first segments is about to be stopped by
-        // this one, and would report that as a failure over the channel now
-        // playing. The viewer has moved on, so drop it.
-        this.pendingStart?.abort();
         const start = this.pendingStart = new AbortController();
         this.loading = true;
 

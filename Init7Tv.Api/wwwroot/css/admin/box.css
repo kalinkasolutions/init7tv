@@ -1,13 +1,5 @@
-@import url('../reset.css');
-@import url('../main.css');
-@import url('../notification.css');
-@import url('../header.css');
-@import url('../modal.css');
-
-@import url('users.css');
-@import url('appSettings.css');
-
-
+/* The panels the admin page is made of. They were written inline in a bundle of its own, which is
+   what kept that page from being able to share one with everything else. */
 .box {
     --box-inset: 1rem;
     border: 1px solid #ffffff80;

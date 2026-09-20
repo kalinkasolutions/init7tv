@@ -11,14 +11,14 @@
 </head>
 <body>
 
+<!-- one document: the header is built once and every view happens underneath it -->
 <div x-init="$el.outerHTML = await loadPartialView('partial/header.html')"></div>
 
 <main>
-    <!-- the channel list is shared, so it is built once and stays put -->
-    <div x-init="$el.outerHTML = await loadPartialView('partial/tv/sidebar.html')"></div>
+    <!-- the channel list belongs to watching and recording, and is shared by them -->
+    <div x-show="$store.view.is('tv') || $store.view.is('recording')" x-data
+         x-init="$el.innerHTML = await loadPartialView('partial/tv/sidebar.html')"></div>
 
-    <!-- x-data because Alpine only looks at directives inside a component, and these two carry
-         nothing of their own beyond being shown or not -->
     <div class="stream-content" x-data x-show="$store.view.is('tv')">
         <div x-init="$el.outerHTML = await loadPartialView('partial/tv/player.html')"></div>
         <div x-init="$el.outerHTML = await loadPartialView('partial/tv/epg.html')"></div>
@@ -27,6 +27,15 @@
     <div class="stream-content" x-data x-show="$store.view.is('recording')" x-cloak>
         <div x-init="$el.outerHTML = await loadPartialView('partial/recording/recording.html')"></div>
     </div>
+
+    <!-- built the first time somebody goes there, so a viewer who never does never asks for any
+         of it, and the dashboard's connection is not opened on their behalf -->
+    <div class="page" x-data="lazyView('admin', 'partial/admin/admin.html')"
+         x-show="$store.view.is('admin')" x-cloak></div>
+
+    <div class="page" x-show="$store.view.is('dashboard')" x-cloak
+         x-data="lazyView('dashboard', 'partial/dashboard/dashboard.html',
+                          'https://cdn.jsdelivr.net/npm/@microsoft/signalr@10.0.11/dist/browser/signalr.min.js')"></div>
 </main>
 
 <div x-init="$el.outerHTML = await loadPartialView('partial/modal.html')"></div>

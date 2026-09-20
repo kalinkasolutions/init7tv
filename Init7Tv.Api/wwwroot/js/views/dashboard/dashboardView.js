@@ -9,7 +9,7 @@ export const dashboardView = () => {
         async init() {
             this.ticker = setInterval(() => (this.now = Date.now()), 30_000);
 
-            this.connection = new signalR.HubConnectionBuilder()
+            this.connection = new window.signalR.HubConnectionBuilder()
                 .withUrl("/hub/admin/dashboard")
                 .withAutomaticReconnect()
                 .build();

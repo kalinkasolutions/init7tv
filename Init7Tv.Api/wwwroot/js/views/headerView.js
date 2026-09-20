@@ -8,6 +8,10 @@ export const headerView = () => {
             this.userInfo = await get("api/user/user-info");
         },
 
+        is(name) {
+            return this.$store.view.is(name);
+        },
+
         /// Admins are not given the role, they simply outrank it.
         get canRecord() {
             return this.userInfo?.isAdmin === true

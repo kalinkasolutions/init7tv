@@ -137,9 +137,16 @@ i {
     height: 1em;
 }
 
-main.admin {
+/* a view that takes the page to itself, rather than sharing it with the channel list */
+main > .page {
+    flex: 1;
+    min-width: 0;
+    overflow: auto;
+}
+
+.admin-page {
+    display: flex;
     flex-direction: column;
-    flex: unset;
     /* a row of a name, an address and two roles reads badly when it is stretched
        the width of a large monitor */
     max-width: 75rem;
