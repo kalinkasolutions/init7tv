@@ -54,4 +54,14 @@ public interface IRecordingEngine
     Task<OperationResult<long>> ForkAsync(string fromDirectory, string intoDirectory, TimeSpan upTo);
 
     void StopAll();
+
+    /// <summary>
+    /// Ends any ffmpeg left writing into a directory by a previous run of this app, and forgets what
+    /// it knew about them. Returns how many were still going.
+    ///
+    /// A clean shutdown stops its own captures, so this only ever finds something after a kill that
+    /// could not be caught — an OOM, a -9, a machine losing power — where ffmpeg is left running
+    /// against a multicast for as long as its -t has to go.
+    /// </summary>
+    int StopLeftovers(string directory);
 }

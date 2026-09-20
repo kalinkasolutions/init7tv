@@ -86,10 +86,21 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
             var rows = group.ToArray();
             var captureId = RecordingFiles.CaptureIdOf(group.Key);
 
-            // nothing survives a restart, so a live one here means the row is stale
+            // this run has just started, so a live one here means the row is stale
             if (captureId != Guid.Empty && m_engine.IsRunning(captureId))
             {
                 continue;
+            }
+
+            // An ffmpeg started by the run before this one may still be going: only a clean shutdown
+            // stops them. Left alone it writes on into the same capture that the resume below is
+            // about to add a part to, so what is finalized is two encodes interleaved and the sizes
+            // are counted while still moving.
+            var leftovers = m_engine.StopLeftovers(group.Key);
+            if (leftovers > 0)
+            {
+                m_logger.LogWarning("Stopped {Count} ffmpeg(s) still writing into {Directory} from the last run",
+                    leftovers, group.Key);
             }
 
             if (now + WorthResuming < rows[0].ScheduledEnd && RecordingFiles.NextPart(group.Key) <= MaxParts)

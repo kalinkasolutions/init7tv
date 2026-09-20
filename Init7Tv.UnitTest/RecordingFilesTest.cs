@@ -39,6 +39,34 @@ public class RecordingFilesTest
         Assert.That(RecordingFiles.CaptureIdOf(Path.Combine(m_root, "not-a-guid")), Is.EqualTo(Guid.Empty));
     }
 
+    /// A note sits beside the part it belongs to, and is not mistaken for a capture.
+    [Test]
+    public void EachPartNotesTheProcessWritingIt()
+    {
+        File.WriteAllText(RecordingFiles.CapturePath(m_root, 1), "x");
+        File.WriteAllText(RecordingFiles.PidPath(m_root, 1), "1234 2026-09-20T14:00:00.0000000Z");
+        File.WriteAllText(RecordingFiles.PidPath(m_root, 2), "5678 2026-09-20T14:30:00.0000000Z");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Path.GetFileName(RecordingFiles.PidPath(m_root, 1)), Is.EqualTo("capture-1.pid"));
+            Assert.That(
+                RecordingFiles.Pids(m_root).Select(Path.GetFileName),
+                Is.EqualTo(new[] { "capture-1.pid", "capture-2.pid" }));
+
+            // the notes must not look like parts of the recording
+            Assert.That(RecordingFiles.Captures(m_root).Select(Path.GetFileName), Is.EqualTo(new[] { "capture-1.ts" }));
+            Assert.That(RecordingFiles.NextPart(m_root), Is.EqualTo(2));
+        });
+    }
+
+    [Test]
+    public void ADirectoryWithNoNotesHasNothingToStop()
+    {
+        Assert.That(RecordingFiles.Pids(m_root), Is.Empty);
+        Assert.That(RecordingFiles.Pids(Path.Combine(m_root, "gone")), Is.Empty);
+    }
+
     [Test]
     public void TheFirstCaptureIsPartOne()
     {

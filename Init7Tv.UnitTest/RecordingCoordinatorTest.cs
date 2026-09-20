@@ -237,8 +237,35 @@ public class RecordingCoordinatorTest
 
     // --- coming back after a restart -------------------------------------
 
-    /// <summary>Nothing survives a restart, so a row claiming to record is one
-    /// with an ffmpeg that died with the process.</summary>
+    /// <summary>
+    /// Only a clean shutdown stops the captures. After a kill that could not be caught, the ffmpeg
+    /// is still writing into the same directory the resume is about to add a part to.
+    /// </summary>
+    [Test]
+    public async Task ARestartEndsAnyFfmpegTheLastRunLeftBehind()
+    {
+        var row = Leftover(DateTime.UtcNow.AddMinutes(20));
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+
+        await m_coordinator.ReconcileAsync();
+
+        m_engine.Verify(x => x.StopLeftovers(row.Directory), Times.Once);
+    }
+
+    [Test]
+    public async Task ARestartPastTheWindowStillEndsWhatWasLeftBehind()
+    {
+        var row = Leftover(DateTime.UtcNow.AddMinutes(-5));
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+
+        await m_coordinator.ReconcileAsync();
+
+        // it is finalized here, and a survivor would still be appending to what is being measured
+        m_engine.Verify(x => x.StopLeftovers(row.Directory), Times.Once);
+    }
+
+    /// <summary>A row claiming to record is one whose ffmpeg went with the process that started
+    /// it, unless it was left behind, which is dealt with first.</summary>
     [Test]
     public async Task ARestartInsideTheWindowGoesBackForTheRest()
     {

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.Dto;
@@ -23,6 +24,9 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
     // so they can be further apart than the live stream's two seconds
     /// <summary>Public so the playlist cannot drift from the spacing actually recorded.</summary>
     public const int KeyframeSeconds = 4;
+
+    /// <summary>Checked before anything is killed, because a pid on its own proves nothing.</summary>
+    private const string FfmpegProcessName = "ffmpeg";
 
     private readonly ILogger<RecordingEngine> m_logger;
     private readonly IFfprobeService m_ffprobeService;
@@ -76,8 +80,8 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         }
 
         Directory.CreateDirectory(request.Directory);
-        var capturePath = RecordingFiles.CapturePath(
-            request.Directory, RecordingFiles.NextPart(request.Directory));
+        var part = RecordingFiles.NextPart(request.Directory);
+        var capturePath = RecordingFiles.CapturePath(request.Directory, part);
 
         // every track is kept; the pick carries no language preference, so the channel's own decides
         // only which of them leads
@@ -107,7 +111,8 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         {
             CaptureId = request.CaptureId,
             Ffmpeg = process,
-            StartedAt = DateTime.UtcNow
+            StartedAt = DateTime.UtcNow,
+            PidPath = RecordingFiles.PidPath(request.Directory, part)
         };
 
         try
@@ -121,6 +126,8 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
             process.Dispose();
             return OperationResult<bool>.Error("Failed to start the recording");
         }
+
+        Note(recording);
 
         if (!m_active.TryAdd(request.CaptureId, recording))
         {
@@ -286,6 +293,9 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
             m_logger.LogError(ex, "Failed to dispose ffmpeg for recording {CaptureId}", recording.CaptureId);
         }
 
+        // it ended in our hands, so there is nothing for the next run to go looking for
+        Forget(recording.PidPath);
+
         m_logger.LogInformation("Recording {CaptureId} ended with exit code {ExitCode}",
             recording.CaptureId, exitCode);
 
@@ -303,11 +313,128 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         m_signal.Signal();
     }
 
+    public int StopLeftovers(string directory)
+    {
+        var stopped = 0;
+
+        foreach (var path in RecordingFiles.Pids(directory))
+        {
+            if (StopLeftover(path))
+            {
+                stopped++;
+            }
+
+            Forget(path);
+        }
+
+        return stopped;
+    }
+
+    /// <summary>
+    /// Ends one noted ffmpeg if it is still there. False when it is already gone, or when the
+    /// number now belongs to something else: pids are handed out again, and killing whatever
+    /// inherited this one would be far worse than leaving an encode running.
+    /// </summary>
+    private bool StopLeftover(string path)
+    {
+        if (Read(path) is not var (pid, startedAt))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+
+            if (process.ProcessName != FfmpegProcessName)
+            {
+                return false;
+            }
+
+            // started at another moment, so this is something else wearing the same number
+            if (Math.Abs((process.StartTime.ToUniversalTime() - startedAt).TotalSeconds) > 1)
+            {
+                return false;
+            }
+
+            m_logger.LogWarning("ffmpeg {Pid} outlived the run that started it, stopping it", pid);
+            process.Kill();
+
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            // nothing runs under that number, which is the ordinary case
+            return false;
+        }
+        catch (Exception ex)
+        {
+            m_logger.LogWarning(ex, "Could not deal with the ffmpeg noted in {Path}", path);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Notes the running ffmpeg beside its capture. Best effort: one that cannot be written down is
+    /// still recording, it is only one that would have to be found by hand.
+    /// </summary>
+    private void Note(ActiveRecording recording)
+    {
+        try
+        {
+            var startedAt = recording.Ffmpeg.StartTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+            File.WriteAllText(recording.PidPath, $"{recording.Ffmpeg.Id} {startedAt}");
+        }
+        catch (Exception ex)
+        {
+            m_logger.LogWarning(ex, "Could not note the ffmpeg writing {Path}", recording.PidPath);
+        }
+    }
+
+    private (int Pid, DateTime StartedAt)? Read(string path)
+    {
+        try
+        {
+            var noted = File.ReadAllText(path).Split(' ', 2);
+
+            if (noted.Length == 2
+                && int.TryParse(noted[0], CultureInfo.InvariantCulture, out var pid)
+                && DateTime.TryParse(
+                    noted[1], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var startedAt))
+            {
+                return (pid, startedAt.ToUniversalTime());
+            }
+
+            m_logger.LogWarning("Could not make sense of {Path}", path);
+        }
+        catch (Exception ex)
+        {
+            m_logger.LogWarning(ex, "Could not read {Path}", path);
+        }
+
+        return null;
+    }
+
+    private void Forget(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            m_logger.LogWarning(ex, "Could not remove {Path}", path);
+        }
+    }
+
     private sealed class ActiveRecording
     {
         public required Guid CaptureId { get; init; }
         public required Process Ffmpeg { get; init; }
         public required DateTime StartedAt { get; init; }
+
+        /// <summary>Where this one is noted, so the note can go when it does.</summary>
+        public required string PidPath { get; init; }
 
         /// <summary>Set when we killed it, so an exit code of its own is not a failure.</summary>
         public bool Stopped { get; set; }

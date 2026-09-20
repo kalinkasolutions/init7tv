@@ -14,6 +14,7 @@ public static class RecordingFiles
 {
     private const string CapturePrefix = "capture-";
     private const string CaptureSuffix = ".ts";
+    private const string PidSuffix = ".pid";
 
     public const string FinalName = "recording.mp4";
 
@@ -28,6 +29,27 @@ public static class RecordingFiles
 
     public static string CapturePath(string directory, int part) =>
         Path.Combine(directory, $"{CapturePrefix}{part.ToString(CultureInfo.InvariantCulture)}{CaptureSuffix}");
+
+    /// <summary>
+    /// Where the ffmpeg writing a part notes itself, so a survivor of an unclean shutdown can be
+    /// found and ended. One per part, because a run that was killed twice leaves two of them.
+    /// </summary>
+    public static string PidPath(string directory, int part) =>
+        Path.Combine(directory, $"{CapturePrefix}{part.ToString(CultureInfo.InvariantCulture)}{PidSuffix}");
+
+    /// <summary>Every part that was started here, whether or not it is still being written.</summary>
+    public static string[] Pids(string directory)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return [];
+        }
+
+        return Directory
+            .EnumerateFiles(directory, $"{CapturePrefix}*{PidSuffix}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
 
     /// <summary>The captures made so far, in the order they were recorded.</summary>
     public static string[] Captures(string directory)
