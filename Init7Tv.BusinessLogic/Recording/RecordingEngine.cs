@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Text;
 using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.Dto;
@@ -24,8 +23,6 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
     // so they can be further apart than the live stream's two seconds
     /// <summary>Public so the playlist cannot drift from the spacing actually recorded.</summary>
     public const int KeyframeSeconds = 4;
-
-    private static readonly TimeSpan RemuxTimeout = TimeSpan.FromMinutes(30);
 
     private readonly ILogger<RecordingEngine> m_logger;
     private readonly IFfprobeService m_ffprobeService;
@@ -332,72 +329,6 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         return process;
     }
 
-    /// <summary>Runs a short-lived ffmpeg, being the remux, and waits for it.</summary>
-    private async Task<OperationResult<bool>> RunToCompletion(string[] args, string directory)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "ffmpeg",
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        foreach (var arg in args)
-        {
-            startInfo.ArgumentList.Add(arg);
-        }
-
-        Process? process;
-        try
-        {
-            process = Process.Start(startInfo);
-        }
-        catch (Exception ex)
-        {
-            m_logger.LogError(ex, "Failed to start ffmpeg to finalize {Directory}", directory);
-            return OperationResult<bool>.Error("Failed to finalize the recording");
-        }
-
-        if (process == null)
-        {
-            return OperationResult<bool>.Error("Failed to finalize the recording");
-        }
-
-        using var _ = process;
-        using var timeout = new CancellationTokenSource(RemuxTimeout);
-
-        var errors = new StringBuilder();
-
-        try
-        {
-            var reading = ReadErrors(process, errors, timeout.Token);
-            await process.WaitForExitAsync(timeout.Token);
-            await reading;
-        }
-        catch (OperationCanceledException)
-        {
-            m_logger.LogError("Finalizing {Directory} timed out after {Timeout}", directory, RemuxTimeout);
-            Kill(process);
-            return OperationResult<bool>.Error("Timed out while finalizing the recording");
-        }
-
-        if (process.ExitCode != 0)
-        {
-            m_logger.LogError("Finalizing {Directory} failed with exit code {ExitCode}: {Errors}",
-                directory, process.ExitCode, errors.ToString());
-            return OperationResult<bool>.Error("Failed to finalize the recording");
-        }
-
-        return OperationResult<bool>.Success(true);
-    }
-
-    private static async Task ReadErrors(Process process, StringBuilder errors, CancellationToken cancellationToken)
-    {
-        var text = await process.StandardError.ReadToEndAsync(cancellationToken);
-        errors.Append(text);
-    }
-
     private void Kill(Process process)
     {
         try
@@ -411,21 +342,6 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         {
             // a disposed process throws here rather than reporting that it exited
             m_logger.LogWarning(ex, "Failed to kill ffmpeg");
-        }
-    }
-
-    private void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (Exception ex)
-        {
-            m_logger.LogWarning(ex, "Failed to delete {Path}", path);
         }
     }
 

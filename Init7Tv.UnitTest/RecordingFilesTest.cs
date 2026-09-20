@@ -62,10 +62,4 @@ public class RecordingFilesTest
 
         Assert.That(RecordingFiles.NextPart(m_root), Is.EqualTo(11));
     }
-
-    [Test]
-    public void TheFinishedFileSitsBesideTheCaptures()
-    {
-        Assert.That(Path.GetFileName(RecordingFiles.FinalPath(m_root)), Is.EqualTo("recording.mp4"));
-    }
 }

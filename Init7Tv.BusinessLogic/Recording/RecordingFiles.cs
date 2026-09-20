@@ -16,7 +16,6 @@ public static class RecordingFiles
     private const string CaptureSuffix = ".ts";
 
     public const string FinalName = "recording.mp4";
-    public const string PartListName = "parts.txt";
 
     public static string DirectoryFor(string root, Guid captureId) =>
         Path.Combine(root, captureId.ToString("N"));
@@ -26,8 +25,6 @@ public static class RecordingFiles
         Guid.TryParseExact(Path.GetFileName(Path.TrimEndingDirectorySeparator(directory)), "N", out var id)
             ? id
             : Guid.Empty;
-
-    public static string FinalPath(string directory) => Path.Combine(directory, FinalName);
 
     public static string CapturePath(string directory, int part) =>
         Path.Combine(directory, $"{CapturePrefix}{part.ToString(CultureInfo.InvariantCulture)}{CaptureSuffix}");
