@@ -201,8 +201,15 @@ export const recordingView = () => ({
         this.$store.filter.offer(this.planned.map(x => x.userName));
     },
 
+    /// The viewer's own pick of a programme, if they made one. An admin is shown everybody's, and
+    /// somebody else having picked it says nothing about whether this viewer has: two people who
+    /// pick the same programme share one capture, so both may.
+    myPick(programmeId) {
+        return this.planned.find(x => x.programmeId === programmeId && x.isMine);
+    },
+
     isPlanned(programme) {
-        return this.planned.some(x => x.programmeId === programme.id);
+        return this.myPick(programme.id) !== undefined;
     },
 
     async toggle(programme) {
@@ -210,8 +217,9 @@ export const recordingView = () => ({
             return;
         }
 
-        if (this.isPlanned(programme)) {
-            await this.forget(programme.id);
+        const mine = this.myPick(programme.id);
+        if (mine) {
+            await this.forget(mine);
             return;
         }
 
@@ -221,18 +229,41 @@ export const recordingView = () => ({
         }
     },
 
-    async forget(programmeId) {
+    /// Whose pick it is has to be said: an admin is shown everybody's, and the programme id alone
+    /// does not say which of them is meant.
+    async forget(entry) {
+        const url = `/api/recording/planned/${entry.programmeId}?owner=${encodeURIComponent(entry.userName)}`;
+
         // null is only returned when the request failed, and it has said so
-        if (await deleteItem(`/api/recording/planned/${programmeId}`) === null) {
+        if (await deleteItem(url) === null) {
             return;
         }
 
-        this.planned = this.planned.filter(x => x.programmeId !== programmeId);
+        this.planned = this.planned.filter(
+            x => x.programmeId !== entry.programmeId || x.userName !== entry.userName);
     },
 
+    /// An admin is shown everybody's picks, so clearing the list can drop somebody else's work.
+    /// Asked first for that reason, the way stopping and deleting a recording are.
     async forgetEverything() {
-        for (const entry of [...this.planned]) {
-            await this.forget(entry.programmeId);
+        const entries = [...this.planned];
+        if (entries.length === 0) {
+            return;
+        }
+
+        const theirs = entries.filter(x => !x.isMine).length;
+        const what = entries.length === 1 ? '1 picked programme' : `${entries.length} picked programmes`;
+
+        const confirmed = await this.$store.modal.show(
+            'Clear every pick?',
+            `${what} will be dropped.${theirs ? ` ${theirs} of them belong to somebody else.` : ''}`);
+
+        if (!confirmed) {
+            return;
+        }
+
+        for (const entry of entries) {
+            await this.forget(entry);
         }
     },
 
@@ -264,7 +295,7 @@ export const recordingView = () => ({
         }
 
         for (const old of older) {
-            if (this.planned.some(x => x.programmeId === old.id)) {
+            if (this.myPick(old.id)) {
                 continue;
             }
 

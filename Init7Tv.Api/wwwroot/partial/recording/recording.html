@@ -85,7 +85,7 @@
                 <button class="link-button" @click="await forgetEverything()">clear all</button>
             </div>
 
-            <template x-for="entry in plannedInOrder" :key="entry.programmeId">
+            <template x-for="entry in plannedInOrder" :key="`${entry.userName}:${entry.programmeId}`">
                 <div class="entry">
                     <div class="entry-when">
                         <span class="entry-day" x-text="plannedOn(entry)"></span>
@@ -106,7 +106,7 @@
                         <button class="link-button" title="Show it in the guide"
                                 @click="await openPlanned(entry)">show in guide</button>
                         <button class="icon-button danger-icon" title="Remove"
-                                @click="await forget(entry.programmeId)">
+                                @click="await forget(entry)">
                             <i class="bi bi-trash3"></i>
                         </button>
                     </div>

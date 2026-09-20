@@ -61,24 +61,29 @@ public sealed class RecordingDownloadWriter : IRecordingDownloadWriter
 
         try
         {
-            foreach (var range in download.Ranges)
+            // one handle per part rather than per range: the ranges arrive in order and a download
+            // is thousands of them out of the same two or three files
+            foreach (var group in download.Ranges.GroupBy(range => range.Part))
             {
                 await using var part = File.Open(
-                    download.Parts[range.Part], FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    download.Parts[group.Key], FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
 
-                part.Seek(range.Offset, SeekOrigin.Begin);
-                var left = range.Length;
-
-                while (left > 0)
+                foreach (var range in group)
                 {
-                    var read = await part.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, left)));
-                    if (read == 0)
-                    {
-                        break;
-                    }
+                    part.Seek(range.Offset, SeekOrigin.Begin);
+                    var left = range.Length;
 
-                    await into.WriteAsync(buffer.AsMemory(0, read));
-                    left -= read;
+                    while (left > 0)
+                    {
+                        var read = await part.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, left)));
+                        if (read == 0)
+                        {
+                            break;
+                        }
+
+                        await into.WriteAsync(buffer.AsMemory(0, read));
+                        left -= read;
+                    }
                 }
             }
         }

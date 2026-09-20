@@ -34,16 +34,18 @@ public class RecordingServiceTest
         m_engine = new Mock<IRecordingEngine>();
         m_planned = new Mock<IPlannedRecordingRepository>();
 
-        m_service = new RecordingService(
-            m_repository.Object,
-            m_planned.Object,
-            new RecordingSignal(),
-            m_engine.Object,
-            Mock.Of<IChannelService>(),
-            new RecordingSegmentCache(),
-            NullLogger<RecordingService>.Instance,
-            Options.Create(new Init7TvOptions { RecordingPath = m_root }));
+        m_service = ServiceWith(new RecordingSegmentCache());
     }
+
+    private RecordingService ServiceWith(IRecordingSegmentCache segments) => new(
+        m_repository.Object,
+        m_planned.Object,
+        new RecordingSignal(),
+        m_engine.Object,
+        Mock.Of<IChannelService>(),
+        segments,
+        NullLogger<RecordingService>.Instance,
+        Options.Create(new Init7TvOptions { RecordingPath = m_root }));
 
     [TearDown]
     public void TearDown()
@@ -151,6 +153,22 @@ public class RecordingServiceTest
         await m_service.DeleteAsync(recording.RecordingId, Owner, isAdmin: false);
 
         m_engine.Verify(x => x.Stop(RecordingFiles.CaptureIdOf(recording.Directory)), Times.Once);
+    }
+
+    /// <summary>
+    /// The index is keyed by the directory and outlives the files unless it is told: an index for a
+    /// recording that has been deleted is held for as long as the process runs and can never be
+    /// asked for again.
+    /// </summary>
+    [Test]
+    public async Task DeletingOneDropsTheSegmentIndexWithIt()
+    {
+        var segments = new Mock<IRecordingSegmentCache>();
+        var recording = Completed();
+
+        await ServiceWith(segments.Object).DeleteAsync(recording.RecordingId, Owner, isAdmin: false);
+
+        segments.Verify(x => x.Forget(recording.Directory), Times.Once);
     }
 
     /// <summary>The other person still wants it, so their capture must keep running.</summary>

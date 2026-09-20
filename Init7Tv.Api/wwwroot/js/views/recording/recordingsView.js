@@ -192,10 +192,15 @@ export const recordingsView = () => ({
         this.dismissed = this.inBreak?.startsAt ?? null;
     },
 
-    /// A file can go between the list being drawn and the button being pressed, and a video element
-    /// pointed at nothing just sits there looking broken.
+    /// The player gave up. One still being written has usually only just started and has no whole
+    /// segment to hand out yet; anything else has lost the file it was pointed at, which can happen
+    /// between the list being drawn and the button being pressed.
     async gone(recording) {
-        notify('Not there any more', `${recording.title} is no longer on disk.`, 'error');
+        if (this.isBusy(recording)) {
+            notify('Nothing to play yet', `${recording.title} has only just started recording.`, 'error');
+        } else {
+            notify('Not there any more', `${recording.title} is no longer on disk.`, 'error');
+        }
 
         this.stopPlaying();
         await this.load();

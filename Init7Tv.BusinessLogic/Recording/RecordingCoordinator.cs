@@ -112,7 +112,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
                 continue;
             }
 
-            await FinalizeGroupAsync(rows, settings, cutShort: true);
+            await FinalizeGroupAsync(rows, cutShort: true);
         }
 
         m_eventBus.Publish(await m_recordingService.GetCurrentAsync());
@@ -130,7 +130,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         // is still beyond it when the window is redrawn on the next pass.
         var horizon = now + Horizon;
 
-        await ForkDroppedOutAsync(settings, now);
+        await ForkDroppedOutAsync(now);
         await HandleFinishedCapturesAsync(settings);
         await StopUnwantedAsync(settings, now, horizon);
         await StartDueAsync(settings, preRoll, postRoll, now, horizon);
@@ -199,7 +199,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
     /// did, cut from the transport stream on disk while the rest of it keeps being written for the
     /// people still waiting. A stream copy, so it costs no encode.
     /// </summary>
-    private async Task ForkDroppedOutAsync(GeneralAppSettingsDto settings, DateTime now)
+    private async Task ForkDroppedOutAsync(DateTime now)
     {
         foreach (var row in await m_recordings.GetUnfinishedAsync())
         {
@@ -219,12 +219,18 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
 
             var forked = await m_engine.ForkAsync(row.Directory, theirs, upTo);
 
+            // counted here for the same reason a finished capture's are: what was cut out has
+            // stopped growing, and the page has to know whether there is anything to leave out
+            // without opening the recording
+            var breaks = forked.IsSuccess ? CountBreaks(theirs) : 0;
+
             await UpdateAsync([row], x =>
             {
                 if (forked.IsSuccess)
                 {
                     x.Directory = theirs;
                     x.FileSizeBytes = forked.Value;
+                    x.AdBreakCount = breaks;
                     x.State = RecordingState.Interrupted;
                     x.ErrorMessage = "Stopped while it was still recording for somebody else";
                 }
@@ -267,7 +273,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
                 continue;
             }
 
-            await FinalizeGroupAsync(rows, settings, cutShort || RecordingFiles.Captures(directory).Length > 1);
+            await FinalizeGroupAsync(rows, cutShort || RecordingFiles.Captures(directory).Length > 1);
         }
     }
 
@@ -283,7 +289,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         var started = await StartCaptureAsync(rows, channel.Value, settings, rows[0].ScheduledEnd - now);
         if (!started)
         {
-            await FinalizeGroupAsync(rows, settings, cutShort: true);
+            await FinalizeGroupAsync(rows, cutShort: true);
         }
     }
 
@@ -293,7 +299,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
     /// the moment it stops being written. Turning it into an mp4 is the download's business, and
     /// only if somebody asks for one.
     /// </summary>
-    private async Task FinalizeGroupAsync(RecordingRow[] rows, GeneralAppSettingsDto settings, bool cutShort)
+    private async Task FinalizeGroupAsync(RecordingRow[] rows, bool cutShort)
     {
         var directory = rows[0].Directory;
         var captured = RecordingFiles.Captures(directory).Sum(path => new FileInfo(path).Length);

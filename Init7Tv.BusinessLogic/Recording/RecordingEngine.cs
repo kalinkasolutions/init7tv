@@ -337,14 +337,14 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
     /// </summary>
     private bool StopLeftover(string path)
     {
-        if (Read(path) is not var (pid, startedAt))
+        if (Read(path) is not { } noted)
         {
             return false;
         }
 
         try
         {
-            using var process = Process.GetProcessById(pid);
+            using var process = Process.GetProcessById(noted.Pid);
 
             if (process.ProcessName != FfmpegProcessName)
             {
@@ -352,12 +352,12 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
             }
 
             // started at another moment, so this is something else wearing the same number
-            if (Math.Abs((process.StartTime.ToUniversalTime() - startedAt).TotalSeconds) > 1)
+            if (Math.Abs((process.StartTime.ToUniversalTime() - noted.StartedAt).TotalSeconds) > 1)
             {
                 return false;
             }
 
-            m_logger.LogWarning("ffmpeg {Pid} outlived the run that started it, stopping it", pid);
+            m_logger.LogWarning("ffmpeg {Pid} outlived the run that started it, stopping it", noted.Pid);
             process.Kill();
 
             return true;

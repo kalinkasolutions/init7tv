@@ -36,8 +36,8 @@ public static class FfmpegArguments
     ///
     /// Transport stream rather than mp4 because a killed ffmpeg leaves an mp4
     /// with no moov atom, which is an unplayable file: every crash would cost
-    /// the whole recording rather than its tail. The remux at the end is what
-    /// makes it seekable.
+    /// the whole recording rather than its tail. It is also what is kept, and
+    /// what is played; an mp4 is only made when somebody downloads one.
     /// </summary>
     /// <param name="duration">
     /// What -t is set from, and the thing that actually ends the recording. A
@@ -87,11 +87,6 @@ public static class FfmpegArguments
         return args.ToArray();
     }
 
-    /// <summary>
-    /// Wraps the captured transport stream as mp4 so a browser can play and seek
-    /// it. A stream copy, so this costs no encode and runs far faster than real
-    /// time.
-    /// </summary>
     /// <summary>
     /// Wraps a transport stream arriving on stdin as an mp4 going out on stdout. A stream copy, so
     /// it costs no encode: the capture is already H.264 and AAC and only the box around it changes.

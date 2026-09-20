@@ -73,6 +73,26 @@ public class PlannedRecordingServiceTest
         m_repository.Verify(x => x.GetForUserAsync(It.IsAny<string>()), Times.Never);
     }
 
+    /// <summary>
+    /// Somebody else having picked it says nothing about whether the viewer has, and the guide
+    /// marks a programme as picked from this: two people who pick the same one share a capture, so
+    /// an admin looking at everybody's picks must still be able to make their own.
+    /// </summary>
+    [Test]
+    public async Task APickSaysWhetherItBelongsToWhoeverAskedForTheList()
+    {
+        m_repository.Setup(x => x.GetAllAsync()).ReturnsAsync([Stored(DateTime.UtcNow, DateTime.UtcNow.AddHours(1))]);
+
+        var somebodyElse = await m_service.GetAsync("the-admin", isAdmin: true);
+        var theirOwn = await m_service.GetAsync(UserName, isAdmin: true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(somebodyElse.Value.Single().IsMine, Is.False);
+            Assert.That(theirOwn.Value.Single().IsMine, Is.True);
+        });
+    }
+
     [Test]
     public async Task PlanningKeepsTheTimeItWasGiven()
     {
@@ -154,6 +174,43 @@ public class PlannedRecordingServiceTest
         var result = await m_service.PlanAsync(UserName, wanted);
 
         Assert.That(result.ResultCode, Is.EqualTo(ResultCode.NotFound));
+    }
+
+    /// An admin is shown everybody's picks, so they have to be able to drop one that is not theirs:
+    /// a list that cannot be acted on is worse than no list at all.
+    [Test]
+    public async Task AnAdminCanDropSomebodyElsesPick()
+    {
+        var programmeId = Guid.NewGuid();
+        m_repository.Setup(x => x.RemoveAsync(UserName, programmeId)).ReturnsAsync(true);
+
+        var result = await m_service.CancelAsync("the-admin", isAdmin: true, programmeId, owner: UserName);
+
+        Assert.That(result.IsSuccess, Is.True);
+        m_repository.Verify(x => x.RemoveAsync(UserName, programmeId), Times.Once);
+    }
+
+    /// Not found rather than forbidden, so somebody else's picks cannot be found by asking.
+    [Test]
+    public async Task AnybodyElseCannotDropAPickThatIsNotTheirs()
+    {
+        var programmeId = Guid.NewGuid();
+
+        var result = await m_service.CancelAsync(UserName, isAdmin: false, programmeId, owner: "somebody-else");
+
+        Assert.That(result.ResultCode, Is.EqualTo(ResultCode.NotFound));
+        m_repository.Verify(x => x.RemoveAsync(It.IsAny<string>(), It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Test]
+    public async Task DroppingYourOwnPickStillWorks()
+    {
+        var programmeId = Guid.NewGuid();
+        m_repository.Setup(x => x.RemoveAsync(UserName, programmeId)).ReturnsAsync(true);
+
+        var result = await m_service.CancelAsync(UserName, isAdmin: false, programmeId, owner: UserName);
+
+        Assert.That(result.IsSuccess, Is.True);
     }
 
     private static PlannedRecordingDto Wanted(DateTime starts, DateTime ends) => new()

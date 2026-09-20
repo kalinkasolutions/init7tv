@@ -220,12 +220,22 @@ public static class RecordingEndpoints
         return (await service.PlanAsync(userIdentityProvider.UserName, recording)).ToHttpResult();
     }
 
+    /// <summary>
+    /// Drops a pick. <paramref name="owner"/> says whose, which an admin needs because they are
+    /// shown everybody's; left out it means the caller's own.
+    /// </summary>
     private static async Task<IResult> Cancel(
         Guid programmeId,
+        string? owner,
         IPlannedRecordingService service,
         IUserIdentityProvider userIdentityProvider
     )
     {
-        return (await service.CancelAsync(userIdentityProvider.UserName, programmeId)).ToHttpResult();
+        return (await service.CancelAsync(
+                userIdentityProvider.UserName,
+                userIdentityProvider.IsAdmin,
+                programmeId,
+                owner ?? userIdentityProvider.UserName))
+            .ToHttpResult();
     }
 }

@@ -501,6 +501,59 @@ public class RecordingCoordinatorTest
         Assert.That(row.Directory, Is.Not.EqualTo(theirs), "their share is a file of its own");
     }
 
+    /// <summary>
+    /// Their share is a recording in its own right, so it has to know about its own advertising:
+    /// the page offers a download without the adverts only when there are some to leave out.
+    /// </summary>
+    [Test]
+    public async Task ThePartCutOutOfASharedCaptureKnowsItsOwnAdvertising()
+    {
+        var row = Leftover(DateTime.UtcNow.AddHours(1), RecordingState.Finalizing);
+        row.StartedAt = DateTime.UtcNow.AddMinutes(-20);
+        row.EndedAt = DateTime.UtcNow;
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+
+        m_engine.Setup(x => x.IsRunning(RecordingFiles.CaptureIdOf(row.Directory))).Returns(true);
+        m_engine
+            .Setup(x => x.ForkAsync(row.Directory, It.IsAny<string>(), It.IsAny<TimeSpan>()))
+            .ReturnsAsync(OperationResult<long>.Success(4242));
+
+        // the share is written to a directory of its own, whose name the coordinator picks
+        m_segments.Setup(x => x.Breaks(It.Is<string>(d => d != row.Directory))).Returns(
+        [
+            new AdBreakMark { StartsAt = 60, EndsAt = 180 },
+            new AdBreakMark { StartsAt = 600, EndsAt = 720 }
+        ]);
+
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        Assert.That(row.AdBreakCount, Is.EqualTo(2));
+    }
+
+    /// <summary>A share that could not be cut is a failure, and counts nothing.</summary>
+    [Test]
+    public async Task AShareThatCouldNotBeCutCountsNoAdvertising()
+    {
+        var row = Leftover(DateTime.UtcNow.AddHours(1), RecordingState.Finalizing);
+        row.StartedAt = DateTime.UtcNow.AddMinutes(-20);
+        row.EndedAt = DateTime.UtcNow;
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+
+        m_engine.Setup(x => x.IsRunning(RecordingFiles.CaptureIdOf(row.Directory))).Returns(true);
+        m_engine
+            .Setup(x => x.ForkAsync(row.Directory, It.IsAny<string>(), It.IsAny<TimeSpan>()))
+            .ReturnsAsync(OperationResult<long>.Error("no"));
+
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.State, Is.EqualTo(RecordingState.Failed));
+            Assert.That(row.AdBreakCount, Is.Zero);
+        });
+        m_segments.Verify(x => x.Breaks(It.IsAny<string>()), Times.Never);
+    }
+
     /// <summary>A capture that has exited is finished normally, not cut in two.</summary>
     [Test]
     public async Task AFinishedCaptureIsNotMistakenForSomebodyDroppingOut()

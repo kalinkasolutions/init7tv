@@ -30,7 +30,8 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
             ? await m_repository.GetAllAsync()
             : await m_repository.GetForUserAsync(userName);
 
-        return OperationResult<PlannedRecordingDto[]>.Success(planned.Select(ToDto).ToArray());
+        return OperationResult<PlannedRecordingDto[]>.Success(
+            planned.Select(x => ToDto(x, userName)).ToArray());
     }
 
     public async Task<OperationResult<PlannedRecordingDto>> PlanAsync(string userName, PlannedRecordingDto recording)
@@ -78,12 +79,23 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
         // One starting in a minute must not wait out a sleep the loop has already committed to
         m_signal.Signal();
 
-        return OperationResult<PlannedRecordingDto>.Success(ToDto(stored));
+        return OperationResult<PlannedRecordingDto>.Success(ToDto(stored, userName));
     }
 
-    public async Task<OperationResult<bool>> CancelAsync(string userName, Guid programmeId)
+    public async Task<OperationResult<bool>> CancelAsync(
+        string userName,
+        bool isAdmin,
+        Guid programmeId,
+        string owner
+    )
     {
-        var removed = await m_repository.RemoveAsync(userName, programmeId);
+        // not found rather than forbidden, so somebody else's picks cannot be found by asking
+        if (!isAdmin && owner != userName)
+        {
+            return OperationResult<bool>.NotFound("That programme was not planned");
+        }
+
+        var removed = await m_repository.RemoveAsync(owner, programmeId);
 
         if (removed)
         {
@@ -101,7 +113,7 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
         return value.Length <= max ? value : value[..max];
     }
 
-    private static PlannedRecordingDto ToDto(PlannedRecording x) => new()
+    private static PlannedRecordingDto ToDto(PlannedRecording x, string askedBy) => new()
     {
         ProgrammeId = x.ProgrammeId,
         ChannelId = x.ChannelId,
@@ -111,7 +123,8 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
         SubTitle = x.SubTitle,
         StartsAt = AsUtc(x.StartsAt),
         EndsAt = AsUtc(x.EndsAt),
-        UserName = x.UserName
+        UserName = x.UserName,
+        IsMine = x.UserName == askedBy
     };
 
     /// These are stored in UTC, but the database hands them back with no kind at

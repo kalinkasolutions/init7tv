@@ -335,6 +335,7 @@ public sealed class RecordingService : IRecordingService
             m_engine.Stop(RecordingFiles.CaptureIdOf(directory));
 
             DeleteDirectory(directory);
+            m_segments.Forget(directory);
         }
 
         return OperationResult<bool>.Success(true);
@@ -395,10 +396,9 @@ public sealed class RecordingService : IRecordingService
     }
 
     /// <summary>
-    /// The stored path is only trusted after it is shown to sit under the root:
-    /// a row that was edited by hand must not be able to read anywhere it likes.
+    /// The recording's own directory, once it is shown to sit under the root: a row that was
+    /// edited by hand must not be able to read anywhere it likes.
     /// </summary>
-    /// <summary>The recording's own directory, once it is shown to be under the root.</summary>
     private string? ResolveDirectory(RecordingRow recording)
     {
         if (string.IsNullOrEmpty(recording.Directory))
