@@ -109,7 +109,12 @@ public static class FfmpegArguments
             "-c", "copy",
             // aac leaves a transport stream as ADTS and mp4 wants it as ASC
             "-bsf:a", "aac_adtstoasc",
-            "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+
+            // delay_moov earns its place: empty_moov writes the header before a single packet has
+            // been through, which is before aac_adtstoasc has seen an ADTS frame to build the audio
+            // config from, so the header went out without one. Chrome works it out from the first
+            // frame anyway; Firefox does not, and played the picture in silence.
+            "-movflags", "frag_keyframe+empty_moov+default_base_moof+delay_moov",
             "-f", "mp4", "pipe:1"
         ];
     }

@@ -401,4 +401,17 @@ public class FfmpegArgumentsTest
                 "an ordinary mp4 cannot be written to something that cannot be seeked back into");
         });
     }
+
+    /// <summary>
+    /// empty_moov writes the header before a packet has been through, and so before aac_adtstoasc
+    /// has seen an ADTS frame to build the audio config from: the header then goes out with none.
+    /// Chrome guesses it from the first frame, Firefox does not, and a recording played silently.
+    /// </summary>
+    [Test]
+    public void Download_WaitsForTheFirstPacketBeforeWritingTheHeader()
+    {
+        var args = FfmpegArguments.BuildDownload("error");
+
+        Assert.That(ValueOf(args, "-movflags"), Does.Contain("delay_moov"));
+    }
 }
