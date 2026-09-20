@@ -1,6 +1,7 @@
 import {get} from '../../requestHandler.js';
 import {notify} from '../../notification.js';
 import {whileShowing} from '../../whileShowing.js';
+import {playHls} from '../../hlsPlayer.js';
 
 export const playerView = () => ({
     /// What is playing, or being started. Not the same as the channel the list points at, which is
@@ -137,6 +138,11 @@ export const playerView = () => ({
             return;
         }
 
+        this.ended();
+    },
+
+    /// Nothing more is coming, whether hls gave up or the server says the stream has stopped.
+    ended() {
         this.stop();
         notify('Stream ended', 'The channel stopped streaming.', 'error');
     },
@@ -144,46 +150,16 @@ export const playerView = () => ({
     startHls(streamId) {
         this.stopHls();
 
-        if (!Hls.isSupported()) {
-            notify('Hls is not supported.', 'Playing hls streams is not supported in this browser', 'error');
-            return;
-        }
-
-        // Defaults are tuned for adaptive VOD. This is a single rendition live
-        // stream with short segments, and low latency mode is on by default
-        // while the playlist carries no LL-HLS parts for it to use.
-        this.hls = new Hls({
-            lowLatencyMode: false,
-            // as far back as the server has ready when a channel opens, and no
-            // further: these are counts of segments, so they track their length
-            liveSyncDurationCount: 2,
-            liveMaxLatencyDurationCount: 6,
-            maxBufferLength: 30
+        this.hls = playHls(this.$refs.video, `/api/streaming/playlist?streamId=${streamId}`, {
+            tuning: {
+                // as far back as the server has ready when a channel opens, and no
+                // further: these are counts of segments, so they track their length
+                liveSyncDurationCount: 2,
+                liveMaxLatencyDurationCount: 6
+            },
+            // hls giving up says the same thing to a viewer as the server saying the stream is gone
+            onFatal: () => this.ended()
         });
-
-        this.hls.on(Hls.Events.MANIFEST_PARSED, () => this.startPlaying());
-        this.hls.loadSource(`/api/streaming/playlist?streamId=${streamId}`);
-        this.hls.attachMedia(this.$refs.video);
-    },
-
-    startPlaying() {
-        this.$refs.video.play().catch(error => {
-            if (error.name === 'NotAllowedError') {
-                this.waitForUserToPlay();
-            } else if (error.name !== 'AbortError') {
-                notify('Playback error', 'Something went wrong', 'error');
-            }
-        });
-    },
-
-    /// Autoplay was refused. Keep the player from pulling segments nobody is
-    /// watching, which otherwise continues for as long as the page is open.
-    waitForUserToPlay() {
-        this.hls?.stopLoad();
-
-        notify('Press play to start', 'Your browser blocked autoplay for this page.', 'error');
-
-        this.$refs.video.addEventListener('play', () => this.hls?.startLoad(), {once: true});
     },
 
     get title() {

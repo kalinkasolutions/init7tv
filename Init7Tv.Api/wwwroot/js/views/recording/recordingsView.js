@@ -1,6 +1,7 @@
 import {get, post, deleteItem} from '../../requestHandler.js';
 import {notify} from '../../notification.js';
 import {whileShowing} from '../../whileShowing.js';
+import {playHls} from '../../hlsPlayer.js';
 
 /// States the scheduler is still working on.
 const BUSY = ['Pending', 'Recording', 'Finalizing'];
@@ -136,11 +137,6 @@ export const recordingsView = () => ({
     startHls(recording) {
         this.stopHls();
 
-        if (!Hls.isSupported()) {
-            notify('Hls is not supported', 'This browser cannot play a recording that is still running', 'error');
-            return;
-        }
-
         // A growing capture is a live playlist, which is what has hls.js come back for new segments
         // and append them without a gap. Left alone it would also drag the playhead to within a few
         // seconds of the end and refuse to be moved off it, so it is told to target an hour behind:
@@ -148,17 +144,16 @@ export const recordingsView = () => ({
         // recorded.
         const behind = 3600;
 
-        this.hls = new Hls({
-            lowLatencyMode: false,
-            liveSyncDuration: behind,
-            liveMaxLatencyDuration: behind * 24,
-            backBufferLength: Infinity,
-            maxBufferLength: 30
-        });
+        const playlist = `/api/recording/recordings/${recording.recordingId}/playlist.m3u8`;
 
-        this.hls.on(Hls.Events.ERROR, (_, data) => data.fatal && this.gone(recording));
-        this.hls.loadSource(`/api/recording/recordings/${recording.recordingId}/playlist.m3u8`);
-        this.hls.attachMedia(this.$refs.video);
+        this.hls = playHls(this.$refs.video, playlist, {
+            tuning: {
+                liveSyncDuration: behind,
+                liveMaxLatencyDuration: behind * 24,
+                backBufferLength: Infinity
+            },
+            onFatal: () => this.gone(recording)
+        });
     },
 
     stopHls() {
