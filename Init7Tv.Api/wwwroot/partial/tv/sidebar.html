@@ -16,7 +16,7 @@
                         :aria-label="c.isFavourite ? 'Remove from favourites' : 'Add to favourites'"
                         x-text="c.isFavourite ? '★' : '☆'"></button>
                 <span x-text="c.displayName"></span>
-                <img :src="`data:image/png;base64,${c.logo}`" :alt="c.displayName">
+                <img :src="`/api/streaming/channels/${c.channelId}/logo`" :alt="c.displayName">
             </div>
         </template>
     </div>

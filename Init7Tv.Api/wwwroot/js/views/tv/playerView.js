@@ -12,6 +12,18 @@ export const playerView = () => ({
     pendingStart: null,
 
     init() {
+        // Choosing a channel while the recordings were in front does not start a stream, which
+        // would be an encode nobody is watching. It waits here instead until watching is what is
+        // being looked at.
+        this.onViewChanged = async event => {
+            const channel = this.$store.ui.channel;
+
+            if (event.detail.view === 'tv' && channel && channel.channelId !== this.currentChannel?.channelId) {
+                await this.playChannel(channel, this.$store.ui.audioStreamIndex);
+            }
+        };
+        window.addEventListener('view-changed', this.onViewChanged);
+
         // the server tears a stream down when ffmpeg exits; without this the
         // player just stalls with no explanation
         this.events = new EventSource("/api/streaming/events");
@@ -22,6 +34,7 @@ export const playerView = () => ({
     },
 
     destroy() {
+        window.removeEventListener('view-changed', this.onViewChanged);
         this.events?.close();
     },
 
@@ -62,7 +75,7 @@ export const playerView = () => ({
 
     get currentLogo() {
         return this.currentChannel
-            ? `data:image/png;base64,${this.currentChannel.logo}`
+            ? `/api/streaming/channels/${this.currentChannel.channelId}/logo`
             : "";
     },
 

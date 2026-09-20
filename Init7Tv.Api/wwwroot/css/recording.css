@@ -117,8 +117,16 @@
     min-width: 0;
 }
 
+/* headings carry a global padding that the paragraphs under them do not, which left the title and
+   sub-title of every programme starting somewhere else from its categories and description */
+#recording .what h4,
+#recording .what h5 {
+    padding: 0;
+}
+
 #recording .what h5 {
     color: #ffffffcf;
+    font-size: 0.85em;
 }
 
 #recording .description {

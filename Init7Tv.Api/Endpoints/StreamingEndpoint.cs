@@ -24,6 +24,7 @@ public static class StreamingEndpoint
             .RequireAuthorization();
 
         group.MapGet("/channels", Channels);
+        group.MapGet("/channels/{channelId:guid}/logo", GetLogo);
         group.MapPut("/channels/{channelId:guid}/favourite", SetFavourite);
         group.MapGet("/start-stream", StartStream);
         group.MapGet("/playlist", GetPlaylist);
@@ -120,6 +121,32 @@ public static class StreamingEndpoint
     )
     {
         return (await favouriteChannelService.GetChannelsAsync(userIdentityProvider.UserName)).ToHttpResult();
+    }
+
+    /// <summary>
+    /// A channel's logo, at an address of its own so a browser can keep it rather than being sent
+    /// every logo again each time a page opens.
+    /// </summary>
+    private static async Task<IResult> GetLogo(
+        Guid channelId,
+        IChannelService channelService,
+        HttpResponse response
+    )
+    {
+        var channel = await channelService.GetChannelById(channelId);
+        if (!channel.IsSuccess || channel.Value.Logo.Length == 0)
+        {
+            return Results.NotFound();
+        }
+
+        // Said outright because signing in refreshes the cookie, and a response that carries one is
+        // marked no-store: without this the logos would come down again on every page after all.
+        // Private rather than public, since it is fetched with the viewer's own cookie.
+        response.Headers.CacheControl = "private,max-age=604800";
+        response.Headers.Remove("Pragma");
+        response.Headers.Expires = DateTimeOffset.UtcNow.AddDays(7).ToString("R");
+
+        return Results.File(channel.Value.Logo, "image/png", enableRangeProcessing: false);
     }
 
     private static async Task<IResult> SetFavourite(

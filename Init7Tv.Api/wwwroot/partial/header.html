@@ -2,12 +2,13 @@
     <h1>init7Tv</h1>
     <ul>
         <li>
-            <a href="/" :class="{ 'active': location.pathname === '/' }">tv</a>
+            <a href="#tv" @click.prevent="$store.view.show('tv')"
+               :class="{ 'active': $store.view.is('tv') }">tv</a>
         </li>
         <template x-if="canRecord">
             <li>
-                <a href="/recording.html"
-                   :class="{ 'active': location.pathname === '/recording.html' }">recording</a>
+                <a href="#recording" @click.prevent="$store.view.show('recording')"
+                   :class="{ 'active': $store.view.is('recording') }">recording</a>
             </li>
         </template>
         <template x-if="userInfo?.isAdmin">

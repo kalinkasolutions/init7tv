@@ -28,6 +28,7 @@ public sealed class RecordingSegments
     /// <summary>Read in whole packets, and enough of them that scanning is not the slow part.</summary>
     private const int ReadBuffer = PacketSize * 4096;
 
+    /// <summary>What a segment is worth when its real length cannot be worked out.</summary>
     private readonly double m_secondsPerSegment;
     private readonly List<RecordingSegment> m_segments = [];
     private readonly Dictionary<int, PartScan> m_parts = new();
@@ -63,6 +64,7 @@ public sealed class RecordingSegments
                 {
                     continue;
                 }
+
 
                 foreach (var found in scan.Timeline.Breaks)
                 {
@@ -181,9 +183,11 @@ public sealed class RecordingSegments
 
                 if (scan.Detector.IsKeyframeStart(packet) && scan.LastTables >= 0)
                 {
-                    if (scan.Cuts.Count == 0 || scan.Cuts[^1] < scan.LastTables)
+                    // the timestamp of the picture this segment opens with, which is what makes its
+                    // length the length it really is rather than the one it was meant to be
+                    if (scan.Cuts.Count == 0 || scan.Cuts[^1].Offset < scan.LastTables)
                     {
-                        scan.Cuts.Add(scan.LastTables);
+                        scan.Cuts.Add((scan.LastTables, scan.LastPts));
                     }
                 }
             }
@@ -201,13 +205,23 @@ public sealed class RecordingSegments
 
         for (var i = scan.Published; i < available; i++)
         {
-            var start = scan.Cuts[i];
-            var end = i + 1 < scan.Cuts.Count ? scan.Cuts[i + 1] : scan.End;
+            var cut = scan.Cuts[i];
+            var next = i + 1 < scan.Cuts.Count ? scan.Cuts[i + 1] : ((long?)null, (ulong?)null);
+            var end = next.Item1 ?? scan.End;
 
-            if (end > start)
+            if (end <= cut.Offset)
             {
-                m_segments.Add(new RecordingSegment(part, start, end - start, m_secondsPerSegment));
+                continue;
             }
+
+            // Declared lengths are what a player lays its timeline out from, so a nominal four
+            // seconds against segments that are not quite four leaves the two drifting apart: about
+            // two per cent, which is a minute and a half across a recording of a film.
+            var seconds = next.Item2 is { } until
+                ? Seconds(until, cut.Pts)
+                : m_secondsPerSegment;
+
+            m_segments.Add(new RecordingSegment(part, cut.Offset, end - cut.Offset, seconds));
         }
 
         scan.Published = Math.Max(scan.Published, available);
@@ -253,7 +267,7 @@ public sealed class RecordingSegments
 
         public ulong? FirstPts { get; set; }
         public ulong LastPts { get; set; }
-        public List<long> Cuts { get; } = [];
+        public List<(long Offset, ulong Pts)> Cuts { get; } = [];
         public long Scanned { get; set; }
         public long End { get; set; }
         public long LastTables { get; set; } = -1;

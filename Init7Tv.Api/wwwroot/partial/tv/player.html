@@ -1,5 +1,6 @@
 <section id="player-container" x-data="playerView()"
-         @channel-selected.window="await playChannel($event.detail.channel, $event.detail.audioStreamIndex)">
+         @channel-selected.window="if ($store.view.is('tv'))
+                                       await playChannel($event.detail.channel, $event.detail.audioStreamIndex)">
     <!-- outside player-wrapper on purpose: with no channel chosen yet the drawer
          trigger is the only way to reach the channel list on a narrow screen -->
     <div class="player-title-wrapper">

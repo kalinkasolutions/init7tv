@@ -1,5 +1,5 @@
 <div id="epg" x-data="epgView()"
-     @channel-selected.window="await getEpg($event.detail.channel)">
+     @channel-selected.window="if ($store.view.is('tv')) await getEpg($event.detail.channel)">
     <template x-if="current">
         <div class="epg-data">
             <div class="epg-progress" x-ref="progressFill"></div>

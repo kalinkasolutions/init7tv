@@ -1,5 +1,26 @@
 import {get, put} from '../../requestHandler.js';
 
+/// The channel list changes about as often as the channels do, and every page draws it. Kept for
+/// the tab rather than for ever, so switching between the guide and the recordings does not fetch
+/// it again while a new tab still picks up anything that has changed.
+const STORE = 'channels';
+
+function remembered() {
+    try {
+        return JSON.parse(sessionStorage.getItem(STORE)) ?? null;
+    } catch {
+        return null;
+    }
+}
+
+function remember(channels) {
+    try {
+        sessionStorage.setItem(STORE, JSON.stringify(channels));
+    } catch {
+        // a full store is not worth failing over, it only means fetching again
+    }
+}
+
 export const sidebarView = () => ({
     channels: [],
     allChannels: [],
@@ -7,13 +28,33 @@ export const sidebarView = () => ({
     selectedChannel: null,
 
     async init() {
-        this.allChannels = await get("/api/streaming/channels") ?? [];
-        this.showChannels();
+        // drawn from what is already known first, so moving between pages does not sit empty
+        const known = remembered();
+        if (known) {
+            this.allChannels = known;
+            this.showChannels();
+        }
 
-        // the tv page picks up where it left off; choosing what to record is a
-        // decision, and starting on whatever was last watched makes it look like
-        // one has already been made
-        if (this.$store.ui.restoreLastChannel) {
+        const fetched = await get("/api/streaming/channels");
+        if (fetched) {
+            this.allChannels = fetched;
+            remember(fetched);
+            this.showChannels();
+        }
+
+
+        // Watching picks up where it left off. Choosing what to record is a decision, and starting
+        // on whatever was last watched makes it look like one has already been made, so it waits
+        // until the watching half is the one being looked at.
+        this.onViewChanged = event => {
+            if (event.detail.view === 'tv' && !this.selectedChannel) {
+                this.dispatchLastWatchedChannel();
+            }
+        };
+
+        window.addEventListener('view-changed', this.onViewChanged);
+
+        if (this.$store.view.is('tv')) {
             this.dispatchLastWatchedChannel();
         }
 
@@ -30,6 +71,7 @@ export const sidebarView = () => ({
 
     destroy() {
         window.removeEventListener('select-channel', this.onSelectChannel);
+        window.removeEventListener('view-changed', this.onViewChanged);
     },
 
     searchChannel(event) {
@@ -82,6 +124,11 @@ export const sidebarView = () => ({
     },
 
     dispatch(audioStreamIndex = null) {
+        // what the list is pointing at, for the halves of the page that were not looking when it
+        // was chosen: the player picks it up when watching is next brought to the front
+        this.$store.ui.channel = this.selectedChannel;
+        this.$store.ui.audioStreamIndex = audioStreamIndex;
+
         window.dispatchEvent(new CustomEvent('channel-selected', {
             detail: {channel: this.selectedChannel, audioStreamIndex}
         }));

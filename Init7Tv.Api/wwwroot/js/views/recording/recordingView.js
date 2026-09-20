@@ -14,6 +14,8 @@ export const recordingView = () => ({
     /// Set while jumping to a pick, so the guide knows which day to open on and
     /// what to scroll to once it has loaded.
     goingTo: null,
+    /// A channel chosen while the other half was showing, waiting to be looked at.
+    pending: null,
     /// The row just jumped to. Held as state rather than written onto the element,
     /// because the guide owns that element's classes and a redraw wiped it.
     foundId: null,
@@ -42,21 +44,44 @@ export const recordingView = () => ({
         this.$watch('waiting.length', value => (this.$store.tabs.counts.planned = value));
         this.$store.tabs.counts.planned = this.waiting.length;
 
-        // the channel list is the one from the tv page and announces itself the
-        // same way; here it waits to be asked
-        // a channel is chosen to see what is on it, so that is what to show
         // a recording finishing takes its pick with it, so this list has to look again
         this.onRecordingsChanged = () => this.loadPlanned();
         window.addEventListener('recordings-changed', this.onRecordingsChanged);
 
+        // The channel list is shared with the watching half, so a channel chosen over there is
+        // remembered rather than acted on: loading a guide nobody is looking at, and moving their
+        // tab under them, is not what picking a channel to watch meant.
         this.onChannelSelected = event => {
-            this.$store.tabs.show('guide');
-            this.selectChannel(event.detail.channel);
+            this.pending = event.detail.channel;
+
+            if (this.$store.view.is('recording')) {
+                this.showPending();
+            }
         };
         window.addEventListener('channel-selected', this.onChannelSelected);
+
+        this.onViewChanged = event => {
+            if (event.detail.view === 'recording') {
+                this.showPending();
+            }
+        };
+        window.addEventListener('view-changed', this.onViewChanged);
+    },
+
+    /// Catches the guide up with whatever the channel list is pointing at.
+    showPending() {
+        if (!this.pending || this.pending.channelId === this.channel?.channelId) {
+            return;
+        }
+
+        const channel = this.pending;
+        this.pending = null;
+        this.$store.tabs.show('guide');
+        this.selectChannel(channel);
     },
 
     destroy() {
+        window.removeEventListener('view-changed', this.onViewChanged);
         window.removeEventListener('channel-selected', this.onChannelSelected);
         window.removeEventListener('recordings-changed', this.onRecordingsChanged);
     },
