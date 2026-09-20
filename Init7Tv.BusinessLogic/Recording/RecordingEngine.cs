@@ -79,12 +79,13 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         var capturePath = RecordingFiles.CapturePath(
             request.Directory, RecordingFiles.NextPart(request.Directory));
 
-        // the pick carries no language preference, so the channel's own is the best guide
-        var audioStreamIndex = streamInfo.Value.GetPreferredAudioStream(request.Channel.MainLanguage);
+        // every track is kept; the pick carries no language preference, so the channel's own decides
+        // only which of them leads
+        var audioStreams = streamInfo.Value.GetAudioStreamsToRecord(request.Channel.MainLanguage);
 
         var args = FfmpegArguments.BuildRecording(
             request.Channel,
-            audioStreamIndex,
+            audioStreams,
             request.Preset,
             request.LogLevel,
             streamInfo.Value,

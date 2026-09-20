@@ -102,8 +102,13 @@ public sealed class FfprobeRoot
     ///
     /// A track that is already stereo is preferred over a surround one in the same language, because
     /// the alternative is asking ffmpeg to fold 5.1 down to two channels, and its default fold puts
-    /// the centre channel, which is where the dialogue is, well below the rest. These channels carry
-    /// both: a 5.1 mix first and a stereo mix of the same language further down.
+    /// the centre channel, which is where the dialogue is, well below the rest.
+    ///
+    /// The stereo track further down the same language is not always a stereo mix of the programme,
+    /// though: on the SRG channels it is the description for the visually impaired, which is mostly
+    /// silence with a narrator over it. Preferring stereo picked that one and recorded a programme
+    /// that sounds like it has no audio, so a described or commentary track is never the choice
+    /// however well it otherwise fits.
     /// </summary>
     public int GetPreferredAudioStream(string? language)
     {
@@ -113,20 +118,59 @@ public sealed class FfprobeRoot
             return 0;
         }
 
-        var spoken = audioStreams
-            .Select((stream, index) => (stream, index))
-            .Where(x => Matches(x.stream, language))
-            .ToArray();
+        var numbered = audioStreams.Select((stream, index) => (stream, index)).ToArray();
+
+        // a described track is worse than the wrong language, so this comes before either
+        var programme = numbered.Where(x => !IsAlternativeCommentary(x.stream)).ToArray();
+        if (programme.Length == 0)
+        {
+            programme = numbered;
+        }
+
+        var spoken = programme.Where(x => Matches(x.stream, language)).ToArray();
 
         // nothing in that language, so the choice is between what there is
-        var candidates = spoken.Length > 0
-            ? spoken
-            : audioStreams.Select((stream, index) => (stream, index)).ToArray();
+        var candidates = spoken.Length > 0 ? spoken : programme;
 
         var stereo = candidates.FirstOrDefault(x => x.stream.Channels == 2);
 
         return stereo.stream != null ? stereo.index : candidates[0].index;
     }
+
+    /// <summary>
+    /// Every audio track, in the order a recording should carry them, using ffmpeg's
+    /// <c>-map 0:a:N</c> numbering.
+    ///
+    /// All of them, because the choice is made once and for ever: a recording is kept for weeks and
+    /// whoever watches it later may want the other language, or the description. The preferred one
+    /// leads, since a player with no way to choose takes the first.
+    /// </summary>
+    public int[] GetAudioStreamsToRecord(string? language)
+    {
+        var count = GetAudioStreams.Length;
+        if (count == 0)
+        {
+            return [];
+        }
+
+        var preferred = GetPreferredAudioStream(language);
+
+        return [preferred, .. Enumerable.Range(0, count).Where(index => index != preferred)];
+    }
+
+    /// <summary>
+    /// Whether the track is something other than the programme's own sound: a description for the
+    /// visually impaired, or a commentary.
+    /// </summary>
+    private static bool IsAlternativeCommentary(StreamInfo stream)
+    {
+        return Flagged(stream, "visual_impaired")
+               || Flagged(stream, "descriptions")
+               || Flagged(stream, "comment");
+    }
+
+    private static bool Flagged(StreamInfo stream, string name) =>
+        stream.Disposition?.GetValueOrDefault(name) == 1;
 
     private static bool Matches(StreamInfo stream, string? language)
     {

@@ -24,7 +24,7 @@ public static class FfmpegArguments
         var args = new List<string>();
         args.AddRange(LogLevel(appSettings.FfmpegLogLevel));
         args.AddRange(Input(channel, useMultiCast));
-        args.AddRange(Transcode(appSettings.FfmpegPreset, streamInfo, audioStreamIndex, segmentSeconds));
+        args.AddRange(Transcode(appSettings.FfmpegPreset, streamInfo, [audioStreamIndex], segmentSeconds));
         args.AddRange(["-f", "mpegts"]);
         args.Add("pipe:1");
 
@@ -44,9 +44,13 @@ public static class FfmpegArguments
     /// scheduler that is wedged or restarting must not leave an ffmpeg running
     /// against a multicast for ever.
     /// </param>
+    /// <param name="audioStreamIndexes">
+    /// Every track to carry, in the order they should appear. A player with no way to choose takes
+    /// the first, so whichever leads is the one most people will hear.
+    /// </param>
     public static string[] BuildRecording(
         ChannelDto channel,
-        int audioStreamIndex,
+        IReadOnlyList<int> audioStreamIndexes,
         string preset,
         string logLevel,
         FfprobeRoot streamInfo,
@@ -63,7 +67,7 @@ public static class FfmpegArguments
         var args = new List<string> { "-nostdin", "-y", "-copy_unknown" };
         args.AddRange(LogLevel(logLevel));
         args.AddRange(Input(channel, useMultiCast));
-        args.AddRange(Transcode(preset, streamInfo, audioStreamIndex, keyframeSeconds));
+        args.AddRange(Transcode(preset, streamInfo, audioStreamIndexes, keyframeSeconds));
 
         // The advertising cues the channel already carries, copied in beside the pictures so that a
         // cue and what it refers to end up on the same clock. Read from the source separately they
@@ -99,7 +103,8 @@ public static class FfmpegArguments
             "-fflags", "+genpts",
             "-f", "mpegts", "-i", "pipe:0",
             "-map", "0:v:0",
-            "-map", "0:a:0",
+            // every track the capture holds: choosing one was the recording's job, and it kept them all
+            "-map", "0:a",
             "-c", "copy",
             // aac leaves a transport stream as ADTS and mp4 wants it as ASC
             "-bsf:a", "aac_adtstoasc",
@@ -147,7 +152,7 @@ public static class FfmpegArguments
     private static string[] Transcode(
         string preset,
         FfprobeRoot streamInfo,
-        int audioStreamIndex,
+        IReadOnlyList<int> audioStreamIndexes,
         int keyframeSeconds
     )
     {
@@ -178,7 +183,13 @@ public static class FfmpegArguments
         }
 
         args.AddRange(["-pix_fmt", "yuv420p"]);
-        args.AddRange(["-map", $"0:a:{audioStreamIndex}"]);
+
+        foreach (var audioStreamIndex in audioStreamIndexes)
+        {
+            args.AddRange(["-map", $"0:a:{audioStreamIndex}"]);
+        }
+
+        // one setting covers every mapped track
         args.AddRange(["-c:a", "aac"]);
         args.AddRange(["-b:a", "128k"]);
         args.AddRange(["-ac", "2"]);

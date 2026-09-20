@@ -252,10 +252,40 @@ public class FfmpegArgumentsTest
 
     private const string CapturePath = "/var/srv/recordings/abc/capture-1.ts";
 
-    private static string[] BuildRecording(bool interlaced = true, bool multicast = true) =>
+    private static string[] BuildRecording(bool interlaced = true, bool multicast = true, params int[] audioStreams) =>
         FfmpegArguments.BuildRecording(
-            Channel, audioStreamIndex: 0, "veryfast", "warning", Probe(interlaced), multicast,
-            keyframeSeconds: 4, TimeSpan.FromMinutes(65), CapturePath);
+            Channel, audioStreams.Length == 0 ? [0] : audioStreams, "veryfast", "warning", Probe(interlaced),
+            multicast, keyframeSeconds: 4, TimeSpan.FromMinutes(65), CapturePath);
+
+    /// <summary>
+    /// A recording is kept for weeks and the choice cannot be revisited, so it carries every track
+    /// the channel offered rather than the one that looked best on the day.
+    /// </summary>
+    [Test]
+    public void Recording_CarriesEveryAudioTrack()
+    {
+        var args = BuildRecording(audioStreams: [1, 0, 2]);
+
+        var mapped = args
+            .Select((arg, i) => (arg, i))
+            .Where(x => x.arg == "-map")
+            .Select(x => args[x.i + 1])
+            .Where(x => x.StartsWith("0:a:"))
+            .ToArray();
+
+        // in the order given, because a player with no way to choose takes the first
+        Assert.That(mapped, Is.EqualTo(new[] { "0:a:1", "0:a:0", "0:a:2" }));
+    }
+
+    /// <summary>Watching is one track, the one the viewer asked for: they can ask again.</summary>
+    [Test]
+    public void Live_CarriesOnlyTheChosenTrack()
+    {
+        var args = Build(audioStreamIndex: 2);
+
+        Assert.That(args.Count(x => x.StartsWith("0:a:")), Is.EqualTo(1));
+        Assert.That(args, Does.Contain("0:a:2"));
+    }
 
     [Test]
     public void Recording_WritesAFileRatherThanThePipe()

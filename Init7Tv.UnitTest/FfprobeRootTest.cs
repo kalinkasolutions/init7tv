@@ -69,21 +69,29 @@ public class FfprobeRootTest
         Assert.That(new FfprobeRoot().IsInterlaced, Is.False);
     }
 
-    private static FfprobeRoot WithAudio(params (string Language, int Channels)[] tracks) => new()
+    private static FfprobeRoot WithAudio(params (string Language, int Channels)[] tracks) =>
+        WithTracks(tracks.Select(t => (t.Language, t.Channels, false)).ToArray());
+
+    private static FfprobeRoot WithTracks(params (string Language, int Channels, bool Described)[] tracks) => new()
     {
         Streams = tracks
             .Select(t => new StreamInfo
             {
                 CodecType = "audio",
                 Channels = t.Channels,
-                Tags = new Dictionary<string, string> { ["language"] = t.Language }
+                Tags = new Dictionary<string, string> { ["language"] = t.Language },
+                Disposition = new Dictionary<string, int>
+                {
+                    ["visual_impaired"] = t.Described ? 1 : 0,
+                    ["descriptions"] = t.Described ? 1 : 0
+                }
             })
             .ToList()
     };
 
     /// <summary>
-    /// These channels carry a 5.1 mix first and a stereo mix of the same language after it. Folding
-    /// the 5.1 down puts the dialogue well below the rest, so the stereo one is what to record.
+    /// Folding a 5.1 mix down puts the dialogue well below the rest, so a stereo track carrying the
+    /// programme is what to record.
     /// </summary>
     [Test]
     public void AStereoTrackIsPreferredOverSurroundInTheSameLanguage()
@@ -107,6 +115,58 @@ public class FfprobeRootTest
         var probe = WithAudio(("fra", 6), ("eng", 2));
 
         Assert.That(probe.GetPreferredAudioStream("de"), Is.EqualTo(1));
+    }
+
+    /// <summary>
+    /// What SRF zwei FHD actually carries: German 5.1, English 5.1, and a German stereo track that
+    /// is the description for the visually impaired. Preferring stereo recorded the description,
+    /// which is silence with a narrator over it.
+    /// </summary>
+    [Test]
+    public void ADescribedTrackIsNeverTheChoice()
+    {
+        var probe = WithTracks(("deu", 6, false), ("eng", 6, false), ("deu", 2, true));
+
+        Assert.That(probe.GetPreferredAudioStream("de"), Is.Zero);
+    }
+
+    [Test]
+    public void ADescribedTrackIsPassedOverEvenWhenNothingElseSpeaksTheLanguage()
+    {
+        var probe = WithTracks(("deu", 2, true), ("eng", 2, false));
+
+        Assert.That(probe.GetPreferredAudioStream("de"), Is.EqualTo(1));
+    }
+
+    /// <summary>A description is still better than nothing at all.</summary>
+    [Test]
+    public void ADescribedTrackIsTakenWhenItIsAllThereIs()
+    {
+        Assert.That(WithTracks(("deu", 2, true)).GetPreferredAudioStream("de"), Is.Zero);
+    }
+
+    /// <summary>The description is kept too: what is not recorded can never be chosen later.</summary>
+    [Test]
+    public void EveryTrackIsRecordedWithThePreferredOneLeading()
+    {
+        var probe = WithTracks(("deu", 6, false), ("eng", 6, false), ("deu", 2, true));
+
+        Assert.That(probe.GetAudioStreamsToRecord("de"), Is.EqualTo(new[] { 0, 1, 2 }));
+    }
+
+    [Test]
+    public void ThePreferredTrackLeadsEvenWhenItIsNotTheFirst()
+    {
+        var probe = WithAudio(("eng", 2), ("deu", 6), ("deu", 2));
+
+        // the stereo German one is the pick, and the rest follow in the order the channel had them
+        Assert.That(probe.GetAudioStreamsToRecord("de"), Is.EqualTo(new[] { 2, 0, 1 }));
+    }
+
+    [Test]
+    public void NoAudioIsNothingToRecord()
+    {
+        Assert.That(new FfprobeRoot().GetAudioStreamsToRecord("de"), Is.Empty);
     }
 
     [Test]
