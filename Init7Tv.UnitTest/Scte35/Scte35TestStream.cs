@@ -11,7 +11,10 @@ internal static class Scte35TestStream
     public const int PacketSize = Scte35CueExtractor.PacketSize;
     public const int VideoPid = 0x0100;
 
-    public static byte[] Packet(int pid, bool payloadStart, ReadOnlySpan<byte> payload)
+    /// <param name="pointerField">
+    /// PSI begins with one, saying how far off the section is. A PES payload has no such thing.
+    /// </param>
+    public static byte[] Packet(int pid, bool payloadStart, ReadOnlySpan<byte> payload, bool pointerField = true)
     {
         var packet = new byte[PacketSize];
         Array.Fill(packet, (byte)0xFF);
@@ -22,7 +25,7 @@ internal static class Scte35TestStream
         packet[3] = 0x10;
 
         var offset = 4;
-        if (payloadStart)
+        if (payloadStart && pointerField)
         {
             packet[offset++] = 0x00;    // pointer_field
         }
@@ -91,6 +94,27 @@ internal static class Scte35TestStream
         Packet(pmtPid, true, Pmt(cuePid)));
 
     public static byte[] CuePacket(int cuePid, byte[] section) => Packet(cuePid, true, section);
+
+    /// <summary>
+    /// A section carried the way a capture carries it: inside a PES packet, because ffmpeg copies a
+    /// stream it has no codec for as data rather than as PSI.
+    /// </summary>
+    public static byte[] PesPacket(int pid, byte[] section)
+    {
+        var pts = new byte[] { 0x21, 0x00, 0x0B, 0x00, 0x0D };
+        var header = new List<byte>
+        {
+            0x00, 0x00, 0x01,                       // packet_start_code_prefix
+            0xFC,                                   // stream_id, the one ffmpeg uses for this
+            0x00, 0x00,                             // PES_packet_length, which may be left unsaid
+            0x84, 0x80,                             // flags, the second saying a PTS follows
+            (byte)pts.Length
+        };
+        header.AddRange(pts);
+        header.AddRange(section);
+
+        return Packet(pid, true, header.ToArray(), pointerField: false);
+    }
 
     /// <summary>Tables followed by one packet per cue message.</summary>
     public static byte[] Build(int pmtPid, int cuePid, params byte[][] sections) =>

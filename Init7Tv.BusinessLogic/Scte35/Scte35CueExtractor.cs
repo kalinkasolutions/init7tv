@@ -227,10 +227,36 @@ public sealed class Scte35CueExtractor
     }
 
     /// <summary>Skips the pointer_field that says how far into the payload the section starts.</summary>
+    /// <summary>
+    /// Where the section starts in a payload that begins one.
+    ///
+    /// Two shapes, and a recording needs both. A broadcast carries cue messages as PSI, whose first
+    /// byte says how far off the section is. Copied into a capture the same messages come back
+    /// wrapped in PES packets instead: ffmpeg has no codec for a cue stream, so it carries it as an
+    /// unknown one, and the section then sits past a PES header rather than past a pointer.
+    ///
+    /// Told apart by the start code, which no PSI payload can begin with: the byte after a
+    /// table_id always has its section_syntax_indicator set, so 00 00 01 cannot be one.
+    /// </summary>
     private static ReadOnlySpan<byte> SectionStart(ReadOnlySpan<byte> payload)
     {
-        var offset = 1 + payload[0];
+        var offset = IsPes(payload) ? PesHeaderLength(payload) : 1 + payload[0];
+
         return offset >= payload.Length ? [] : payload[offset..];
+    }
+
+    private static bool IsPes(ReadOnlySpan<byte> payload) =>
+        payload.Length >= 6 && payload[0] == 0x00 && payload[1] == 0x00 && payload[2] == 0x01;
+
+    private static int PesHeaderLength(ReadOnlySpan<byte> payload)
+    {
+        // padding and private_stream_2 carry no extension, and their data starts straight after
+        if (payload[3] is 0xBE or 0xBF)
+        {
+            return 6;
+        }
+
+        return payload.Length >= 9 ? 9 + payload[8] : payload.Length;
     }
 
     private sealed class SectionBuffer

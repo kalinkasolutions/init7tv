@@ -143,6 +143,7 @@ public sealed class AdBreakTimeline
             EventId = insert.SpliceEventId,
             Signal = AdBreakSignal.SpliceInsert,
             StartPts = SpliceTimeOf(section, insert.SpliceTime, insert.SpliceImmediate, arrivalPts),
+            ArrivalPts = arrivalPts,
             Duration = insert.BreakDuration == null
                 ? null
                 : SpliceInfoSection.ToTimeSpan(insert.BreakDuration.Duration),
@@ -176,6 +177,7 @@ public sealed class AdBreakTimeline
             EventId = descriptor.SegmentationEventId,
             Signal = AdBreakSignal.Segmentation,
             StartPts = at,
+            ArrivalPts = arrivalPts,
             Duration = descriptor.Duration == null
                 ? null
                 : SpliceInfoSection.ToTimeSpan(descriptor.Duration.Value),

@@ -21,6 +21,16 @@ public sealed record AdBreak
     /// <summary>Start of the break on the stream's 90 kHz clock, pts_adjustment applied.</summary>
     public required ulong StartPts { get; init; }
 
+    /// <summary>
+    /// Where the stream was when the break was announced, on whatever clock the reader is following.
+    ///
+    /// Only a recording needs this. A capture carries the cue messages ffmpeg copied out of the
+    /// source, untouched, so the splice time inside them is still on the source's clock while the
+    /// pictures around them were given a clock of their own. The two cannot be compared, and the one
+    /// thing that can be placed in a recording is the moment the announcement went past.
+    /// </summary>
+    public required ulong ArrivalPts { get; init; }
+
     /// <summary>Absent when the signal carried no duration; the end is then announced separately.</summary>
     public TimeSpan? Duration { get; init; }
 

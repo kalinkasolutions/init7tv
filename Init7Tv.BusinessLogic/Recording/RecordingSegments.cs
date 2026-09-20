@@ -68,7 +68,9 @@ public sealed class RecordingSegments
 
                 foreach (var found in scan.Timeline.Breaks)
                 {
-                    var starts = scan.StartsAt + Seconds(found.StartPts, scan.FirstPts.Value);
+                    // where the announcement went past, not the splice time it carries: that one is
+                    // still on the clock of the source the capture was made from
+                    var starts = scan.StartsAt + Seconds(found.ArrivalPts, scan.FirstPts.Value);
                     var length = found.Duration ?? AdBreakTimeline.UnknownBreakLength;
 
                     if (starts >= 0)

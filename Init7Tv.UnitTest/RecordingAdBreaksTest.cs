@@ -92,12 +92,24 @@ public class RecordingAdBreaksTest
         return index.Breaks;
     }
 
+    /// <summary>
+    /// A break is placed where its announcement went past, not at the splice time the announcement
+    /// carries.
+    ///
+    /// The two are the same thing on a broadcast and different things in a capture, which is what
+    /// this has to cope with: ffmpeg copies the cue messages out untouched, so the splice time
+    /// inside them is still on the source's clock, while the pictures around them were given a
+    /// clock starting near zero. Measured on a real 3+ capture the splice times read as twenty one
+    /// hours into a ten minute recording. Placing them by arrival puts a break a few seconds early,
+    /// by however long the broadcaster announces ahead, which is the safe direction for both a skip
+    /// button and a cut.
+    /// </summary>
     [Test]
-    public void ABreakIsPlacedWhereItFallsInTheRecording()
+    public void ABreakIsPlacedWhereItWasAnnounced()
     {
         var start = 1_000_000UL;
 
-        // announced twelve seconds in, lasting thirty
+        // announced one keyframe in, saying it will last thirty seconds
         var cue = SpliceSectionBuilder
             .SpliceInsert(1, ptsTime: start + 12 * Hz, durationTicks: 30 * Hz)
             .Build();
@@ -107,8 +119,8 @@ public class RecordingAdBreaksTest
         var breaks = Read();
 
         Assert.That(breaks, Has.Count.EqualTo(1));
-        Assert.That(breaks[0].StartsAt, Is.EqualTo(12).Within(0.5));
-        Assert.That(breaks[0].EndsAt, Is.EqualTo(42).Within(0.5));
+        Assert.That(breaks[0].StartsAt, Is.EqualTo(4).Within(0.5), "one keyframe in, where it was announced");
+        Assert.That(breaks[0].EndsAt, Is.EqualTo(34).Within(0.5), "and as long as it said it would be");
     }
 
     /// <summary>
@@ -131,8 +143,8 @@ public class RecordingAdBreaksTest
 
         Assert.That(breaks, Has.Count.EqualTo(1));
 
-        // five keyframes of the first part, four seconds each, then eight into the second
-        Assert.That(breaks[0].StartsAt, Is.EqualTo(20 + 8).Within(0.5));
+        // five keyframes of the first part, four seconds each, then one keyframe into the second
+        Assert.That(breaks[0].StartsAt, Is.EqualTo(20 + 4).Within(0.5));
     }
 
     [Test]

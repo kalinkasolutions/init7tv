@@ -71,6 +71,26 @@ public class Scte35CueExtractorTest
         Assert.That(cues[0].SpliceInsert!.SpliceEventId, Is.EqualTo(7));
     }
 
+    /// <summary>
+    /// What a capture actually holds. ffmpeg has no codec for a cue stream, so copying one wraps
+    /// every section in a PES packet rather than leaving it as PSI: no pointer to step over, a start
+    /// code and a header instead. Read as PSI the section began three bytes late, failed its
+    /// table_id, and a recording of a channel that announces its advertising reported none.
+    /// </summary>
+    [Test]
+    public void ACueSectionWrappedInAPesPacket_IsRead()
+    {
+        var extractor = new Scte35CueExtractor(privateDataMayCarryCues: true);
+
+        var cues = extractor.Read(Stream(
+            Scte35TestStream.Packet(0x0000, true, Scte35TestStream.Pat((ProgramNumber, PmtPid))),
+            Scte35TestStream.Packet(PmtPid, true, Scte35TestStream.Pmt(CuePid, cueStreamType: 0x06)),
+            Scte35TestStream.PesPacket(CuePid, Cue(eventId: 42)))).ToArray();
+
+        Assert.That(cues, Has.Length.EqualTo(1));
+        Assert.That(cues[0].SpliceInsert!.SpliceEventId, Is.EqualTo(42));
+    }
+
     /// <summary>A source declares AC-3 and teletext as private data too, so reading one is strict.</summary>
     [Test]
     public void ACueStreamDeclaredAsPrivateData_IsIgnoredByDefault()
