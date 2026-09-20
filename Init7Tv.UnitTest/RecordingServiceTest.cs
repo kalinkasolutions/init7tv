@@ -218,6 +218,36 @@ public class RecordingServiceTest
         Assert.That(listed.State, Is.EqualTo("Completed"));
     }
 
+    /// <summary>
+    /// The page offers a download without the advertising only when there is some to leave out.
+    /// Counted when the recording finished, so listing costs nothing.
+    /// </summary>
+    [Test]
+    public async Task WhatWasAnnouncedIsCarriedToThePage()
+    {
+        var recording = Completed();
+        recording.AdBreakCount = 3;
+        m_repository.Setup(x => x.GetForUserAsync(Owner)).ReturnsAsync([recording]);
+
+        var listed = (await m_service.GetAsync(Owner, isAdmin: false)).Value.Single();
+
+        Assert.That(listed.AdBreakCount, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task ARecordingWhoseFileHasGoneOffersNothingToCutEither()
+    {
+        var recording = Completed();
+        recording.AdBreakCount = 3;
+        File.Delete(RecordingFiles.CapturePath(recording.Directory, 1));
+
+        m_repository.Setup(x => x.GetForUserAsync(Owner)).ReturnsAsync([recording]);
+
+        var listed = (await m_service.GetAsync(Owner, isAdmin: false)).Value.Single();
+
+        Assert.That(listed.AdBreakCount, Is.Zero);
+    }
+
     [Test]
     public async Task AnAdminSeesEverybodysRecordings()
     {

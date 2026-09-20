@@ -33,8 +33,14 @@ public sealed record RecordingDto
     /// </summary>
     public string[] SharedWith { get; init; } = [];
 
-    /// <summary>Where the advertising falls, for the skip button and for leaving it out of a download.</summary>
-    public AdBreakMark[] AdBreaks { get; init; } = [];
+    /// <summary>
+    /// How many advertising breaks the capture announced. The page offers a download without them
+    /// only when there is something to leave out: most channels announce nothing, and a button that
+    /// silently hands back the whole recording is worse than no button.
+    ///
+    /// Where they fall is asked for separately, by whoever is about to play it.
+    /// </summary>
+    public int AdBreakCount { get; init; }
 }
 
 /// <summary>

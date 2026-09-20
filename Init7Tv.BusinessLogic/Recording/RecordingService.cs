@@ -489,6 +489,8 @@ public sealed class RecordingService : IRecordingService
         FileSizeBytes = hasFile ? x.FileSizeBytes : 0,
         ErrorMessage = IsFinished(x) && !hasFile ? "The file is no longer on disk" : x.ErrorMessage,
         UserName = x.UserName,
-        SharedWith = sharedWith
+        SharedWith = sharedWith,
+        // a file that has gone cannot be downloaded either way
+        AdBreakCount = hasFile ? x.AdBreakCount : 0
     };
 }

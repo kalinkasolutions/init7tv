@@ -69,6 +69,14 @@ public sealed class Recording
 
     public long FileSizeBytes { get; set; }
 
+    /// <summary>
+    /// How many advertising breaks the capture announced, counted once when the recording was
+    /// finished. Only whether there are any matters to the page, which offers a download without
+    /// them when there is something to leave out; the download itself works the breaks out again
+    /// from the capture rather than trusting this.
+    /// </summary>
+    public int AdBreakCount { get; set; }
+
     [MaxLength(500)]
     public string ErrorMessage { get; set; } = string.Empty;
 

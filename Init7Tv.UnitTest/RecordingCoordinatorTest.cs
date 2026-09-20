@@ -26,6 +26,7 @@ public class RecordingCoordinatorTest
     private Mock<IRecordingRepository> m_recordings = null!;
     private Mock<IPlannedRecordingRepository> m_planned = null!;
     private Mock<IRecordingEngine> m_engine = null!;
+    private Mock<IRecordingSegmentCache> m_segments = null!;
     private List<RecordingRow> m_added = null!;
     private RecordingCoordinator m_coordinator = null!;
 
@@ -47,6 +48,7 @@ public class RecordingCoordinatorTest
         m_planned.Setup(x => x.GetInWindowAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>())).ReturnsAsync([]);
 
         m_engine = new Mock<IRecordingEngine>();
+        m_segments = new Mock<IRecordingSegmentCache>();
         m_engine.Setup(x => x.TakeFinished()).Returns([]);
         m_engine.Setup(x => x.StartAsync(It.IsAny<RecordingRequest>()))
             .ReturnsAsync(OperationResult<bool>.Success(true));
@@ -74,6 +76,7 @@ public class RecordingCoordinatorTest
             m_engine.Object,
             Mock.Of<IRecordingService>(x => x.GetCurrentAsync() == Task.FromResult(Array.Empty<CurrentRecordingDto>())),
             Mock.Of<IRecordingEventBus>(),
+            m_segments.Object,
             Options.Create(new Init7TvOptions { RecordingPath = m_root, MaxConcurrentRecordings = 2 }));
     }
 
@@ -291,6 +294,38 @@ public class RecordingCoordinatorTest
 
         Assert.That(row.State, Is.EqualTo(RecordingState.Interrupted));
         Assert.That(row.FileSizeBytes, Is.EqualTo(4096), "what was captured, as it stands on disk");
+    }
+
+    /// <summary>
+    /// Counted once, here, because the page needs it for every recording at once and reading a
+    /// capture through for cues is far too much to do per request.
+    /// </summary>
+    [Test]
+    public async Task FinishingCountsTheAdvertisingTheCaptureAnnounced()
+    {
+        var row = Leftover(DateTime.UtcNow.AddMinutes(-5));
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+        m_segments.Setup(x => x.Breaks(row.Directory)).Returns(
+        [
+            new AdBreakMark { StartsAt = 60, EndsAt = 180 },
+            new AdBreakMark { StartsAt = 600, EndsAt = 720 }
+        ]);
+
+        await m_coordinator.ReconcileAsync();
+
+        Assert.That(row.AdBreakCount, Is.EqualTo(2));
+    }
+
+    /// <summary>Most channels announce nothing, and the page then offers no way to leave it out.</summary>
+    [Test]
+    public async Task FinishingAChannelThatAnnouncesNothingLeavesTheCountAtZero()
+    {
+        var row = Leftover(DateTime.UtcNow.AddMinutes(-5));
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+
+        await m_coordinator.ReconcileAsync();
+
+        Assert.That(row.AdBreakCount, Is.Zero);
     }
 
     [Test]

@@ -43,6 +43,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
     private readonly IRecordingEngine m_engine;
     private readonly IRecordingService m_recordingService;
     private readonly IRecordingEventBus m_eventBus;
+    private readonly IRecordingSegmentCache m_segments;
     private readonly Init7TvOptions m_options;
 
     public RecordingCoordinator(
@@ -54,6 +55,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         IRecordingEngine engine,
         IRecordingService recordingService,
         IRecordingEventBus eventBus,
+        IRecordingSegmentCache segments,
         IOptions<Init7TvOptions> options
     )
     {
@@ -65,6 +67,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         m_engine = engine;
         m_recordingService = recordingService;
         m_eventBus = eventBus;
+        m_segments = segments;
         m_options = options.Value;
     }
 
@@ -311,18 +314,46 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
             return;
         }
 
-        m_logger.LogInformation("Finished {Directory}, {Bytes} bytes{CutShort}",
-            directory, captured, cutShort ? " (cut short)" : string.Empty);
+        var breaks = CountBreaks(directory);
+
+        m_logger.LogInformation("Finished {Directory}, {Bytes} bytes, {Breaks} advertising break(s){CutShort}",
+            directory, captured, breaks, cutShort ? " (cut short)" : string.Empty);
 
         await UpdateAsync(rows, row =>
         {
             row.State = cutShort ? RecordingState.Interrupted : RecordingState.Completed;
             row.EndedAt = now;
             row.FileSizeBytes = captured;
+            row.AdBreakCount = breaks;
             row.ErrorMessage = cutShort ? "Part of the programme is missing" : string.Empty;
         });
 
         await ForgetPicksAsync(rows);
+    }
+
+    /// <summary>
+    /// How much advertising the capture announced, counted here because this is the one moment it
+    /// can be: the file has stopped growing, and the page needs the answer for every recording at
+    /// once rather than for the one being watched.
+    ///
+    /// Reading it through costs a pass over the capture, which is why it is done once rather than
+    /// per request. The index it leaves behind is the one the first playback would have had to
+    /// build anyway.
+    /// </summary>
+    private int CountBreaks(string directory)
+    {
+        try
+        {
+            m_segments.Segments(directory, RecordingFiles.Captures(directory), finished: true);
+
+            return m_segments.Breaks(directory).Count;
+        }
+        catch (Exception ex)
+        {
+            // a recording that cannot be read for cues is still a recording
+            m_logger.LogWarning(ex, "Could not look for advertising in {Directory}", directory);
+            return 0;
+        }
     }
 
     // --- captures that outstayed their window ----------------------------
