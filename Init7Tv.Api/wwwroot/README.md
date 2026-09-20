@@ -3,7 +3,7 @@
 One document, no build step, Alpine.js. Four views live in `index.html` at once and the address says
 which one is showing. Everything below follows from that.
 
-## The five rules
+## The six rules
 
 **1. The address says which view.** `$store.view` reads the fragment and nothing else writes it.
 The header's links are ordinary links, so the back button, a bookmark and a reload all still mean
@@ -23,6 +23,15 @@ a search box, a spinner, which row is highlighted — and derives everything els
 
 **5. Talking to the server goes through `requestHandler.js`.** It reports failures itself, and
 returns `null` when it has, so callers check for `null` and never for a status.
+
+**6. Nothing polls. The server says when something changed.** A view that has to keep up opens an
+`EventSource` while it is showing — the player for its stream, the recordings list for its
+recordings. The event carries the news and nothing else: the client then reads the list through the
+same endpoint it would have used anyway, which keeps one place deciding what a given user may see,
+and a browser that reconnects is told to look again straight away.
+
+The dashboard is the exception, and for a reason: it is the one view that wants the payload itself,
+box-wide, for admins only, which is what its SignalR hub already pushes.
 
 ## The shape of a component
 
@@ -50,6 +59,7 @@ Single quotes, `() => ({...})`, and elements are reached with `x-ref`, never `ge
 | `js/views/` | one file per component, mirroring `partial/` |
 | `partial/` | the markup for each component |
 | `js/whileShowing.js` | rule 2 |
+| `/api/streaming/events`, `/api/recording/events` | rule 6 |
 | `js/requestHandler.js`, `notification.js`, `loadPartial.js`, `epgCache.js` | the small shared pieces |
 
 ## The stores

@@ -1,3 +1,6 @@
+using System.Net.ServerSentEvents;
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Init7Tv.BusinessLogic;
 using Init7Tv.BusinessLogic.Recording;
 using Init7Tv.Dto;
@@ -8,6 +11,10 @@ namespace Init7Tv.Endpoints;
 
 public static class RecordingEndpoints
 {
+    // idle connections are dropped by proxies, and nothing else tells the
+    // server that a viewer's browser has gone away
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(25);
+
     public static void MapRecordingEndpoints(this IEndpointRouteBuilder app)
     {
         // the page is only offered to these two, and the endpoints say so as well:
@@ -22,6 +29,7 @@ public static class RecordingEndpoints
         group.MapDelete("/planned/{programmeId:guid}", Cancel);
 
         group.MapGet("/recordings", GetRecordings);
+        group.MapGet("/events", GetEvents);
         // MapGet alone answers HEAD with 405, and a player checking the length
         // before it starts is entitled to an answer
         group.MapMethods("/recordings/{recordingId:guid}/file", ["GET", "HEAD"], GetRecordingFile);
@@ -31,6 +39,64 @@ public static class RecordingEndpoints
         group.MapPost("/recordings/{recordingId:guid}/stop", StopRecording);
         group.MapDelete("/recordings/{recordingId:guid}", DeleteRecording);
     }
+
+    /// <summary>
+    /// Says when a recording has started, finished, been stopped or been given up on, so the page
+    /// can ask again at the moment there is something to ask about rather than every fifteen
+    /// seconds in the hope of it.
+    ///
+    /// Nothing is sent but the news itself: the client then reads the same list it would have read
+    /// anyway, which keeps GET /recordings the one place that decides what a given user may see.
+    /// </summary>
+    private static IResult GetEvents(IRecordingEventBus eventBus, CancellationToken cancellationToken)
+    {
+        return TypedResults.ServerSentEvents(RecordingChanges(eventBus, cancellationToken));
+    }
+
+    private static async IAsyncEnumerable<SseItem<string>> RecordingChanges(
+        IRecordingEventBus eventBus,
+        [EnumeratorCancellation] CancellationToken cancellationToken
+    )
+    {
+        // Every pass publishes, and a pass only runs when something could have changed. Which
+        // recording changed does not matter here: one pass is one reason to look again, and a
+        // reader that missed three of them still only has to look once.
+        var changes = Channel.CreateBounded<bool>(
+            new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
+
+        using var subscription = eventBus.Subscribe(_ => changes.Writer.TryWrite(true));
+
+        // a browser that has just connected, or reconnected after the socket dropped, has no idea
+        // what it missed
+        yield return Changed;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var changed = false;
+
+            using (var heartbeat = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                heartbeat.CancelAfter(HeartbeatInterval);
+                try
+                {
+                    changed = await changes.Reader.ReadAsync(heartbeat.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // heartbeat elapsed, or the client disconnected
+                }
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                yield break;
+            }
+
+            yield return changed ? Changed : new SseItem<string>(string.Empty, "ping");
+        }
+    }
+
+    private static SseItem<string> Changed => new(string.Empty, "changed");
 
     private static async Task<IResult> GetRecordings(
         IRecordingService service,

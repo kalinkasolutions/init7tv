@@ -2,17 +2,14 @@ import {get, post, deleteItem} from '../../requestHandler.js';
 import {notify} from '../../notification.js';
 import {whileShowing} from '../../whileShowing.js';
 
-/// States the scheduler is still working on, which is what decides how often this asks again.
+/// States the scheduler is still working on.
 const BUSY = ['Pending', 'Recording', 'Finalizing'];
-
-const BUSY_INTERVAL = 15_000;
-const IDLE_INTERVAL = 60_000;
 
 export const recordingsView = () => ({
     recordings: [],
     /// The one open in the player, or null when it is closed.
     playing: null,
-    timer: null,
+    events: null,
     hls: null,
     /// Where the advertising falls in whatever is open, in seconds from its start.
     breaks: [],
@@ -22,10 +19,11 @@ export const recordingsView = () => ({
     at: 0,
 
     init() {
-        // A pick turns into a recording with nobody touching this page, so the list has to notice on
-        // its own — but only while somebody is looking at it, and it catches up when they come back.
+        // A pick turns into a recording with nobody touching this page, so the server says when
+        // that happens — but only while somebody is looking, and the first thing it says on
+        // connecting is "look again", which is what fills the list.
         whileShowing(this, 'recording', {
-            enter: () => this.watchForChanges(),
+            enter: () => this.listen(),
             leave: () => this.rest()
         });
 
@@ -36,24 +34,20 @@ export const recordingsView = () => ({
         this.rest();
     },
 
-    async watchForChanges() {
-        await this.load();
-        this.schedule();
+    listen() {
+        if (this.events) {
+            return;
+        }
+
+        this.events = new EventSource('/api/recording/events');
+        this.events.addEventListener('changed', () => this.load());
     },
 
-    /// Nothing is happening on screen, so nothing needs to be asked or played.
+    /// Nothing is happening on screen, so nothing needs to be listened for or played.
     rest() {
-        clearTimeout(this.timer);
-        this.timer = null;
+        this.events?.close();
+        this.events = null;
         this.stopPlaying();
-    },
-
-    schedule() {
-        clearTimeout(this.timer);
-        this.timer = setTimeout(async () => {
-            await this.load();
-            this.schedule();
-        }, this.recordings.some(x => this.isBusy(x)) ? BUSY_INTERVAL : IDLE_INTERVAL);
     },
 
     async load() {
