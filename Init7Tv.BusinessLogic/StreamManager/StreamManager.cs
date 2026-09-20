@@ -113,7 +113,8 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 return OperationResult<StreamDto>.Success(existingStream.ToDto());
             }
 
-            var streamInfo = await m_ffprobeService.ProbeAsync(SourceUrl(channelResult.Value));
+            var streamInfo = await m_ffprobeService.ProbeAsync(
+                FfmpegArguments.SourceUrl(channelResult.Value, m_options.UseMultiCast));
 
             if (streamInfo.HasError)
             {
@@ -309,7 +310,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 }
             }
 
-            if (stream.CancellationToken.IsCancellationRequested || HasExited(stream))
+            if (stream.CancellationToken.IsCancellationRequested || FfmpegProcess.HasExited(stream.Ffmpeg))
             {
                 return false;
             }
@@ -318,22 +319,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
 
         return false;
-    }
-
-    /// <summary>
-    /// The read loop disposes the process as soon as ffmpeg dies, and a disposed
-    /// Process throws rather than reporting that it exited.
-    /// </summary>
-    private static bool HasExited(TvStream stream)
-    {
-        try
-        {
-            return stream.Ffmpeg.HasExited;
-        }
-        catch (InvalidOperationException)
-        {
-            return true;
-        }
     }
 
     private async Task StreamLoopAsync(TvStream stream, CancellationToken cancellationToken)
@@ -470,10 +455,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
         }
     }
 
-    /// <summary>The transport ffmpeg reads, which is also the one worth probing.</summary>
-    private string SourceUrl(ChannelDto channel) =>
-        m_options.UseMultiCast ? channel.UdpSource : channel.HlsSource;
-
     private Process GetFfmpegProcess(
         ChannelDto channel,
         int audioStreamIndex,
@@ -486,34 +467,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
         m_logger.LogInformation("starting ffmpeg with args: {FfmpegArgs}", string.Join(' ', ffmpegArgs));
 
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "ffmpeg",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        // ArgumentList quotes each entry, so a source url can never inject extra flags
-        foreach (var arg in ffmpegArgs)
-        {
-            startInfo.ArgumentList.Add(arg);
-        }
-
-        var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-
-        // ffmpeg logs to stderr; without this the configured log level went to the
-        // container's console with no indication of which stream produced it
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data))
-            {
-                m_logger.LogInformation("[ffmpeg {Channel}] {Line}", channel.CanonicalName, e.Data);
-            }
-        };
-
-        return process;
+        return FfmpegProcess.Logged(ffmpegArgs, m_logger, channel.CanonicalName, readOutput: true);
     }
 
     private static string GetStreamId(string input)
@@ -594,27 +548,12 @@ public sealed class StreamManager : IStreamManager, IDisposable
         try
         {
             stream.CancellationToken.Cancel();
-            KillProcess(stream.Ffmpeg);
+            FfmpegProcess.Kill(stream.Ffmpeg, m_logger);
             stream.Ffmpeg.Dispose();
         }
         catch (Exception ex)
         {
             m_logger.LogError(ex, "Failed to stop stream: {StreamId}", stream.StreamId);
-        }
-    }
-
-    private void KillProcess(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill();
-            }
-        }
-        catch (Exception ex)
-        {
-            m_logger.LogError(ex, "Failed to kill {FileName}", process.StartInfo.FileName);
         }
     }
 }

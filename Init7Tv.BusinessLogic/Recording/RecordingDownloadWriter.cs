@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Init7Tv.BusinessLogic.StreamManager;
 using Microsoft.Extensions.Logging;
 
@@ -17,27 +16,15 @@ public sealed class RecordingDownloadWriter : IRecordingDownloadWriter
 
     public async Task WriteAsync(RecordingDownloadDto download, Stream into)
     {
-        var args = FfmpegArguments.BuildDownload("error");
+        using var ffmpeg = FfmpegProcess.Piped(FfmpegArguments.BuildDownload("error"));
 
-        var startInfo = new ProcessStartInfo
+        try
         {
-            FileName = "ffmpeg",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        foreach (var arg in args)
-        {
-            startInfo.ArgumentList.Add(arg);
+            ffmpeg.Start();
         }
-
-        using var ffmpeg = Process.Start(startInfo);
-        if (ffmpeg == null)
+        catch (Exception ex)
         {
-            m_logger.LogError("Could not start ffmpeg to write a download");
+            m_logger.LogError(ex, "Could not start ffmpeg to write a download");
             return;
         }
 
@@ -55,7 +42,7 @@ public sealed class RecordingDownloadWriter : IRecordingDownloadWriter
         {
             // the usual one is the viewer closing the tab part way through
             m_logger.LogInformation(ex, "A download ended early");
-            Kill(ffmpeg);
+            FfmpegProcess.Kill(ffmpeg, m_logger);
         }
 
         if (ffmpeg.HasExited && ffmpeg.ExitCode != 0)
@@ -102,21 +89,6 @@ public sealed class RecordingDownloadWriter : IRecordingDownloadWriter
         finally
         {
             await into.DisposeAsync();
-        }
-    }
-
-    private void Kill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill();
-            }
-        }
-        catch (Exception ex)
-        {
-            m_logger.LogWarning(ex, "Failed to stop ffmpeg after a download ended early");
         }
     }
 }

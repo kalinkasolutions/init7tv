@@ -108,13 +108,19 @@ public static class FfmpegArguments
         ];
     }
 
+    /// <summary>The transport ffmpeg reads, which is also the one worth probing.</summary>
+    public static string SourceUrl(ChannelDto channel, bool useMultiCast) =>
+        useMultiCast ? channel.UdpSource : channel.HlsSource;
+
     private static string[] LogLevel(string logLevel) => ["-loglevel", logLevel];
 
     private static string[] Input(ChannelDto channel, bool useMultiCast)
     {
+        var source = SourceUrl(channel, useMultiCast);
+
         if (!useMultiCast)
         {
-            return ["-i", channel.HlsSource];
+            return ["-i", source];
         }
 
         return
@@ -134,7 +140,7 @@ public static class FfmpegArguments
             // that the later audio tracks are still found and mappable.
             "-analyzeduration", "1000000",
             "-probesize", "2000000",
-            "-i", $"{channel.UdpSource}?fifo_size=1000000&overrun_nonfatal=1"
+            "-i", $"{source}?fifo_size=1000000&overrun_nonfatal=1"
         ];
     }
 

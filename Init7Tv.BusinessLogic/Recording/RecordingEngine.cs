@@ -67,7 +67,7 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
             return OperationResult<bool>.Conflict("That recording is already running");
         }
 
-        var sourceUrl = m_options.UseMultiCast ? request.Channel.UdpSource : request.Channel.HlsSource;
+        var sourceUrl = FfmpegArguments.SourceUrl(request.Channel, m_options.UseMultiCast);
 
         var streamInfo = await m_ffprobeService.ProbeAsync(sourceUrl);
         if (streamInfo.HasError)
@@ -98,7 +98,9 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
             request.CaptureId, request.Channel.CanonicalName, capturePath, request.Duration,
             string.Join(' ', args));
 
-        var process = CreateProcess(args, request.CaptureId, request.Channel.CanonicalName);
+        // why a capture died is only ever visible in its ffmpeg's own output
+        var process = FfmpegProcess.Logged(
+            args, m_logger, $"recording {request.CaptureId} {request.Channel.CanonicalName}");
         var recording = new ActiveRecording
         {
             CaptureId = request.CaptureId,
@@ -121,7 +123,7 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         if (!m_active.TryAdd(request.CaptureId, recording))
         {
             m_logger.LogError("Recording {CaptureId} was started twice, discarding this one", request.CaptureId);
-            Kill(process);
+            FfmpegProcess.Kill(process, m_logger);
             process.Dispose();
             return OperationResult<bool>.Conflict("That recording is already running");
         }
@@ -143,7 +145,7 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         // safe to kill outright, because a transport stream has no trailer to
         // write. An mp4 would have needed to be asked nicely.
         recording.Stopped = true;
-        Kill(recording.Ffmpeg);
+        FfmpegProcess.Kill(recording.Ffmpeg, m_logger);
     }
 
     public FinishedCapture[] TakeFinished()
@@ -297,52 +299,6 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
         // A capture that has ended is either finished or worth going back for, and both want doing
         // now rather than whenever the loop happened to be due to wake.
         m_signal.Signal();
-    }
-
-    private Process CreateProcess(string[] args, Guid captureId, string channelName)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "ffmpeg",
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        // ArgumentList quotes each entry, so a source url can never inject extra flags
-        foreach (var arg in args)
-        {
-            startInfo.ArgumentList.Add(arg);
-        }
-
-        var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-
-        // why a capture died is only ever visible here
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data))
-            {
-                m_logger.LogInformation("[recording {CaptureId} {Channel}] {Line}", captureId, channelName, e.Data);
-            }
-        };
-
-        return process;
-    }
-
-    private void Kill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill();
-            }
-        }
-        catch (Exception ex)
-        {
-            // a disposed process throws here rather than reporting that it exited
-            m_logger.LogWarning(ex, "Failed to kill ffmpeg");
-        }
     }
 
     private sealed class ActiveRecording
