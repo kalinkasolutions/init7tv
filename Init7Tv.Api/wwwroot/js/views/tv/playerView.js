@@ -2,6 +2,7 @@ import {get} from '../../requestHandler.js';
 import {notify} from '../../notification.js';
 import {whileShowing} from '../../whileShowing.js';
 import {playHls} from '../../hlsPlayer.js';
+import {subscribe} from '../../eventSource.js';
 
 export const playerView = () => ({
     /// What is playing, or being started. Not the same as the channel the list points at, which is
@@ -28,10 +29,11 @@ export const playerView = () => ({
 
         // the server tears a stream down when ffmpeg exits; without this the
         // player just stalls with no explanation
-        this.events = new EventSource('/api/streaming/events');
-        this.events.addEventListener('streams', event => {
-            const {streamIds} = JSON.parse(event.data);
-            this.checkStillRunning(streamIds ?? []);
+        this.events = subscribe('/api/streaming/events', {
+            streams: event => {
+                const {streamIds} = JSON.parse(event.data);
+                this.checkStillRunning(streamIds ?? []);
+            }
         });
     },
 

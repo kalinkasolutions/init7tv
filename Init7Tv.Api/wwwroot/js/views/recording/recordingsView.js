@@ -2,6 +2,7 @@ import {get, post, deleteItem} from '../../requestHandler.js';
 import {notify} from '../../notification.js';
 import {whileShowing} from '../../whileShowing.js';
 import {playHls} from '../../hlsPlayer.js';
+import {subscribe} from '../../eventSource.js';
 
 /// States the scheduler is still working on.
 const BUSY = ['Pending', 'Recording', 'Finalizing'];
@@ -40,8 +41,7 @@ export const recordingsView = () => ({
             return;
         }
 
-        this.events = new EventSource('/api/recording/events');
-        this.events.addEventListener('changed', () => this.load());
+        this.events = subscribe('/api/recording/events', {changed: () => this.load()});
     },
 
     /// Nothing is happening on screen, so nothing needs to be listened for or played.
