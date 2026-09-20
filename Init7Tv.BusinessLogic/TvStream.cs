@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Init7Tv.BusinessLogic.Ffprobe;
+using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.Dto;
 
 namespace Init7Tv.BusinessLogic;
@@ -11,13 +12,12 @@ public readonly record struct TvSegment(string Name, TimeSpan Duration);
 public sealed class TvStream
 {
     public required string StreamId { get; init; }
-    public ConcurrentDictionary<string, byte[]> TsSegments { get; set; } = new();
     public required Process Ffmpeg { get; set; }
-    public List<TvSegment> Playlist { get; } = [];
-    public Lock PlaylistLock { get; } = new();
-    public ulong SegmentIndex { get; set; }
+
+    /// <summary>The segments a player may still ask for, and the bytes behind them.</summary>
+    public required SegmentWindow Segments { get; init; }
+
     public CancellationTokenSource CancellationToken { get; set; } = new();
-    public int MediaSequenceId { get; set; }
 
     /// <summary>User name to the time they last fetched a playlist.</summary>
     public ConcurrentDictionary<string, DateTime> Viewers { get; } = new();

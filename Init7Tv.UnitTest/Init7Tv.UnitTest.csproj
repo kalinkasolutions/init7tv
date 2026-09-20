@@ -38,6 +38,12 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Init7Tv.BusinessLogic\Init7Tv.BusinessLogic.csproj" />
+      <ProjectReference Include="..\Init7Tv.Api\Init7Tv.Api.csproj" />
+    </ItemGroup>
+
+    <!-- Identity's token providers and the endpoints' IResult both live in the shared framework -->
+    <ItemGroup>
+      <FrameworkReference Include="Microsoft.AspNetCore.App" />
     </ItemGroup>
 
 </Project>

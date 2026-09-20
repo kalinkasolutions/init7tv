@@ -56,7 +56,13 @@ public sealed class EmailService : IEmailService
                 (MailKit.Security.SecureSocketOptions)appSettings.SecureSocketOptions
             );
 
-            await smtp.AuthenticateAsync(appSettings.Username, appSettings.Password);
+            // a relay on the local network often wants no credentials at all, and
+            // MailKit refuses a blank user name rather than skipping the step
+            if (!string.IsNullOrWhiteSpace(appSettings.Username))
+            {
+                await smtp.AuthenticateAsync(appSettings.Username, appSettings.Password);
+            }
+
             await smtp.SendAsync(email);
             await smtp.DisconnectAsync(true);
             return OperationResult<MessageDto>.Success(new MessageDto { Message = $"Mail sent to: {recipient}" });
@@ -95,7 +101,7 @@ public sealed class EmailService : IEmailService
         var body = await LoadTemplate("ResetPasswordEmailTemplate.html", new Dictionary<string, string>()
         {
             ["Title"] = "Reset password request",
-            ["ResetUrl"] = GetResetUrl(recipient, resetToken, appSettings)
+            ["ResetUrl"] = ResetUrl(appSettings.Value.BaseDomain, recipient, resetToken)
         });
         return await SendMailAsync("Reset password request", recipient, body);
     }
@@ -112,15 +118,21 @@ public sealed class EmailService : IEmailService
         var body = await LoadTemplate("InviteUserTemplate.html", new Dictionary<string, string>()
         {
             ["Title"] = "You're invited",
-            ["SetPasswordUrl"] = GetResetUrl(recipient, resetToken, appSettings)
+            ["SetPasswordUrl"] = ResetUrl(appSettings.Value.BaseDomain, recipient, resetToken)
         });
 
         return await SendMailAsync("Invite to Init7Tv", recipient, body);
     }
 
-    private static string GetResetUrl(string recipient, string resetToken, OperationResult<GeneralAppSettingsDto> appSettings)
+    /// <summary>
+    /// Where the mail sends somebody to set a password. Both parts are escaped: a reset token is
+    /// base64 and routinely carries "+" and "/", which a raw query string would hand back changed.
+    /// </summary>
+    public static string ResetUrl(string baseDomain, string recipient, string resetToken)
     {
-        return $"{appSettings.Value.BaseDomain}/resetPassword.html?email={Uri.EscapeDataString(recipient)}&token={Uri.EscapeDataString(resetToken)}";
+        return $"{baseDomain.TrimEnd('/')}/resetPassword.html" +
+               $"?email={Uri.EscapeDataString(recipient)}" +
+               $"&token={Uri.EscapeDataString(resetToken)}";
     }
 
     private async Task<string> LoadTemplate(string templateName, Dictionary<string, string> templateData)

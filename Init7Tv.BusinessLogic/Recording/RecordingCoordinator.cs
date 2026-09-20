@@ -17,18 +17,8 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
     /// programme left to catch.</summary>
     private static readonly TimeSpan WorthResuming = TimeSpan.FromMinutes(1);
 
-    /// <summary>ffmpeg ends itself with -t; this is how long after that we stop waiting.</summary>
-    private static readonly TimeSpan OverrunGrace = TimeSpan.FromMinutes(1);
-
     /// <summary>A source that keeps dropping is a broken channel, not bad luck.</summary>
     private const int MaxParts = 3;
-
-    /// <summary>
-    /// How far ahead one pass reads, and so the longest it sleeps in one go. A pick set inside this
-    /// window rings the doorbell, so this only bounds the damage from a suspended machine or a
-    /// system-clock jump: one late look rather than an arbitrarily long oversleep.
-    /// </summary>
-    private static readonly TimeSpan Horizon = TimeSpan.FromHours(1);
 
     // a recording at the default preset runs well under this, and guessing high
     // is the safe direction when the database shares the volume
@@ -121,14 +111,14 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
     public async Task<RecordingSweepResult> SweepAsync(DateTime now)
     {
         var settings = await GetSettings();
-        var preRoll = PreRoll(settings);
-        var postRoll = PostRoll(settings);
+        var preRoll = RecordingWindow.PreRoll(settings);
+        var postRoll = RecordingWindow.PostRoll(settings);
 
         // The window reaches one sleep ahead, because that is when the caller comes back. Reading
         // further would be reading rows this pass cannot act on and the next pass reads again.
         // Nothing is missed: a pick made inside the window rings the doorbell, and one made beyond it
         // is still beyond it when the window is redrawn on the next pass.
-        var horizon = now + Horizon;
+        var horizon = now + RecordingWindow.Horizon;
 
         await ForkDroppedOutAsync(now);
         await HandleFinishedCapturesAsync(settings);
@@ -151,10 +141,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         return new RecordingSweepResult(next, horizon);
     }
 
-    /// <summary>
-    /// The earliest moment inside the window that something has to happen: a pick's padded start, or
-    /// the point at which a capture that has outstayed its window gets stopped.
-    /// </summary>
+    /// <summary>Reads the rows the next moment is worked out from, and works it out.</summary>
     private async Task<DateTime?> NextMomentAsync(
         TimeSpan preRoll,
         TimeSpan postRoll,
@@ -162,37 +149,13 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         DateTime horizon
     )
     {
-        var moments = new List<DateTime>();
-
-        var claimed = new HashSet<Guid>();
-        foreach (var row in await m_recordings.GetUnfinishedAsync())
-        {
-            claimed.Add(row.ProgrammeId);
-
-            if (row.State == RecordingState.Recording)
-            {
-                moments.Add(row.ScheduledEnd + OverrunGrace);
-            }
-        }
-
-        foreach (var plan in await m_planned.GetInWindowAsync(now - postRoll, horizon + preRoll))
-        {
-            if (!claimed.Contains(plan.ProgrammeId))
-            {
-                moments.Add(AsUtc(plan.StartsAt) - preRoll);
-            }
-        }
-
-        var ahead = moments.Where(moment => moment > now && moment <= horizon).ToArray();
-
-        return ahead.Length == 0 ? null : ahead.Min();
+        return RecordingWindow.NextMoment(
+            await m_recordings.GetUnfinishedAsync(),
+            await m_planned.GetInWindowAsync(now - postRoll, horizon + preRoll),
+            preRoll,
+            now,
+            horizon);
     }
-
-    private static TimeSpan PreRoll(GeneralAppSettingsDto settings) =>
-        TimeSpan.FromMinutes(Math.Max(settings.RecordingPreRollMinutes, 0));
-
-    private static TimeSpan PostRoll(GeneralAppSettingsDto settings) =>
-        TimeSpan.FromMinutes(Math.Max(settings.RecordingPostRollMinutes, 0));
 
     /// <summary>
     /// Gives whoever let go of a shared capture their share of it: everything up to the moment they
@@ -382,7 +345,8 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
             return;
         }
 
-        var picks = await m_planned.GetInWindowAsync(now - PostRoll(settings), horizon + PreRoll(settings));
+        var picks = await m_planned.GetInWindowAsync(
+            now - RecordingWindow.PostRoll(settings), horizon + RecordingWindow.PreRoll(settings));
         var wanted = picks.Select(plan => plan.ProgrammeId).ToHashSet();
 
         m_logger.LogDebug("{Running} recording(s) under way, {Picks} pick(s) still wanted: {Wanted}",
@@ -396,7 +360,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
                 continue;
             }
 
-            if (now >= row.ScheduledEnd + OverrunGrace)
+            if (now >= row.ScheduledEnd + RecordingWindow.OverrunGrace)
             {
                 m_logger.LogWarning("Capture {CaptureId} outran its window, stopping it", captureId);
                 m_engine.Stop(captureId);
@@ -430,9 +394,8 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         // The window is drawn wide enough for both jobs at once: anything whose padded window is still
         // open, and anything whose padded start falls before the horizon. The pass that works out the
         // next moment reads the same rows.
-        var due = (await m_planned.GetInWindowAsync(now - postRoll, horizon + preRoll))
-            .Where(plan => now >= AsUtc(plan.StartsAt) - preRoll && now < AsUtc(plan.EndsAt) + postRoll)
-            .ToArray();
+        var due = RecordingWindow.Due(
+            await m_planned.GetInWindowAsync(now - postRoll, horizon + preRoll), preRoll, postRoll, now);
 
         if (due.Length == 0)
         {
@@ -463,7 +426,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
                 continue;
             }
 
-            if (AlreadyAttempted(attempts, group))
+            if (RecordingWindow.AlreadyAttempted(attempts, group))
             {
                 continue;
             }
@@ -475,51 +438,16 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
     /// <summary>Gives whoever has picked it since a row on the capture already running.</summary>
     private async Task JoinAsync(PlannedRecording[] plans, RecordingRow[] rows, DateTime now)
     {
-        var already = rows.Select(row => row.UserName).ToHashSet();
-        var newcomers = plans.Where(plan => !already.Contains(plan.UserName)).ToArray();
-
+        var newcomers = RecordingRows.Joining(plans, rows, now);
         if (newcomers.Length == 0)
         {
             return;
         }
 
-        var running = rows[0];
-
         m_logger.LogInformation("{Names} joined the recording of {Title} already under way",
-            string.Join(", ", newcomers.Select(plan => plan.UserName)), running.Title);
+            string.Join(", ", newcomers.Select(row => row.UserName)), rows[0].Title);
 
-        // the same window, the same directory and the same state: it is one capture, and what they
-        // get is whatever it ends up holding
-        await m_recordings.AddRangeAsync(newcomers.Select(plan => new RecordingRow
-        {
-            RecordingId = Guid.NewGuid(),
-            ProgrammeId = running.ProgrammeId,
-            UserName = plan.UserName,
-            ChannelId = running.ChannelId,
-            ChannelName = running.ChannelName,
-            CanonicalName = running.CanonicalName,
-            Title = running.Title,
-            SubTitle = running.SubTitle,
-            ScheduledStart = running.ScheduledStart,
-            ScheduledEnd = running.ScheduledEnd,
-            StartedAt = running.StartedAt,
-            State = running.State,
-            Directory = running.Directory,
-            CreatedAt = now
-        }).ToArray());
-    }
-
-    /// <summary>
-    /// Whether this programme has been had a go at since it was asked for. A pick made after the
-    /// attempt is somebody asking again — having stopped the first one, say — and starts a new one.
-    /// </summary>
-    private static bool AlreadyAttempted(
-        Dictionary<Guid, DateTime> attempts,
-        IGrouping<Guid, PlannedRecording> group
-    )
-    {
-        return attempts.TryGetValue(group.Key, out var attemptedAt)
-               && attemptedAt >= group.Max(plan => AsUtc(plan.PlannedAt));
+        await m_recordings.AddRangeAsync(newcomers);
     }
 
     private async Task StartGroupAsync(
@@ -530,8 +458,8 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         DateTime now
     )
     {
-        var scheduledStart = AsUtc(plans[0].StartsAt) - preRoll;
-        var scheduledEnd = AsUtc(plans[0].EndsAt) + postRoll;
+        var scheduledStart = RecordingWindow.AsUtc(plans[0].StartsAt) - preRoll;
+        var scheduledEnd = RecordingWindow.AsUtc(plans[0].EndsAt) + postRoll;
         var duration = scheduledEnd - now;
 
         var inTheWay = WhatIsInTheWay(duration);
@@ -565,33 +493,18 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         }
     }
 
-    /// <summary>One capture per programme, one row per person who asked for it.</summary>
+    /// <summary>A fresh set of rows, and the directory the capture behind them writes into.</summary>
     private RecordingRow[] NewRows(
         PlannedRecording[] plans,
         DateTime scheduledStart,
         DateTime scheduledEnd,
         DateTime now
-    )
-    {
-        var directory = RecordingFiles.DirectoryFor(m_options.RecordingPath, Guid.NewGuid());
-
-        return plans.Select(plan => new RecordingRow
-        {
-            RecordingId = Guid.NewGuid(),
-            ProgrammeId = plan.ProgrammeId,
-            UserName = plan.UserName,
-            ChannelId = plan.ChannelId,
-            ChannelName = plan.ChannelName,
-            CanonicalName = plan.CanonicalName,
-            Title = plan.Title,
-            SubTitle = plan.SubTitle,
-            ScheduledStart = scheduledStart,
-            ScheduledEnd = scheduledEnd,
-            State = RecordingState.Pending,
-            Directory = directory,
-            CreatedAt = now
-        }).ToArray();
-    }
+    ) => RecordingRows.New(
+        plans,
+        RecordingFiles.DirectoryFor(m_options.RecordingPath, Guid.NewGuid()),
+        scheduledStart,
+        scheduledEnd,
+        now);
 
     /// <summary>Why this cannot start right now, or null when nothing is.</summary>
     private string? WhatIsInTheWay(TimeSpan duration)
@@ -746,12 +659,4 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
 
         return general;
     }
-
-    /// Picks were stored in UTC, but Sqlite hands them back with no kind at all.
-    private static DateTime AsUtc(DateTime value) => value.Kind switch
-    {
-        DateTimeKind.Utc => value,
-        DateTimeKind.Local => value.ToUniversalTime(),
-        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
-    };
 }

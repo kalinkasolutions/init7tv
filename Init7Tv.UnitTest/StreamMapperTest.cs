@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Init7Tv.BusinessLogic;
 using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.Mapping;
+using Init7Tv.BusinessLogic.StreamManager;
 using Init7Tv.Dto;
 
 namespace Init7Tv.UnitTest;
@@ -29,7 +30,8 @@ public class StreamMapperTest
         AudioStreamIndex = audioStreamIndex,
         StreamInfo = new FfprobeRoot { Streams = streams.ToList() },
         Channel = new ChannelDto(),
-        Ffmpeg = new Process()
+        Ffmpeg = new Process(),
+        Segments = new SegmentWindow(keep: 20, perKeyframe: TimeSpan.FromSeconds(2))
     };
 
     [Test]

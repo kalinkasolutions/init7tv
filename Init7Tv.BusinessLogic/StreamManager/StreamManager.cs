@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 using System.Diagnostics;
-using System.Text;
 using Init7Tv.BusinessLogic.Ffprobe;
 using Init7Tv.BusinessLogic.Init7Api;
 using Init7Tv.BusinessLogic.Mapping;
@@ -131,6 +129,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
                 StreamId = streamId,
                 AudioStreamIndex = audioStreamIndex,
                 Ffmpeg = GetFfmpegProcess(channelResult.Value, audioStreamIndex, appSettings, streamInfo.Value),
+                Segments = new SegmentWindow(PlaylistLength, SegmentDuration),
                 StreamInfo = streamInfo.Value,
                 Channel = channelResult.Value
             };
@@ -213,31 +212,11 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
         stream.Viewers[userName] = DateTime.UtcNow;
 
-        TvSegment[] segments;
-        int mediaSequenceId;
-        lock (stream.PlaylistLock)
-        {
-            segments = stream.Playlist.ToArray();
-            mediaSequenceId = stream.MediaSequenceId;
-        }
+        var (segments, mediaSequenceId) = stream.Segments.Snapshot();
 
-        var targetDuration = segments.Length == 0
-            ? SegmentSeconds
-            : (int)Math.Ceiling(segments.Max(x => x.Duration.TotalSeconds));
-
-        var sb = new StringBuilder();
-        sb.AppendLine("#EXTM3U");
-        sb.AppendLine("#EXT-X-VERSION:6");
-        sb.AppendLine($"#EXT-X-TARGETDURATION:{targetDuration}");
-        sb.AppendLine($"#EXT-X-MEDIA-SEQUENCE:{mediaSequenceId}");
-
-        foreach (var segment in segments)
-        {
-            sb.AppendLine($"#EXTINF:{segment.Duration.TotalSeconds.ToString("0.000", CultureInfo.InvariantCulture)},");
-            sb.AppendLine($"/api/streaming/segment/{stream.StreamId}/{segment.Name}");
-        }
-
-        return OperationResult<string>.Text(sb.ToString(), "application/vnd.apple.mpegurl");
+        return OperationResult<string>.Text(
+            HlsPlaylist.Live(stream.StreamId, segments, mediaSequenceId, SegmentSeconds),
+            "application/vnd.apple.mpegurl");
     }
 
 
@@ -248,12 +227,11 @@ public sealed class StreamManager : IStreamManager, IDisposable
             return OperationResult<byte[]>.NotFound($"Could not find stream: {streamId} for segment: {name}");
         }
 
-        if (stream.TsSegments.TryGetValue(name, out var tsSegment))
-        {
-            return OperationResult<byte[]>.File(tsSegment, "video/MP2T");
-        }
+        var bytes = stream.Segments.Bytes(name);
 
-        return OperationResult<byte[]>.NotFound();
+        return bytes == null
+            ? OperationResult<byte[]>.NotFound()
+            : OperationResult<byte[]>.File(bytes, "video/MP2T");
     }
 
     public CurrentStreamDto[] GetCurrentStreams()
@@ -302,12 +280,9 @@ public sealed class StreamManager : IStreamManager, IDisposable
 
         while (DateTime.UtcNow < deadline)
         {
-            lock (stream.PlaylistLock)
+            if (stream.Segments.Count >= SegmentsBeforeStart)
             {
-                if (stream.Playlist.Count >= SegmentsBeforeStart)
-                {
-                    return true;
-                }
+                return true;
             }
 
             if (stream.CancellationToken.IsCancellationRequested || FfmpegProcess.HasExited(stream.Ffmpeg))
@@ -327,8 +302,7 @@ public sealed class StreamManager : IStreamManager, IDisposable
         {
             var stdout = stream.Ffmpeg.StandardOutput.BaseStream;
             var buffer = new byte[TsKeyframeDetector.PacketSize * 1024];
-            var detector = new TsKeyframeDetector();
-            var segment = new SegmentBuilder();
+            var segmenter = new HlsSegmenter();
             var carried = 0;
 
             while (!cancellationToken.IsCancellationRequested)
@@ -341,7 +315,13 @@ public sealed class StreamManager : IStreamManager, IDisposable
                     return;
                 }
 
-                carried = ConsumePackets(stream, detector, buffer, carried + read, segment);
+                var cuts = segmenter.Consume(buffer, carried + read);
+                foreach (var cut in cuts.Segments)
+                {
+                    stream.Segments.Add(cut);
+                }
+
+                carried = cuts.Carried;
             }
         }
         catch (OperationCanceledException)
@@ -351,107 +331,6 @@ public sealed class StreamManager : IStreamManager, IDisposable
         catch (Exception ex)
         {
             m_logger.LogError(ex, "Stream loop failed stream: {StreamId}", stream.StreamId);
-        }
-    }
-
-    /// <summary>
-    /// Copies whole transport stream packets into the current segment, starting a
-    /// new one on each keyframe. Returns the number of trailing bytes moved to the
-    /// front of the buffer, being the start of a packet the next read completes.
-    /// </summary>
-    private int ConsumePackets(
-        TvStream stream,
-        TsKeyframeDetector detector,
-        byte[] buffer,
-        int available,
-        SegmentBuilder segment
-    )
-    {
-        var consumed = 0;
-
-        while (available - consumed >= TsKeyframeDetector.PacketSize)
-        {
-            var packet = buffer.AsSpan(consumed, TsKeyframeDetector.PacketSize);
-            consumed += TsKeyframeDetector.PacketSize;
-
-            if (packet[0] != TsKeyframeDetector.SyncByte)
-            {
-                // ffmpeg writes whole packets, so this only happens after a hiccup
-                consumed -= TsKeyframeDetector.PacketSize - 1;
-                continue;
-            }
-
-            if (detector.IsKeyframeStart(packet))
-            {
-                // scenecut is off and -g cannot fire first, so every keyframe here is
-                // a forced one exactly SegmentDuration of media after the last
-                if (segment.Keyframes > 0)
-                {
-                    PublishSegment(stream, segment);
-                    segment.Reset();
-                }
-
-                // the program tables have to lead the segment. ffmpeg emits them
-                // periodically, so cutting at a keyframe left them a third of a
-                // second in, and a player that demuxes each segment on its own
-                // discards everything before them.
-                foreach (var table in detector.ProgramTables)
-                {
-                    segment.Write(table);
-                }
-
-                segment.Keyframes++;
-            }
-
-            // anything before the first keyframe cannot be decoded on its own
-            if (segment.Keyframes > 0)
-            {
-                segment.Write(packet);
-            }
-        }
-
-        var remaining = available - consumed;
-        buffer.AsSpan(consumed, remaining).CopyTo(buffer);
-        return remaining;
-    }
-
-    private void PublishSegment(TvStream stream, SegmentBuilder segment)
-    {
-        var name = $"seg{stream.SegmentIndex++}.ts";
-        stream.TsSegments[name] = segment.ToArray();
-
-        // every keyframe is one forced interval of media, which is what a player
-        // needs; wall clock drifts whenever the transcode runs behind realtime
-        var duration = segment.Keyframes * SegmentDuration;
-
-        lock (stream.PlaylistLock)
-        {
-            stream.Playlist.Add(new TvSegment(name, duration));
-
-            while (stream.Playlist.Count > PlaylistLength)
-            {
-                var oldSegment = stream.Playlist[0];
-                stream.Playlist.RemoveAt(0);
-                stream.TsSegments.TryRemove(oldSegment.Name, out _);
-                stream.MediaSequenceId++;
-            }
-        }
-    }
-
-    private sealed class SegmentBuilder
-    {
-        private MemoryStream m_buffer = new();
-
-        public int Keyframes { get; set; }
-
-        public void Write(ReadOnlySpan<byte> packet) => m_buffer.Write(packet);
-
-        public byte[] ToArray() => m_buffer.ToArray();
-
-        public void Reset()
-        {
-            m_buffer = new MemoryStream();
-            Keyframes = 0;
         }
     }
 

@@ -18,9 +18,6 @@ namespace Init7Tv.Services;
 /// </summary>
 public sealed class RecordingScheduler : BackgroundService
 {
-    // A floor on the sleep, so a horizon of zero cannot turn the loop into a spin.
-    private static readonly TimeSpan MinSleep = TimeSpan.FromSeconds(1);
-
     // How long to wait after a pass that could not run at all — a database that is not up yet, say.
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
 
@@ -86,16 +83,7 @@ public sealed class RecordingScheduler : BackgroundService
                 .GetRequiredService<IRecordingCoordinator>()
                 .SweepAsync(DateTime.UtcNow);
 
-            // Sleep to the next moment the pass found, or — when its window held nothing more — to
-            // where that window ends, which is the pass's own answer to "when will this be stale?".
-            // Taking the horizon from the result rather than adding it here is what keeps the two
-            // exactly aligned: measuring from now would put the wake-up a whole pass *past* the
-            // window, leaving a sliver at the end that nothing had read.
-            //
-            // Subtracted from the current time rather than the pass's start: probing a channel takes
-            // seconds, and a pick that fell due while we were working should be taken up next turn
-            // rather than slept through.
-            return Clamp((result.NextFireAt ?? result.Horizon) - DateTime.UtcNow);
+            return result.SleepFrom(DateTime.UtcNow);
         }
         catch (Exception ex)
         {
@@ -120,6 +108,4 @@ public sealed class RecordingScheduler : BackgroundService
             m_logger.LogError(ex, "Reconciling the recordings left over from the last run failed");
         }
     }
-
-    private static TimeSpan Clamp(TimeSpan delay) => delay < MinSleep ? MinSleep : delay;
 }

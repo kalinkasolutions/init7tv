@@ -8,7 +8,9 @@ public sealed class OperationResult<T>
     public string ErrorMessage { get; }
     public ResultCode ResultCode { get; }
 
-    public T Value => m_value ?? throw new InvalidOperationException($"Cannot access Value when operation failed with {ResultCode}: {ErrorMessage}");
+    public T Value => m_value
+        ?? throw new InvalidOperationException(
+            $"Cannot access Value when operation failed with {ResultCode}: {ErrorMessage}");
     public bool HasError => ResultCode.IsError();
     public bool IsSuccess => !HasError;
 
@@ -102,13 +104,15 @@ public enum ResultCode
 
 public static class ResultCodeExtensions
 {
+    /// <summary>
+    /// Listed the other way round on purpose: a code added later and forgotten here reads as an
+    /// error, which surfaces at once, rather than as a success whose Value then throws.
+    /// </summary>
     public static bool IsError(this ResultCode code) => code switch
     {
-        ResultCode.NotFound => true,
-        ResultCode.BadGateway => true,
-        ResultCode.Conflict => true,
-        ResultCode.Invalid => true,
-        ResultCode.Error => true,
-        _ => false
+        ResultCode.Success => false,
+        ResultCode.TextSuccess => false,
+        ResultCode.FileResult => false,
+        _ => true
     };
 }
