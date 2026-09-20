@@ -4,11 +4,15 @@
          @keydown.enter.prevent="confirm()">
         <h2 class="modal-title" x-text="title"></h2>
         <div class="modal-text" x-text="description"></div>
+        <!-- the red one is the one that does it. The other way round, a ban icon in danger red
+             reads as "yes, stop that", and pressing it silently did nothing -->
         <div class="modal-actions">
-            <button class="icon-button danger-icon" type="button" @click="cancel()">
-                <i class="bi bi-ban"></i>
+            <button class="icon-button" type="button" title="Leave it" aria-label="Leave it"
+                    @click="cancel()">
+                <i class="bi bi-x-lg"></i>
             </button>
-            <button class="icon-button" type="button" @click="confirm()">
+            <button class="icon-button danger-icon" type="button" title="Go ahead" aria-label="Go ahead"
+                    @click="confirm()">
                 <i class="bi bi-check-lg"></i>
             </button>
         </div>
