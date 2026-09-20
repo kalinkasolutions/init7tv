@@ -1,8 +1,8 @@
 import {get, post, deleteItem} from '../../requestHandler.js';
 import {notify} from '../../notification.js';
+import {whileShowing} from '../../whileShowing.js';
 
-/// States the scheduler is still working on, which is what decides how often
-/// this asks again.
+/// States the scheduler is still working on, which is what decides how often this asks again.
 const BUSY = ['Pending', 'Recording', 'Finalizing'];
 
 const BUSY_INTERVAL = 15_000;
@@ -18,55 +18,65 @@ export const recordingsView = () => ({
     breaks: [],
     /// Which break the viewer waved away. One at a time: waving one off says nothing about the next.
     dismissed: null,
-    /// Re-read while playing so the button knows when a break has been reached.
+    /// Re-read while playing so the skip button knows when a break has been reached.
     at: 0,
 
-    async init() {
-        await this.load();
-        this.schedule();
+    init() {
+        // A pick turns into a recording with nobody touching this page, so the list has to notice on
+        // its own — but only while somebody is looking at it, and it catches up when they come back.
+        whileShowing(this, 'recording', {
+            enter: () => this.watchForChanges(),
+            leave: () => this.rest()
+        });
 
         this.$watch('recordings', () => this.publishCounts());
-        this.publishCounts();
-    },
-
-    /// The tabs say how many without having to be opened, which is the point of
-    /// having one for what is under way.
-    publishCounts() {
-        const underway = this.inProgress;
-
-        this.$store.tabs.counts.recording = underway.length;
-        this.$store.tabs.counts.recorded = this.finished.length;
-        this.$store.recordings.underway = underway.map(x => x.programmeId);
     },
 
     destroy() {
+        this.rest();
+    },
+
+    async watchForChanges() {
+        await this.load();
+        this.schedule();
+    },
+
+    /// Nothing is happening on screen, so nothing needs to be asked or played.
+    rest() {
         clearTimeout(this.timer);
-        this.stopHls();
+        this.timer = null;
+        this.stopPlaying();
     },
 
-    async load() {
-        const before = this.recordings.map(x => `${x.recordingId}:${x.state}`).join();
-
-        this.recordings = await get('/api/recording/recordings') ?? [];
-        this.$store.filter.offer(this.recordings.map(x => x.userName));
-
-        // The picks behind a recording are dropped once it finishes, so the planned list is stale
-        // the moment any of this changes. It owns its own data and is a component away, so it is
-        // told rather than reached into.
-        if (before !== this.recordings.map(x => `${x.recordingId}:${x.state}`).join()) {
-            window.dispatchEvent(new CustomEvent('recordings-changed'));
-        }
-    },
-
-    /// A pick turns into a recording with nobody touching this page, so the list
-    /// has to notice on its own; it just looks more often while something is
-    /// actually happening.
     schedule() {
         clearTimeout(this.timer);
         this.timer = setTimeout(async () => {
             await this.load();
             this.schedule();
         }, this.recordings.some(x => this.isBusy(x)) ? BUSY_INTERVAL : IDLE_INTERVAL);
+    },
+
+    async load() {
+        const before = this.states();
+
+        this.recordings = await get('/api/recording/recordings') ?? [];
+        this.$store.filter.offer(this.recordings.map(x => x.userName));
+
+        if (before !== this.states()) {
+            this.$store.recordings.changed();
+        }
+    },
+
+    states() {
+        return this.recordings.map(x => `${x.recordingId}:${x.state}`).join();
+    },
+
+    /// The tabs say how many without having to be opened, which is the point of having one for what
+    /// is under way.
+    publishCounts() {
+        this.$store.tabs.counts.recording = this.inProgress.length;
+        this.$store.tabs.counts.recorded = this.finished.length;
+        this.$store.recordings.underway = this.inProgress.map(x => x.programmeId);
     },
 
     isBusy(recording) {
@@ -95,18 +105,20 @@ export const recordingsView = () => ({
         }
     },
 
-    fileUrl(recording, {withoutAds = false} = {}) {
+    fileUrl(recording, withoutAds = false) {
         return `/api/recording/recordings/${recording.recordingId}/file?withoutAds=${withoutAds}`;
-    },
-
-    playlistUrl(recording) {
-        return `/api/recording/recordings/${recording.recordingId}/playlist.m3u8`;
     },
 
     /// A finished recording is an mp4 the browser plays on its own. One still being written is the
     /// transport stream on disk, described as byte ranges, which needs hls.js to demux it.
     needsHls(recording) {
         return this.isBusy(recording);
+    },
+
+    /// What the video element is pointed at, which for one still recording is nothing: hls.js feeds
+    /// it instead.
+    sourceFor(recording) {
+        return this.needsHls(recording) ? null : this.fileUrl(recording);
     },
 
     /// Anything with a whole segment on disk can be watched, which for one under way is everything
@@ -121,17 +133,13 @@ export const recordingsView = () => ({
         this.dismissed = null;
         this.breaks = await get(`/api/recording/recordings/${recording.recordingId}/ad-breaks`) ?? [];
 
-        if (!this.needsHls(recording)) {
-            return;
+        if (this.needsHls(recording)) {
+            // the element only exists once the overlay has been drawn
+            this.$nextTick(() => this.startHls(recording));
         }
-
-        // the element only exists once the overlay has been drawn
-        this.$nextTick(() => this.startHls(recording));
     },
 
     startHls(recording) {
-        const video = this.$root.querySelector('.player-box video');
-
         this.stopHls();
 
         if (!Hls.isSupported()) {
@@ -154,14 +162,21 @@ export const recordingsView = () => ({
             maxBufferLength: 30
         });
 
-        this.hls.on(Hls.Events.ERROR, (_, data) => {
-            if (data.fatal) {
-                this.gone(recording);
-            }
-        });
+        this.hls.on(Hls.Events.ERROR, (_, data) => data.fatal && this.gone(recording));
+        this.hls.loadSource(`/api/recording/recordings/${recording.recordingId}/playlist.m3u8`);
+        this.hls.attachMedia(this.$refs.video);
+    },
 
-        this.hls.loadSource(this.playlistUrl(recording));
-        this.hls.attachMedia(video);
+    stopHls() {
+        this.hls?.destroy();
+        this.hls = null;
+    },
+
+    stopPlaying() {
+        this.stopHls();
+        this.playing = null;
+        this.breaks = [];
+        this.dismissed = null;
     },
 
     /// Called as the picture moves, which is what the skip button watches.
@@ -175,24 +190,17 @@ export const recordingsView = () => ({
             this.at >= gap.startsAt && this.at < gap.endsAt && this.dismissed !== gap.startsAt) ?? null;
     },
 
-    skipBreak(video) {
+    skipBreak() {
         const gap = this.inBreak;
 
         if (gap) {
-            video.currentTime = gap.endsAt;
+            this.$refs.video.currentTime = gap.endsAt;
         }
     },
 
     /// Waving it away leaves the advertising playing and says nothing about the next break.
     dismissBreak() {
         this.dismissed = this.inBreak?.startsAt ?? null;
-    },
-
-    stopHls() {
-        if (this.hls) {
-            this.hls.destroy();
-            this.hls = null;
-        }
     },
 
     /// A file can go between the list being drawn and the button being pressed, and a video element
@@ -207,14 +215,7 @@ export const recordingsView = () => ({
     /// The mp4 is made as it is sent rather than kept, so this is a plain navigation: the browser
     /// streams it to disk instead of the page holding gigabytes in memory.
     download(recording, withoutAds) {
-        window.location = this.fileUrl(recording, {withoutAds});
-    },
-
-    stopPlaying() {
-        this.stopHls();
-        this.playing = null;
-        this.breaks = [];
-        this.dismissed = null;
+        window.location = this.fileUrl(recording, withoutAds);
     },
 
     /// Letting go of one still running. What it has caught so far is kept either way: if nobody else
@@ -224,7 +225,7 @@ export const recordingsView = () => ({
             ? ` ${recording.sharedWith.join(' and ')} also asked for it, so it keeps recording for them.`
             : '';
 
-        const confirmed = await Alpine.store('modal').show(
+        const confirmed = await this.$store.modal.show(
             'Stop this recording?',
             `${recording.title} will stop and what has been recorded so far is kept.${shared}`);
 
@@ -240,7 +241,7 @@ export const recordingsView = () => ({
     },
 
     async remove(recording) {
-        const confirmed = await Alpine.store('modal').show(
+        const confirmed = await this.$store.modal.show(
             'Delete this recording?',
             `${recording.title} will be removed and the file deleted.`);
 
@@ -264,6 +265,7 @@ export const recordingsView = () => ({
         const date = new Date(recording.scheduledStart);
         const day = date.toLocaleDateString([], {weekday: 'short', day: 'numeric', month: 'short'});
         const time = date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false});
+
         return `${day} ${time}`;
     },
 
@@ -273,6 +275,7 @@ export const recordingsView = () => ({
         }
 
         const gigabytes = recording.fileSizeBytes / 1_000_000_000;
+
         return gigabytes >= 1
             ? `${gigabytes.toFixed(1)} GB`
             : `${Math.round(recording.fileSizeBytes / 1_000_000)} MB`;

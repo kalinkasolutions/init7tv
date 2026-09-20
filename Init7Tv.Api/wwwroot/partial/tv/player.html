@@ -1,34 +1,30 @@
-<section id="player-container" x-data="playerView()"
-         @channel-selected.window="if ($store.view.is('tv'))
-                                       await playChannel($event.detail.channel, $event.detail.audioStreamIndex)">
+<section id="player-container" x-data="playerView()">
     <!-- outside player-wrapper on purpose: with no channel chosen yet the drawer
          trigger is the only way to reach the channel list on a narrow screen -->
     <div class="player-title-wrapper">
-        <button class="menu-button link-button" @click="$store.ui.toggleMenu()"
-                :aria-expanded="$store.ui.menuOpen" aria-label="Channels" title="Channels">&#9776;</button>
-        <template x-if="currentChannel">
-            <img :src="currentLogo" :alt="currentTitle"/>
+        <button class="menu-button link-button" @click="$store.menu.toggle()"
+                :aria-expanded="$store.menu.open" aria-label="Channels" title="Channels">&#9776;</button>
+        <template x-if="channel">
+            <img :src="logo" :alt="title"/>
         </template>
-        <h2 x-text="currentTitle"></h2>
+        <h2 x-text="title"></h2>
         <div class="lang-select-wrapper" x-show="!loading && languages.length > 0" x-cloak>
             <label for="lang-select">Language</label>
-            <select id="lang-select"
-                    x-model="selectedLanguage"
-                    @change="await onLanguageChange(selectedLanguage)">
+            <select id="lang-select" x-model.number="$store.channels.audio">
                 <template x-for="l in languages" :key="l.audioStreamIndex">
                     <option :value="l.audioStreamIndex" x-text="l.language"></option>
                 </template>
             </select>
         </div>
     </div>
-    <div class="player-wrapper" x-show="currentChannel">
+    <div class="player-wrapper" x-show="channel">
         <div class="video-wrapper">
             <!-- controls stay on: the loading overlay is opaque and covers them,
                  and they are the only way to start playback when autoplay is blocked -->
-            <video id="player" controls></video>
+            <video x-ref="video" controls></video>
             <div class="player-loading" x-show="loading" x-cloak>
                 <div class="spinner"></div>
-                <span x-text="`Starting ${currentTitle}...`"></span>
+                <span x-text="`Starting ${title}...`"></span>
             </div>
         </div>
     </div>

@@ -1,5 +1,4 @@
-<div id="epg" x-data="epgView()"
-     @channel-selected.window="if ($store.view.is('tv')) await getEpg($event.detail.channel)">
+<div id="epg" x-data="epgView()">
     <template x-if="current">
         <div class="epg-data">
             <div class="epg-progress" x-ref="progressFill"></div>
@@ -14,19 +13,17 @@
             <div class="description" x-text="current.description"></div>
         </div>
     </template>
-    <template x-if="future.length">
-        <template x-for="e in future" :key="e.id">
-            <div class="epg-data">
-                <div class="title-wrapper">
-                    <h4 x-text="e.title"></h4>
-                    <h5 class="starts-at" x-text="beginsAt(e)"></h5>
-                </div>
-                <h5 x-text="e.subTitle"></h5>
-                <div class="divider-white"></div>
-                <h5 x-text="e.categories.join(', ')"></h5>
-                <div class="divider-white"></div>
-                <div class="description" x-text="e.description"></div>
+    <template x-for="programme in next" :key="programme.id">
+        <div class="epg-data">
+            <div class="title-wrapper">
+                <h4 x-text="programme.title"></h4>
+                <h5 class="starts-at" x-text="beginsAt(programme)"></h5>
             </div>
-        </template>
+            <h5 x-text="programme.subTitle"></h5>
+            <div class="divider-white"></div>
+            <h5 x-text="programme.categories.join(', ')"></h5>
+            <div class="divider-white"></div>
+            <div class="description" x-text="programme.description"></div>
+        </div>
     </template>
 </div>

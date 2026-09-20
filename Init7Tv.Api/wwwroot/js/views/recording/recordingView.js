@@ -1,5 +1,6 @@
 import {get, postJson, deleteItem} from '../../requestHandler.js';
 import {epgFor, warm, sweepOldGuides} from '../../epgCache.js';
+import {whileShowing} from '../../whileShowing.js';
 
 /// Where picks lived before there was somewhere to send them. Read once so that
 /// anything chosen while it was a browser-only page is not silently lost.
@@ -7,19 +8,17 @@ const OLD_STORE = 'planned-recordings';
 
 export const recordingView = () => ({
     channel: null,
-    epg: [],
+    programmes: [],
     day: 0,
     loading: false,
     planned: [],
     /// Set while jumping to a pick, so the guide knows which day to open on and
     /// what to scroll to once it has loaded.
     goingTo: null,
-    /// A channel chosen while the other half was showing, waiting to be looked at.
-    pending: null,
     /// The row just jumped to. Held as state rather than written onto the element,
     /// because the guide owns that element's classes and a redraw wiped it.
     foundId: null,
-    highlightTimer: null,
+    highlight: null,
 
     /// The source carries full days out to six and part of a seventh.
     days: Array.from({length: 7}, (_, offset) => {
@@ -35,165 +34,60 @@ export const recordingView = () => ({
 
     async init() {
         sweepOldGuides();
-        await this.loadPlanned();
-        await this.adoptAnythingPickedBefore();
+
+        whileShowing(this, 'recording', {enter: () => this.catchUp()});
+        this.$watch('$store.channels.current', () => this.catchUp());
+
+        // a recording finishing takes its pick with it, so this list has gone stale
+        this.$watch('$store.recordings.changedAt', () => this.loadPlanned());
 
         // the tab shows how many are waiting without having to be opened. Watching
         // the count rather than the picks, because one starting to record changes it
         // without the picks themselves changing at all.
-        this.$watch('waiting.length', value => (this.$store.tabs.counts.planned = value));
+        this.$watch('waiting.length', count => (this.$store.tabs.counts.planned = count));
+
+        await this.loadPlanned();
+        await this.adoptAnythingPickedBefore();
         this.$store.tabs.counts.planned = this.waiting.length;
-
-        // a recording finishing takes its pick with it, so this list has to look again
-        this.onRecordingsChanged = () => this.loadPlanned();
-        window.addEventListener('recordings-changed', this.onRecordingsChanged);
-
-        // The channel list is shared with the watching half, so a channel chosen over there is
-        // remembered rather than acted on: loading a guide nobody is looking at, and moving their
-        // tab under them, is not what picking a channel to watch meant.
-        this.onChannelSelected = event => {
-            this.pending = event.detail.channel;
-
-            if (this.$store.view.is('recording')) {
-                this.showPending();
-            }
-        };
-        window.addEventListener('channel-selected', this.onChannelSelected);
-
-        this.onViewChanged = event => {
-            if (event.detail.view === 'recording') {
-                this.showPending();
-            }
-        };
-        window.addEventListener('view-changed', this.onViewChanged);
     },
 
-    /// Catches the guide up with whatever the channel list is pointing at.
-    showPending() {
-        if (!this.pending || this.pending.channelId === this.channel?.channelId) {
+    /// The guide for whatever the channel list points at, fetched only while this is the view being
+    /// looked at. A channel chosen while watching was showing meant "watch this", not "move my tab
+    /// and load a guide nobody is looking at", so it waits until this view is come back to.
+    async catchUp() {
+        const channel = this.$store.channels.current;
+
+        if (!this.$store.view.is('recording') || !channel || channel.channelId === this.channel?.channelId) {
             return;
         }
 
-        const channel = this.pending;
-        this.pending = null;
         this.$store.tabs.show('guide');
-        this.selectChannel(channel);
+        await this.show(channel);
     },
 
-    destroy() {
-        window.removeEventListener('view-changed', this.onViewChanged);
-        window.removeEventListener('channel-selected', this.onChannelSelected);
-        window.removeEventListener('recordings-changed', this.onRecordingsChanged);
-    },
-
-    async selectChannel(channel) {
+    async show(channel) {
         this.channel = channel;
         this.day = this.goingTo ? this.goingTo.day : 0;
+
         await this.load();
 
         if (this.goingTo) {
             const id = this.goingTo.id;
             this.goingTo = null;
-            this.scrollTo(id);
+            this.scrollTo(id, {mark: true});
             return;
         }
 
-        this.scrollToNow();
-    },
-
-    /// Opens the guide where a pick sits: its channel, its day, scrolled to it.
-    openPlanned(entry) {
-        this.goingTo = {id: entry.programmeId, day: this.dayOffsetOf(entry.startsAt)};
-        this.$store.tabs.show('guide');
-
-        if (this.channel?.channelId === entry.channelId) {
-            // already here, so nothing will announce a change
-            this.selectChannel(this.channel);
-            return;
-        }
-
-        window.dispatchEvent(new CustomEvent('select-channel', {
-            detail: {channelId: entry.channelId}
-        }));
-    },
-
-    /// Which day of the guide a programme is on. The source cuts its days at UTC
-    /// midnight, so counting in local days sends anything airing after midnight
-    /// here to a day the programme is not on.
-    dayOffsetOf(when) {
-        const midnight = date => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-        const days = Math.round((midnight(new Date(when)) - midnight(new Date())) / 86_400_000);
-        return Math.min(Math.max(days, 0), this.days.length - 1);
-    },
-
-    /// The row only exists once the day has been drawn, which is a frame or two
-    /// after the guide arrives rather than on the next tick. $root, not $el: this
-    /// runs from the pick's own click handler, where $el is that button.
-    scrollTo(id, attemptsLeft = 60) {
-        const row = this.$root.querySelector(`[data-programme="${id}"]`);
-
-        if (!row) {
-            if (attemptsLeft > 0) {
-                requestAnimationFrame(() => this.scrollTo(id, attemptsLeft - 1));
-            }
-
-            return;
-        }
-
-        row.scrollIntoView({block: 'center', behavior: 'smooth'});
-
-        // it is one row among forty, so say which one was meant
-        clearTimeout(this.highlightTimer);
-        this.foundId = id;
-        this.highlightTimer = setTimeout(() => (this.foundId = null), 2500);
-    },
-
-    /// A day of the guide starts at midnight, so opening one lands on hours that
-    /// are already over. What is on now is where anybody wants to be, and on a
-    /// later day that is its first programme.
-    scrollToNow(attemptsLeft = 60) {
-        const programme = this.epg.find(x => this.isOnNow(x)) ?? this.epg.find(x => !this.hasEnded(x));
-
-        if (!programme) {
-            return;
-        }
-
-        const row = this.$root.querySelector(`[data-programme="${programme.id}"]`);
-
-        if (!row) {
-            if (attemptsLeft > 0) {
-                requestAnimationFrame(() => this.scrollToNow(attemptsLeft - 1));
-            }
-
-            return;
-        }
-
-        // no marking and no animation: this is where the guide opens, not
-        // somewhere it was asked to go
-        row.scrollIntoView({block: 'start', behavior: 'auto'});
-    },
-
-    async showDay(offset) {
-        if (this.day === offset) {
-            return;
-        }
-
-        this.day = offset;
-        await this.load();
-        this.scrollToNow();
+        this.scrollTo(this.onNow?.id);
     },
 
     async load() {
-        if (!this.channel) {
-            return;
-        }
-
-        const canonicalName = this.channel.canonicalName;
+        const {canonicalName} = this.channel;
         const day = this.day;
 
         this.loading = true;
         try {
-            this.epg = await epgFor(canonicalName, day);
+            this.programmes = await epgFor(canonicalName, day);
         } finally {
             this.loading = false;
         }
@@ -203,6 +97,73 @@ export const recordingView = () => ({
         if (day > 0) {
             warm(canonicalName, day - 1);
         }
+    },
+
+    async showDay(offset) {
+        if (this.day === offset) {
+            return;
+        }
+
+        this.day = offset;
+        await this.load();
+        this.scrollTo(this.onNow?.id);
+    },
+
+    /// Opens the guide where a pick sits: its channel, its day, scrolled to it.
+    async openPlanned(entry) {
+        this.goingTo = {id: entry.programmeId, day: this.dayOffsetOf(entry.startsAt)};
+        this.$store.tabs.show('guide');
+
+        if (this.channel?.channelId === entry.channelId) {
+            // the list is already pointing at it, so nothing is about to change
+            await this.show(this.channel);
+            return;
+        }
+
+        this.$store.channels.selectById(entry.channelId);
+    },
+
+    /// A day of the guide starts at midnight, so opening one lands on hours that are already over.
+    /// What is on now is where anybody wants to be, and on a later day that is its first programme.
+    ///
+    /// The row only exists once the day has been drawn, which is a frame or two after the guide
+    /// arrives rather than on the next tick. $root, not $el: this also runs from a pick's own click
+    /// handler, where $el is that button.
+    scrollTo(id, {mark = false} = {}, attemptsLeft = 60) {
+        if (!id) {
+            return;
+        }
+
+        const row = this.$root.querySelector(`[data-programme="${id}"]`);
+
+        if (!row) {
+            if (attemptsLeft > 0) {
+                requestAnimationFrame(() => this.scrollTo(id, {mark}, attemptsLeft - 1));
+            }
+
+            return;
+        }
+
+        row.scrollIntoView({block: mark ? 'center' : 'start', behavior: mark ? 'smooth' : 'auto'});
+
+        if (!mark) {
+            return;
+        }
+
+        // it is one row among forty, so say which one was meant
+        clearTimeout(this.highlight);
+        this.foundId = id;
+        this.highlight = setTimeout(() => (this.foundId = null), 2500);
+    },
+
+    /// Which day of the guide a programme is on. The source cuts its days at UTC
+    /// midnight, so counting in local days sends anything airing after midnight
+    /// here to a day the programme is not on.
+    dayOffsetOf(when) {
+        const midnight = date => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+        const days = Math.round((midnight(new Date(when)) - midnight(new Date())) / 86_400_000);
+
+        return Math.min(Math.max(days, 0), this.days.length - 1);
     },
 
     // --- what is on when -------------------------------------------------
@@ -225,7 +186,12 @@ export const recordingView = () => ({
 
     isOnNow(programme) {
         const now = Date.now();
+
         return Date.parse(programme.lower) <= now && now < Date.parse(programme.upper);
+    },
+
+    get onNow() {
+        return this.programmes.find(p => this.isOnNow(p)) ?? this.programmes.find(p => !this.hasEnded(p));
     },
 
     // --- picking ---------------------------------------------------------
@@ -334,16 +300,17 @@ export const recordingView = () => ({
         return Math.round((Date.parse(entry.endsAt) - Date.parse(entry.startsAt)) / 60000);
     },
 
+    plannedOn(entry) {
+        const date = new Date(entry.startsAt);
+        const day = date.toLocaleDateString([], {weekday: 'short', day: 'numeric', month: 'short'});
+
+        return `${day} ${this.time(entry.startsAt)}`;
+    },
+
     /// The guide is about a channel, the other tabs are not.
     get heading() {
         return this.$store.tabs.is('guide')
             ? (this.channel ? this.channel.displayName : 'Pick a channel')
             : this.$store.tabs.label;
-    },
-
-    plannedOn(entry) {
-        const date = new Date(entry.startsAt);
-        const day = date.toLocaleDateString([], {weekday: 'short', day: 'numeric', month: 'short'});
-        return `${day} ${this.time(entry.startsAt)}`;
     }
 });

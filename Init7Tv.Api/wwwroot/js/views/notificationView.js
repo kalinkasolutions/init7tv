@@ -1,34 +1,25 @@
 // crypto.randomUUID only exists in a secure context, and the app is reachable
 // over plain http behind a proxy; ids only need to be unique within this list
-let nextNotificationId = 0;
+let nextId = 0;
+
+const MOST_AT_ONCE = 4;
+const SECONDS_SHOWN = 5;
 
 export const notificationView = () => ({
-    maxNotifications: 4,
-    timeOutSeconds: 5,
     notifications: [],
-    isSuccess: false,
 
-    show(payload) {
-        if (this.notifications.length === this.maxNotifications) {
-            this.removeFirst();
+    show({title, message, type}) {
+        if (this.notifications.length === MOST_AT_ONCE) {
+            this.notifications = this.notifications.slice(1);
         }
 
-        const id = ++nextNotificationId;
-        this.notifications.push({
-            id: id,
-            isSuccess: payload.type !== "error",
-            ...payload,
-        });
+        const id = ++nextId;
+        this.notifications.push({id, title, message, isSuccess: type !== 'error'});
 
-        setTimeout(() => {
-            this.closeNotification(id)
-        }, this.timeOutSeconds * 1000);
-    },
-    closeNotification(notificationId) {
-        this.notifications = this.notifications.filter(n => n.id !== notificationId);
+        setTimeout(() => this.close(id), SECONDS_SHOWN * 1000);
     },
 
-    removeFirst() {
-        this.notifications = this.notifications.slice(1);
+    close(id) {
+        this.notifications = this.notifications.filter(n => n.id !== id);
     }
-})
+});

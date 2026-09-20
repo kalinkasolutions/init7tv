@@ -1,94 +1,74 @@
-import {deleteItem, get, postJson, putJson} from "../../requestHandler.js";
-import {notify} from "../../notification.js";
+import {deleteItem, get, postJson, putJson} from '../../requestHandler.js';
+import {notify} from '../../notification.js';
 
-export const usersView = () => {
-    return {
-        users: [],
-        roles: [],
-        addUserForm: {userName: '', email: '', password: '', roles: []},
-        editUserForm: {userName: '', email: '', password: '', roles: []},
+const EMPTY_FORM = {userName: '', email: '', password: '', roles: []};
 
-        async init() {
-            this.users = (await get("/api/admin/users") ?? []).map(user => ({
-                ...user,
-                edit: false
-            }));
-            this.roles = await get("/api/admin/roles") ?? [];
-        },
+export const usersView = () => ({
+    users: [],
+    roles: [],
+    addForm: {...EMPTY_FORM},
+    editForm: {...EMPTY_FORM},
+    inviting: false,
 
-        isDeleteAble(userId) {
-            const user = this.users.find(u => u.id === userId);
-            if (!user.roles.some(r => r === "Admin")) {
-                return true;
+    async init() {
+        this.users = (await get('/api/admin/users') ?? []).map(user => ({...user, edit: false}));
+        this.roles = await get('/api/admin/roles') ?? [];
+    },
+
+    /// The last admin cannot be deleted, or nobody could administer anything.
+    canDelete(user) {
+        return !this.isAdmin(user) || this.users.filter(u => this.isAdmin(u)).length > 1;
+    },
+
+    isAdmin(user) {
+        return user.roles.includes('Admin');
+    },
+
+    async addUser() {
+        const added = await postJson('/api/admin/add-user', this.addForm);
+        if (added === null) {
+            return;
+        }
+
+        this.users.push(added);
+        this.addForm = {...EMPTY_FORM};
+    },
+
+    async deleteUser(user) {
+        const confirmed = await this.$store.modal.show(
+            'Delete user', `Are you sure you want to delete user ${user.userName}?`);
+
+        if (!confirmed || await deleteItem(`/api/admin/delete-user/${user.id}`) === null) {
+            return;
+        }
+
+        this.users = this.users.filter(u => u.id !== user.id);
+    },
+
+    toggleEdit(user) {
+        this.editForm = {...user, roles: [...user.roles]};
+        user.edit = !user.edit;
+    },
+
+    async updateUser(userId) {
+        const updated = await putJson(`/api/admin/update-user/${userId}`, this.editForm);
+        if (updated === null) {
+            return;
+        }
+
+        this.users = this.users.map(u => u.id === userId ? {...updated, edit: false} : u);
+    },
+
+    async inviteUser(user) {
+        try {
+            this.inviting = true;
+            const message = await postJson(`/api/admin/invite-user/${encodeURIComponent(user.email)}`);
+
+            if (message) {
+                notify('User invited successfully', message.message, 'success');
             }
-            return this.users.filter(u => u.roles.some(r => r === "Admin")).length > 1
-        },
-
-        async addUser() {
-            const newUser = await postJson("/api/admin/add-user", this.addUserForm);
-            if (newUser === null) {
-                return;
-            }
-            this.users.push(newUser);
-            this.addUserForm = {userName: '', email: '', password: '', roles: []};
-
-        },
-
-        async deleteUser(user) {
-
-            const modal = Alpine.store('modal');
-            const confirmed = await modal.show(`Delete user`, `Are you sure you want to delete user ${user.userName}?`, "Yes", "No");
-
-            if (!confirmed) {
-                return;
-            }
-
-            const result = await deleteItem(`/api/admin/delete-user/${user.id}`);
-            if (result === null) {
-                return;
-            }
-            this.users.splice(this.users.indexOf(user), 1);
-        },
-
-        toggleEdit(user) {
-            this.editUserForm = {...user, roles: [...user.roles]};
-            user.edit = !user.edit;
-        },
-
-        async updateUser(userId) {
-            const updatedUser = await putJson(`/api/admin/update-user/${userId}`, this.editUserForm);
-            if (updatedUser === null) {
-                return;
-            }
-
-            this.users = this.users.map((u) => {
-                if (u.id !== userId) {
-                    return u;
-                }
-                return {
-                    ...updatedUser,
-                    edit: false
-                }
-            });
-
-            this.addUserForm = {userName: '', email: '', password: '', roles: []};
-        },
-
-        async inviteUser(user) {
-            try {
-                this.sendingTestMail = true
-                const message = await postJson(`api/admin/invite-user/${encodeURIComponent(user.email)}`)
-                if (!message) {
-                    return;
-                }
-                notify(
-                    "User invited successfully",
-                    message.message,
-                    "success"
-                );
-            } finally {
-                this.sendingTestMail = false;
-            }
+        } finally {
+            this.inviting = false;
         }
     }
-}
+});

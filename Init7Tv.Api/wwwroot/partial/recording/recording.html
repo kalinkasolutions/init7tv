@@ -1,7 +1,7 @@
 <div id="recording" x-data="recordingView()">
     <div class="recording-header">
-        <button class="menu-button" @click="$store.ui.toggleMenu()"
-                :aria-expanded="$store.ui.menuOpen" aria-label="Channels" title="Channels">&#9776;</button>
+        <button class="menu-button" @click="$store.menu.toggle()"
+                :aria-expanded="$store.menu.open" aria-label="Channels" title="Channels">&#9776;</button>
         <h2 x-text="heading"></h2>
 
         <div class="day-picker" x-show="$store.tabs.is('guide') && channel" x-cloak>
@@ -24,29 +24,29 @@
         </template>
     </nav>
 
-            <div class="filter-bar" x-show="$store.tabs.current !== 'guide'" x-cloak>
-                <input type="search" placeholder="filter by title or channel"
-                       aria-label="Filter" x-model="$store.filter.text">
-                <select aria-label="Whose" x-model="$store.filter.user"
-                        x-show="$store.filter.users.length > 1">
-                    <option value="">everyone</option>
-                    <template x-for="name in $store.filter.users" :key="name">
-                        <option :value="name" x-text="name"></option>
-                    </template>
-                </select>
-                <button class="link-button" x-show="$store.filter.active"
-                        @click="$store.filter.clear()">clear filter</button>
-            </div>
+    <div class="filter-bar" x-show="!$store.tabs.is('guide')" x-cloak>
+        <input type="search" placeholder="filter by title or channel"
+               aria-label="Filter" x-model="$store.filter.text">
+        <select aria-label="Whose" x-model="$store.filter.user"
+                x-show="$store.filter.users.length > 1">
+            <option value="">everyone</option>
+            <template x-for="name in $store.filter.users" :key="name">
+                <option :value="name" x-text="name"></option>
+            </template>
+        </select>
+        <button class="link-button" x-show="$store.filter.active"
+                @click="$store.filter.clear()">clear filter</button>
+    </div>
 
     <div class="recording-body">
         <div class="schedule" x-show="$store.tabs.is('guide')">
             <p class="empty" x-show="!channel" x-cloak>Choose a channel to see what is on.</p>
             <p class="empty" x-show="channel && loading" x-cloak>Loading the guide...</p>
-            <p class="empty" x-show="channel && !loading && epg.length === 0" x-cloak>
+            <p class="empty" x-show="channel && !loading && programmes.length === 0" x-cloak>
                 No guide for this channel.
             </p>
 
-            <template x-for="programme in epg" :key="programme.id">
+            <template x-for="programme in programmes" :key="programme.id">
                 <div class="programme" :data-programme="programme.id"
                      :class="{ 'ended': hasEnded(programme), 'on-now': isOnNow(programme),
                                'picked': isPlanned(programme), 'found': foundId === programme.id }">
@@ -149,7 +149,7 @@
                     <div class="entry-actions">
                         <button class="icon-button"
                                 :title="isBusy(recording) ? 'Watch what has been recorded so far' : 'Play'"
-                                x-show="canPlay(recording)" @click="play(recording)">
+                                x-show="canPlay(recording)" @click="await play(recording)">
                             <i class="bi bi-play-fill"></i>
                         </button>
                         <span class="download-pair" x-show="recording.isPlayable" x-cloak>
@@ -188,7 +188,8 @@
                         </button>
                     </div>
                     <template x-if="playing">
-                        <video controls autoplay preload="metadata"
+                        <video x-ref="video" controls autoplay preload="metadata"
+                               :src="sourceFor(playing)"
                                @timeupdate="moved($el)"
                                @error="if (!needsHls(playing)) await gone(playing)"></video>
                     </template>
@@ -196,9 +197,7 @@
                     <!-- offered rather than taken: a break announced wrongly costs a button that
                          does nothing instead of content that is gone -->
                     <div class="skip-break" x-show="inBreak" x-cloak>
-                        <button class="skip" @click="skipBreak($root.querySelector('.player-box video'))">
-                            Skip the adverts
-                        </button>
+                        <button class="skip" @click="skipBreak()">Skip the adverts</button>
                         <button class="skip-dismiss" title="Leave it" @click="dismissBreak()">
                             <i class="bi bi-x-lg"></i>
                         </button>

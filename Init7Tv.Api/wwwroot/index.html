@@ -11,7 +11,8 @@
 </head>
 <body>
 
-<!-- one document: the header is built once and every view happens underneath it -->
+<!-- One document. Every placeholder below is replaced by the markup it names, except the view
+     slots, which keep their element because that element is what carries x-show. -->
 <div x-init="$el.outerHTML = await loadPartialView('partial/header.html')"></div>
 
 <main>
