@@ -39,5 +39,23 @@ public static class RecordingSpace
             ? $"Stopped with {Gigabytes(free)} GB left on the disk"
             : null;
 
+    /// <summary>
+    /// What is left on the volume holding <paramref name="path"/>, or null when it cannot be read.
+    /// An unreadable drive is not a reason to refuse to record.
+    /// </summary>
+    public static long? Free(string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(path);
+
+            return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path)) ?? "/").AvailableFreeSpace;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private static string Gigabytes(long bytes) => (bytes / 1_000_000_000.0).ToString("0.0");
 }

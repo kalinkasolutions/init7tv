@@ -296,14 +296,13 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
             row.FileSizeBytes = captured;
             row.AdBreakCount = breaks;
 
-            // a reason already on the row, the disk running out say, is worth more than the generic one
+            // A reason already on the row — the disk running out, say — says more than the generic
+            // one, and is never cleared: one stopped for a reason must not come out looking as
+            // though it simply reached its end. Starting a capture clears the message, so anything
+            // still here was put there on purpose.
             if (missing && string.IsNullOrEmpty(row.ErrorMessage))
             {
                 row.ErrorMessage = "Part of the programme is missing";
-            }
-            else if (!missing)
-            {
-                row.ErrorMessage = string.Empty;
             }
         });
 
@@ -578,19 +577,14 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
     /// <summary>What is left on the recording volume, or null when the drive cannot be read.</summary>
     private long? FreeSpace()
     {
-        try
-        {
-            Directory.CreateDirectory(m_options.RecordingPath);
+        var free = RecordingSpace.Free(m_options.RecordingPath);
 
-            return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(m_options.RecordingPath)) ?? "/")
-                .AvailableFreeSpace;
-        }
-        catch (Exception ex)
+        if (free == null)
         {
-            // an unreadable drive is not a reason to refuse to record
-            m_logger.LogWarning(ex, "Could not check the free space at {Path}", m_options.RecordingPath);
-            return null;
+            m_logger.LogWarning("Could not check the free space at {Path}", m_options.RecordingPath);
         }
+
+        return free;
     }
 
     /// <summary>

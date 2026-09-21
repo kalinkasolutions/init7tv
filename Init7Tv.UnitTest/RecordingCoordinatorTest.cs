@@ -856,4 +856,31 @@ public class RecordingCoordinatorTest
 
         m_engine.Verify(x => x.Stop(It.IsAny<Guid>()), Times.Never);
     }
+
+    /// <summary>
+    /// One the disk put a stop to has to say so once it is finished, not just while it is being
+    /// stopped. Ending it complete with nothing written against it leaves a recording that appears
+    /// to have simply reached its end, which is the one thing it did not do.
+    /// </summary>
+    [Test]
+    public async Task ARecordingTheDiskStoppedStillSaysSoOnceItIsFinished()
+    {
+        CoordinatorWith(new Init7TvOptions { FreeSpaceFloorBytes = long.MaxValue });
+
+        var row = Leftover(DateTime.UtcNow.AddHours(20));
+        row.OpenEnded = true;
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+        m_recordings.Setup(x => x.GetByDirectoryAsync(row.Directory)).ReturnsAsync([row]);
+        m_engine.Setup(x => x.IsRunning(It.IsAny<Guid>())).Returns(true);
+
+        // stopped by the disk on this pass, and its ffmpeg reported gone on the next
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        m_engine.Setup(x => x.TakeFinished()).Returns([Finished(row, 0, stopped: true)]);
+        m_engine.Setup(x => x.IsRunning(It.IsAny<Guid>())).Returns(false);
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        Assert.That(row.State, Is.EqualTo(RecordingState.Completed));
+        Assert.That(row.ErrorMessage, Does.Contain("disk"), "the reason survives being finished");
+    }
 }

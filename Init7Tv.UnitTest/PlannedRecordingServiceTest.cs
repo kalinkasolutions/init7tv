@@ -21,6 +21,7 @@ public class PlannedRecordingServiceTest
     };
 
     private Mock<IPlannedRecordingRepository> m_repository = null!;
+    private Mock<IRecordingEngine> m_engine = null!;
     private PlannedRecordingService m_service = null!;
 
     [SetUp]
@@ -37,10 +38,13 @@ public class PlannedRecordingServiceTest
         m_repository = new Mock<IPlannedRecordingRepository>();
         m_repository.Setup(x => x.GetForUserAsync(It.IsAny<string>())).ReturnsAsync([]);
 
+        m_engine = new Mock<IRecordingEngine>();
+
         m_service = new PlannedRecordingService(
             m_repository.Object,
             channelService.Object,
             new RecordingSignal(),
+            m_engine.Object,
             Options.Create(new Init7TvOptions()));
     }
 
@@ -320,5 +324,31 @@ public class PlannedRecordingServiceTest
 
         Assert.That(result.ResultCode, Is.EqualTo(ResultCode.NotFound));
         m_repository.Verify(x => x.AddAsync(It.IsAny<PlannedRecording>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A pick whose window is a day wide is never given up on, so the pass would keep finding it
+    /// in the way and keep saying nothing. Pressing record has to say why it did not take.
+    /// </summary>
+    [Test]
+    public async Task RecordingNowSaysSoWhenThereIsNoRoomToStartAnother()
+    {
+        m_engine.Setup(x => x.ActiveCount).Returns(new Init7TvOptions().MaxConcurrentRecordings);
+
+        var result = await m_service.RecordNowAsync("niggi", SrfOne);
+
+        Assert.That(result.ResultCode, Is.EqualTo(ResultCode.Conflict));
+        Assert.That(result.ErrorMessage, Does.Contain("Already recording"));
+        m_repository.Verify(x => x.AddAsync(It.IsAny<PlannedRecording>()), Times.Never);
+    }
+
+    [Test]
+    public async Task WithRoomToSpareRecordingNowGoesAhead()
+    {
+        m_engine.Setup(x => x.ActiveCount).Returns(0);
+
+        var result = await m_service.RecordNowAsync("niggi", SrfOne);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorMessage);
     }
 }

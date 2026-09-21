@@ -12,18 +12,21 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
     private readonly IPlannedRecordingRepository m_repository;
     private readonly IChannelService m_channelService;
     private readonly RecordingSignal m_signal;
+    private readonly IRecordingEngine m_engine;
     private readonly Init7TvOptions m_options;
 
     public PlannedRecordingService(
         IPlannedRecordingRepository repository,
         IChannelService channelService,
         RecordingSignal signal,
+        IRecordingEngine engine,
         IOptions<Init7TvOptions> options
     )
     {
         m_repository = repository;
         m_channelService = channelService;
         m_signal = signal;
+        m_engine = engine;
         m_options = options.Value;
     }
 
@@ -101,6 +104,14 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
             return channel.MapError<PlannedRecordingDto>();
         }
 
+        // Answered here rather than left to the pass. A pick whose window is a day wide is never
+        // given up on: the pass would keep finding it in the way and keep saying nothing, so the
+        // button would look broken for as long as the recording it is waiting behind runs.
+        if (WhatIsInTheWay() is { } inTheWay)
+        {
+            return OperationResult<PlannedRecordingDto>.Conflict(inTheWay);
+        }
+
         var now = DateTime.UtcNow;
 
         var stored = new PlannedRecording
@@ -127,6 +138,24 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
         m_signal.Signal();
 
         return OperationResult<PlannedRecordingDto>.Success(ToDto(stored, userName));
+    }
+
+    /// <summary>
+    /// Why a recording cannot be started this moment, or null when it can. There is no length to
+    /// size the disk against, so all that can be asked of it is that the floor is clear.
+    /// </summary>
+    private string? WhatIsInTheWay()
+    {
+        if (m_engine.ActiveCount >= m_options.MaxConcurrentRecordings)
+        {
+            return $"Already recording {m_engine.ActiveCount} programmes at once";
+        }
+
+        var free = RecordingSpace.Free(m_options.RecordingPath);
+
+        return free == null
+            ? null
+            : RecordingSpace.TooLittle(free.Value, RecordingSpace.Needed(null, m_options.FreeSpaceFloorBytes));
     }
 
     /// <summary>
