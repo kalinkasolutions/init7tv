@@ -37,6 +37,25 @@
     margin-left: auto;
 }
 
+#player-container .player-title-wrapper .record-button {
+    margin-left: auto;
+}
+
+/* the record button has already taken the free space, so the picker only needs
+   to stand clear of it rather than push itself to the end again */
+#player-container .player-title-wrapper .record-button + .lang-select-wrapper {
+    margin-left: 0.75em;
+}
+
+/* red while it is running, so it reads as "recording" rather than "press to record" */
+#player-container .player-title-wrapper .record-button.is-recording {
+    color: rgba(204, 17, 17, 0.85);
+}
+
+#player-container .player-title-wrapper .record-button.is-recording:hover {
+    color: rgb(204, 17, 17);
+}
+
 #player-container .player-title-wrapper .menu-button {
     padding-left: 0;
     margin-right: 0.3em;

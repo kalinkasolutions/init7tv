@@ -1,4 +1,4 @@
-import {get} from '../../requestHandler.js';
+import {get, post} from '../../requestHandler.js';
 import {notify} from '../../notification.js';
 import {whileShowing} from '../../whileShowing.js';
 import {playHls} from '../../hlsPlayer.js';
@@ -15,6 +15,7 @@ export const playerView = () => ({
     streamId: null,
     starting: null,
     events: null,
+    recordingEvents: null,
 
     init() {
         // Watching is whatever the channel list points at, playing, for as long as this is the view
@@ -35,10 +36,66 @@ export const playerView = () => ({
                 this.checkStillRunning(streamIds ?? []);
             }
         });
+
+        // whether this channel is being recorded is the button's whole state, and a recording can
+        // start or stop from the recording page just as well as from here
+        if (this.$store.user.canRecord) {
+            this.$store.recordings.load();
+            this.recordingEvents = subscribe('/api/recording/events', {
+                changed: () => this.$store.recordings.load()
+            });
+        }
     },
 
     destroy() {
         this.events?.close();
+        this.recordingEvents?.close();
+    },
+
+    /// Whether what is on screen is also being recorded.
+    get isRecording() {
+        return this.channel != null && this.$store.recordings.isRecording(this.channel.channelId);
+    },
+
+    get canRecord() {
+        return this.$store.user.canRecord && this.channel != null;
+    },
+
+    /// Records the channel from now, with no end: it runs until it is stopped here or on the
+    /// recording page, or until the disk has no more room for it.
+    async record() {
+        if (await post(`/api/recording/record-now?channelId=${this.channel.channelId}`) === null) {
+            return;
+        }
+
+        notify('Recording', `${this.title} is being recorded.`);
+        await this.$store.recordings.load();
+    },
+
+    /// Stops every recording of this channel that is the viewer's to stop. Asked first, because
+    /// there is no undoing it and one started hours ago looks the same as one started a minute ago.
+    async stopRecording() {
+        const confirmed = await this.$store.modal.show(
+            'Stop recording this channel?',
+            `${this.title} will stop and what has been recorded so far is kept.`);
+
+        if (!confirmed) {
+            return;
+        }
+
+        const recordings = await get('/api/recording/recordings');
+        if (recordings === null) {
+            return;
+        }
+
+        const mine = recordings.filter(x =>
+            x.channelId === this.channel.channelId && (x.state === 'Pending' || x.state === 'Recording'));
+
+        for (const recording of mine) {
+            await post(`/api/recording/recordings/${recording.recordingId}/stop`);
+        }
+
+        await this.$store.recordings.load();
     },
 
     /// Makes what is playing equal to what the list points at. Everything that could make those two

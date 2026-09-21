@@ -8,6 +8,17 @@
             <img :src="logo" :alt="title"/>
         </template>
         <h2 x-text="title"></h2>
+        <!-- offered only to whoever may record; hiding it is a courtesy, the endpoint is the rule -->
+        <template x-if="canRecord">
+            <button class="icon-button record-button"
+                    :class="{ 'is-recording': isRecording }"
+                    :title="isRecording ? 'Stop recording this channel' : 'Record this channel'"
+                    :aria-label="isRecording ? 'Stop recording this channel' : 'Record this channel'"
+                    :aria-pressed="isRecording"
+                    @click="isRecording ? await stopRecording() : await record()">
+                <i class="bi" :class="isRecording ? 'bi-stop-fill' : 'bi-record-circle'"></i>
+            </button>
+        </template>
         <div class="lang-select-wrapper" x-show="!loading && languages.length > 0" x-cloak>
             <label for="lang-select">Language</label>
             <select id="lang-select" x-model.number="$store.channels.audio">

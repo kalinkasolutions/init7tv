@@ -20,11 +20,6 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
     /// <summary>A source that keeps dropping is a broken channel, not bad luck.</summary>
     private const int MaxParts = 3;
 
-    // a recording at the default preset runs well under this, and guessing high
-    // is the safe direction when the database shares the volume
-    private const long BytesPerSecondEstimate = 1_500_000;
-    private const long FreeSpaceFloorBytes = 5L * 1024 * 1024 * 1024;
-
     private readonly ILogger<RecordingCoordinator> m_logger;
     private readonly IRecordingRepository m_recordings;
     private readonly IPlannedRecordingRepository m_planned;
@@ -122,6 +117,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
 
         await ForkDroppedOutAsync(now);
         await HandleFinishedCapturesAsync(settings);
+        await StopWhenSpaceRunsOutAsync();
         await StopUnwantedAsync(settings, now, horizon);
         await StartDueAsync(settings, preRoll, postRoll, now, horizon);
 
@@ -154,7 +150,8 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
             await m_planned.GetInWindowAsync(now - postRoll, horizon + preRoll),
             preRoll,
             now,
-            horizon);
+            horizon,
+            TimeSpan.FromSeconds(Math.Max(m_options.SpaceCheckSeconds, 1)));
     }
 
     /// <summary>
@@ -288,13 +285,26 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         m_logger.LogInformation("Finished {Directory}, {Bytes} bytes, {Breaks} advertising break(s){CutShort}",
             directory, captured, breaks, cutShort ? " (cut short)" : string.Empty);
 
+        // One asked for with no end stops when somebody stops it, which is how it was always going
+        // to end. Calling that cut short would mark every one of them as missing something.
+        var missing = cutShort && !rows[0].OpenEnded;
+
         await UpdateAsync(rows, row =>
         {
-            row.State = cutShort ? RecordingState.Interrupted : RecordingState.Completed;
+            row.State = missing ? RecordingState.Interrupted : RecordingState.Completed;
             row.EndedAt = now;
             row.FileSizeBytes = captured;
             row.AdBreakCount = breaks;
-            row.ErrorMessage = cutShort ? "Part of the programme is missing" : string.Empty;
+
+            // a reason already on the row, the disk running out say, is worth more than the generic one
+            if (missing && string.IsNullOrEmpty(row.ErrorMessage))
+            {
+                row.ErrorMessage = "Part of the programme is missing";
+            }
+            else if (!missing)
+            {
+                row.ErrorMessage = string.Empty;
+            }
         });
 
         await ForgetPicksAsync(rows);
@@ -462,7 +472,7 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         var scheduledEnd = RecordingWindow.AsUtc(plans[0].EndsAt) + postRoll;
         var duration = scheduledEnd - now;
 
-        var inTheWay = WhatIsInTheWay(duration);
+        var inTheWay = WhatIsInTheWay(plans[0].OpenEnded ? null : duration);
         if (inTheWay != null)
         {
             // another recording finishing or a disk being cleared usually clears
@@ -506,15 +516,22 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         scheduledEnd,
         now);
 
-    /// <summary>Why this cannot start right now, or null when nothing is.</summary>
-    private string? WhatIsInTheWay(TimeSpan duration)
+    /// <summary>
+    /// Why this cannot start right now, or null when nothing is. A length of null is a recording
+    /// with no end, which can only be asked to leave the floor clear.
+    /// </summary>
+    private string? WhatIsInTheWay(TimeSpan? expected)
     {
         if (m_engine.ActiveCount >= m_options.MaxConcurrentRecordings)
         {
             return $"Already recording {m_engine.ActiveCount} programmes at once";
         }
 
-        return CheckFreeSpace(duration);
+        var free = FreeSpace();
+
+        return free == null
+            ? null
+            : RecordingSpace.TooLittle(free.Value, RecordingSpace.Needed(expected, m_options.FreeSpaceFloorBytes));
     }
 
     /// <summary>Puts one ffmpeg behind a group of rows and marks them as recording.</summary>
@@ -558,20 +575,15 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
         return true;
     }
 
-    /// <summary>The message when there is no room, which the page shows rather than saying nothing.</summary>
-    private string? CheckFreeSpace(TimeSpan duration)
+    /// <summary>What is left on the recording volume, or null when the drive cannot be read.</summary>
+    private long? FreeSpace()
     {
         try
         {
             Directory.CreateDirectory(m_options.RecordingPath);
-            var free = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(m_options.RecordingPath)) ?? "/")
+
+            return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(m_options.RecordingPath)) ?? "/")
                 .AvailableFreeSpace;
-
-            var needed = (long)duration.TotalSeconds * BytesPerSecondEstimate + FreeSpaceFloorBytes;
-
-            return free < needed
-                ? $"Not enough disk space: {free / 1_000_000_000.0:0.0} GB free"
-                : null;
         }
         catch (Exception ex)
         {
@@ -579,6 +591,46 @@ public sealed class RecordingCoordinator : IRecordingCoordinator
             m_logger.LogWarning(ex, "Could not check the free space at {Path}", m_options.RecordingPath);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Ends captures that would otherwise fill the disk. Checked every pass rather than only
+    /// before one starts: a recording asked for with no end cannot be sized in advance, and one
+    /// that was sized can still be overtaken by whatever else shares the volume.
+    ///
+    /// All of them go together. Which one is to blame cannot be told apart, they are all still
+    /// writing, and what has been captured so far is kept either way.
+    /// </summary>
+    private async Task StopWhenSpaceRunsOutAsync()
+    {
+        var running = (await m_recordings.GetUnfinishedAsync())
+            .Where(row => row.State == RecordingState.Recording)
+            .ToArray();
+
+        if (running.Length == 0)
+        {
+            return;
+        }
+
+        var free = FreeSpace();
+        if (free == null || RecordingSpace.RunningOut(free.Value, m_options.FreeSpaceFloorBytes) is not { } reason)
+        {
+            return;
+        }
+
+        m_logger.LogWarning("Stopping {Count} recording(s): {Reason}", running.Length, reason);
+
+        foreach (var row in running)
+        {
+            var captureId = RecordingFiles.CaptureIdOf(row.Directory);
+            if (captureId != Guid.Empty && m_engine.IsRunning(captureId))
+            {
+                m_engine.Stop(captureId);
+            }
+        }
+
+        // said on the rows now, because the finalizing that follows only knows that it stopped
+        await UpdateAsync(running, row => row.ErrorMessage = reason);
     }
 
     // --- writing the rows back -------------------------------------------

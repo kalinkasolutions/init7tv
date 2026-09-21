@@ -26,6 +26,7 @@ public static class RecordingEndpoints
 
         group.MapGet("/planned", GetPlanned);
         group.MapPost("/planned", Plan);
+        group.MapPost("/record-now", RecordNow);
         group.MapDelete("/planned/{programmeId:guid}", Cancel);
 
         group.MapGet("/recordings", GetRecordings);
@@ -218,6 +219,19 @@ public static class RecordingEndpoints
     )
     {
         return (await service.PlanAsync(userIdentityProvider.UserName, recording)).ToHttpResult();
+    }
+
+    /// <summary>
+    /// Records what is on a channel now, with no end in mind: it runs until somebody stops it, or
+    /// until the disk has no more room for it.
+    /// </summary>
+    private static async Task<IResult> RecordNow(
+        Guid channelId,
+        IPlannedRecordingService service,
+        IUserIdentityProvider userIdentityProvider
+    )
+    {
+        return (await service.RecordNowAsync(userIdentityProvider.UserName, channelId)).ToHttpResult();
     }
 
     /// <summary>

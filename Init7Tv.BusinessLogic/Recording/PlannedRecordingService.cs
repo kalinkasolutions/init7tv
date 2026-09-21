@@ -3,6 +3,7 @@ using Init7Tv.Dal.Entities;
 using Init7Tv.Dal.Repositories;
 using Init7Tv.Dto;
 using Init7Tv.Shared;
+using Microsoft.Extensions.Options;
 
 namespace Init7Tv.BusinessLogic.Recording;
 
@@ -11,16 +12,19 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
     private readonly IPlannedRecordingRepository m_repository;
     private readonly IChannelService m_channelService;
     private readonly RecordingSignal m_signal;
+    private readonly Init7TvOptions m_options;
 
     public PlannedRecordingService(
         IPlannedRecordingRepository repository,
         IChannelService channelService,
-        RecordingSignal signal
+        RecordingSignal signal,
+        IOptions<Init7TvOptions> options
     )
     {
         m_repository = repository;
         m_channelService = channelService;
         m_signal = signal;
+        m_options = options.Value;
     }
 
     public async Task<OperationResult<PlannedRecordingDto[]>> GetAsync(string userName, bool isAdmin)
@@ -82,6 +86,56 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
         return OperationResult<PlannedRecordingDto>.Success(ToDto(stored, userName));
     }
 
+    /// <summary>
+    /// Records what is on a channel now, with no end in mind.
+    ///
+    /// The same pick a programme makes, so everything that follows — sharing one capture, joining
+    /// one already running, stopping by taking the pick back, resuming after a restart — works
+    /// without knowing this is any different.
+    /// </summary>
+    public async Task<OperationResult<PlannedRecordingDto>> RecordNowAsync(string userName, Guid channelId)
+    {
+        var channel = await m_channelService.GetChannelById(channelId);
+        if (!channel.IsSuccess)
+        {
+            return channel.MapError<PlannedRecordingDto>();
+        }
+
+        var now = DateTime.UtcNow;
+
+        var stored = new PlannedRecording
+        {
+            // The channel names it rather than a new id each time, so two people recording the same
+            // channel share one capture exactly as two people picking the same programme do.
+            ProgrammeId = OpenEndedProgrammeId(channelId),
+            UserName = userName,
+            ChannelId = channel.Value.ChannelId,
+            ChannelName = channel.Value.DisplayName,
+            CanonicalName = channel.Value.CanonicalName,
+            Title = Trimmed(channel.Value.DisplayName, 500),
+            SubTitle = string.Empty,
+            StartsAt = now,
+
+            // far enough out that it is never why one ends; the free space is what stops these
+            EndsAt = now + m_options.OpenEndedBackstop,
+            PlannedAt = now,
+            OpenEnded = true
+        };
+
+        await m_repository.AddAsync(stored);
+
+        m_signal.Signal();
+
+        return OperationResult<PlannedRecordingDto>.Success(ToDto(stored, userName));
+    }
+
+    /// <summary>
+    /// The id an open-ended recording of a channel goes under. Derived from the channel so that
+    /// asking twice is one recording, the same way the guide's own id makes one pick of a programme.
+    /// </summary>
+    private static Guid OpenEndedProgrammeId(Guid channelId) =>
+        new(Convert.FromHexString(Hash.GetSha256($"open-ended:{channelId}")[..32]));
+
     public async Task<OperationResult<bool>> CancelAsync(
         string userName,
         bool isAdmin,
@@ -124,7 +178,8 @@ public sealed class PlannedRecordingService : IPlannedRecordingService
         StartsAt = AsUtc(x.StartsAt),
         EndsAt = AsUtc(x.EndsAt),
         UserName = x.UserName,
-        IsMine = x.UserName == askedBy
+        IsMine = x.UserName == askedBy,
+        OpenEnded = x.OpenEnded
     };
 
     /// These are stored in UTC, but the database hands them back with no kind at

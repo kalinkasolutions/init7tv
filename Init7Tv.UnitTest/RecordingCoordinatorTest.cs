@@ -619,8 +619,10 @@ public class RecordingCoordinatorTest
 
         var swept = await m_coordinator.SweepAsync(now);
 
-        // the grace after -t should have ended it by itself
-        Assert.That(swept.NextFireAt, Is.EqualTo(row.ScheduledEnd.AddMinutes(1)));
+        // The window end is still a moment — the grace after -t should have ended it by itself —
+        // but while anything is recording the free space is looked at far sooner than that, so the
+        // sooner of the two is what the loop is told.
+        Assert.That(swept.NextFireAt, Is.EqualTo(now.AddSeconds(new Init7TvOptions().SpaceCheckSeconds)));
     }
 
     /// <summary>A pick taken on by this very pass must not be waited for all over again.</summary>
@@ -640,10 +642,39 @@ public class RecordingCoordinatorTest
         var swept = await m_coordinator.SweepAsync(now);
 
         Assert.That(m_added.Single().State, Is.EqualTo(RecordingState.Recording));
-        Assert.That(swept.NextFireAt, Is.EqualTo(m_added.Single().ScheduledEnd.AddMinutes(1)));
+
+        // its padded start has been and gone, so what is left is the space check on what is now
+        // running rather than anything about the pick
+        Assert.That(swept.NextFireAt, Is.EqualTo(now.AddSeconds(new Init7TvOptions().SpaceCheckSeconds)));
     }
 
     // --- fixtures ---------------------------------------------------------
+
+    /// <summary>The same coordinator with different options, for the ones a test is about.</summary>
+    private void CoordinatorWith(Init7TvOptions options)
+    {
+        var channelService = new Mock<IChannelService>();
+        channelService.Setup(x => x.GetChannelById(SrfOne))
+            .ReturnsAsync(OperationResult<ChannelDto>.Success(Channel));
+
+        var appSettings = new Mock<IAppSettingsService>();
+        appSettings.Setup(x => x.GetGeneralSettingsAsync())
+            .ReturnsAsync(OperationResult<GeneralAppSettingsDto>.Success(new GeneralAppSettingsDto()));
+
+        options.RecordingPath = m_root;
+
+        m_coordinator = new RecordingCoordinator(
+            NullLogger<RecordingCoordinator>.Instance,
+            m_recordings.Object,
+            m_planned.Object,
+            channelService.Object,
+            appSettings.Object,
+            m_engine.Object,
+            Mock.Of<IRecordingService>(x => x.GetCurrentAsync() == Task.FromResult(Array.Empty<CurrentRecordingDto>())),
+            Mock.Of<IRecordingEventBus>(),
+            m_segments.Object,
+            Options.Create(options));
+    }
 
     private void Plan(DateTime starts, string userName, Guid? programmeId = null) =>
         PlanAll([Planned(starts, starts.AddHours(1), userName, programmeId)]);
@@ -661,7 +692,8 @@ public class RecordingCoordinatorTest
         DateTime ends,
         string userName,
         Guid? programmeId = null,
-        DateTime? plannedAt = null
+        DateTime? plannedAt = null,
+        bool openEnded = false
     ) => new()
     {
         ProgrammeId = programmeId ?? Guid.NewGuid(),
@@ -672,7 +704,8 @@ public class RecordingCoordinatorTest
         Title = "Tagesschau",
         StartsAt = starts,
         EndsAt = ends,
-        PlannedAt = plannedAt ?? DateTime.UtcNow.AddHours(-1)
+        PlannedAt = plannedAt ?? DateTime.UtcNow.AddHours(-1),
+        OpenEnded = openEnded
     };
 
     private RecordingRow Leftover(DateTime scheduledEnd, RecordingState state = RecordingState.Recording) => new()
@@ -708,4 +741,119 @@ public class RecordingCoordinatorTest
         StartedAt = row.ScheduledStart,
         EndedAt = DateTime.UtcNow
     };
+
+    // --- recordings asked for with no end ---------------------------------
+
+    [Test]
+    public async Task ARecordingAskedForWithNoEndStarts()
+    {
+        var now = DateTime.UtcNow;
+        PlanAll([Planned(now, now.AddHours(24), "niggi", openEnded: true)]);
+
+        await m_coordinator.SweepAsync(now);
+
+        m_engine.Verify(x => x.StartAsync(It.IsAny<RecordingRequest>()), Times.Once);
+        Assert.That(m_added.Single().OpenEnded, Is.True, "and the row remembers that is what it is");
+    }
+
+    /// <summary>
+    /// Sizing the disk against its backstop would ask for over a hundred gigabytes and refuse on
+    /// any real machine. There is no length to size, so only the floor can be asked for.
+    /// </summary>
+    [Test]
+    public async Task ARecordingWithNoEndIsNotRefusedForWantOfADaysWorthOfDisk()
+    {
+        var now = DateTime.UtcNow;
+        PlanAll([Planned(now, now.AddHours(24), "niggi", openEnded: true)]);
+
+        await m_coordinator.SweepAsync(now);
+
+        m_engine.Verify(x => x.StartAsync(It.IsAny<RecordingRequest>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Stopping one is how it was always going to end, so it is complete rather than missing
+    /// something. A programme stopped early really has lost the rest of itself.
+    /// </summary>
+    [Test]
+    public async Task StoppingOneWithNoEndLeavesItComplete()
+    {
+        var row = Leftover(DateTime.UtcNow.AddHours(20));
+        row.OpenEnded = true;
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+        m_engine.Setup(x => x.TakeFinished()).Returns([Finished(row, 0, stopped: true)]);
+        m_recordings.Setup(x => x.GetByDirectoryAsync(row.Directory)).ReturnsAsync([row]);
+
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.State, Is.EqualTo(RecordingState.Completed));
+            Assert.That(row.ErrorMessage, Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task AProgrammeStoppedEarlyIsStillMissingSomething()
+    {
+        var row = Leftover(DateTime.UtcNow.AddHours(20));
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+        m_engine.Setup(x => x.TakeFinished()).Returns([Finished(row, 0, stopped: true)]);
+        m_recordings.Setup(x => x.GetByDirectoryAsync(row.Directory)).ReturnsAsync([row]);
+
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        Assert.That(row.State, Is.EqualTo(RecordingState.Interrupted));
+    }
+
+    // --- the disk running out --------------------------------------------
+
+    /// <summary>
+    /// Looked at every pass rather than only before one starts: a recording asked for with no end
+    /// cannot be sized in advance, and one that was sized can still be overtaken by whatever else
+    /// shares the volume.
+    /// </summary>
+    [Test]
+    public async Task ACaptureIsStoppedOnceTheDiskIsNearlyFull()
+    {
+        // a floor nothing can be under, so the check is bound to fire
+        CoordinatorWith(new Init7TvOptions { FreeSpaceFloorBytes = long.MaxValue });
+
+        var row = Leftover(DateTime.UtcNow.AddHours(20));
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+        m_engine.Setup(x => x.IsRunning(It.IsAny<Guid>())).Returns(true);
+
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        m_engine.Verify(x => x.Stop(RecordingFiles.CaptureIdOf(row.Directory)), Times.AtLeastOnce);
+        Assert.That(row.ErrorMessage, Does.Contain("disk"), "and the row says why");
+    }
+
+    [Test]
+    public async Task WithRoomToSpareACaptureIsLeftAlone()
+    {
+        CoordinatorWith(new Init7TvOptions { FreeSpaceFloorBytes = 1 });
+
+        var now = DateTime.UtcNow;
+        var row = Leftover(now.AddHours(20));
+        m_recordings.Setup(x => x.GetUnfinishedAsync()).ReturnsAsync([row]);
+        m_engine.Setup(x => x.IsRunning(It.IsAny<Guid>())).Returns(true);
+
+        // somebody still wants it, so the disk is the only thing that could end it
+        PlanAll([Planned(now.AddHours(-1), now.AddHours(20), "niggi", row.ProgrammeId)]);
+
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        m_engine.Verify(x => x.Stop(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Test]
+    public async Task ADiskThatIsNearlyFullStopsNothingWhenNothingIsRecording()
+    {
+        CoordinatorWith(new Init7TvOptions { FreeSpaceFloorBytes = long.MaxValue });
+
+        await m_coordinator.SweepAsync(DateTime.UtcNow);
+
+        m_engine.Verify(x => x.Stop(It.IsAny<Guid>()), Times.Never);
+    }
 }

@@ -31,7 +31,8 @@ public static class RecordingRows
             ScheduledEnd = scheduledEnd,
             State = RecordingState.Pending,
             Directory = directory,
-            CreatedAt = now
+            CreatedAt = now,
+            OpenEnded = plan.OpenEnded
         }).ToArray();
     }
 
@@ -65,7 +66,8 @@ public static class RecordingRows
                 StartedAt = running.StartedAt,
                 State = running.State,
                 Directory = running.Directory,
-                CreatedAt = now
+                CreatedAt = now,
+                OpenEnded = running.OpenEnded
             })
             .ToArray();
     }

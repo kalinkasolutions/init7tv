@@ -35,4 +35,11 @@ public sealed class PlannedRecording
     public DateTime StartsAt { get; set; }
     public DateTime EndsAt { get; set; }
     public DateTime PlannedAt { get; set; }
+
+    /// <summary>
+    /// Asked for from the channel rather than the guide, and so running until somebody stops it.
+    /// <see cref="EndsAt"/> is still set, to a backstop far enough out that it is never the reason
+    /// one ends, because the scheduling arithmetic has to have a time to work with.
+    /// </summary>
+    public bool OpenEnded { get; set; }
 }
