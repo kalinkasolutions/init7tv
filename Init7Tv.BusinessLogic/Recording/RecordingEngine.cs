@@ -97,7 +97,8 @@ public sealed class RecordingEngine : IRecordingEngine, IDisposable
             KeyframeSeconds,
             request.Duration,
             capturePath,
-            streamInfo.Value.GetCueStream());
+            streamInfo.Value.GetCueStream(),
+            streamInfo.Value.GetSourceClock);
 
         m_logger.LogInformation(
             "recording {CaptureId} ({Channel}) to {CapturePath} for {Duration}, ffmpeg args: {Args}",

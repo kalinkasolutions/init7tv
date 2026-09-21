@@ -84,9 +84,7 @@ public sealed class RecordingSegments
                         continue;
                     }
 
-                    // where the announcement went past, not the splice time it carries: that one is
-                    // still on the clock of the source the capture was made from
-                    var starts = scan.StartsAt + Seconds(found.ArrivalPts, scan.FirstPts.Value);
+                    var starts = scan.StartsAt + Placed(found, scan, recorded);
                     var ends = Math.Min(starts + length.TotalSeconds, recorded);
 
                     if (starts >= 0 && ends > starts)
@@ -98,6 +96,28 @@ public sealed class RecordingSegments
 
             return marks.OrderBy(x => x.StartsAt).ToArray();
         }
+    }
+
+    /// <summary>
+    /// Where a break falls in the part, in seconds from its first picture.
+    ///
+    /// The splice time the cue carries is the real answer, and the capture keeps the source's
+    /// clock so that it can be read. It is only believed when it lands inside the part, because a
+    /// capture made before that was so — or a broadcaster whose splice times are nonsense — would
+    /// otherwise put a break days out. Falling back on when the announcement went past is what
+    /// those get, a few seconds early, being how this worked throughout.
+    /// </summary>
+    private static double Placed(AdBreak found, PartScan scan, double recorded)
+    {
+        var first = scan.FirstPts!.Value;
+        var atSpliceTime = Seconds(found.StartPts, first);
+
+        if (!found.AlreadyInProgress && atSpliceTime >= 0 && atSpliceTime <= recorded)
+        {
+            return atSpliceTime;
+        }
+
+        return Seconds(found.ArrivalPts, first);
     }
 
     /// <summary>
