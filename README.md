@@ -191,8 +191,10 @@ the password immediately after first login.
 | `Init7TvOptions__UseMultiCast`             | Enable multicast stream reception. Requires `network_mode: host`. Set to `false` to use HLS.  | `true`    | No                  |
 | `Init7TvOptions__RecordingPath`            | Where recordings are written. Keep it inside the data volume so they survive an update.        | `/var/srv/recordings` | No      |
 | `Init7TvOptions__MaxConcurrentRecordings`  | How many programmes may record at once. Each one is a separate FFmpeg encode.                  | `2`       | No                  |
+| `Logging__LogLevel__Default`               | Minimum level of the app's own log: `Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical`. | `Information` | No          |
+| `Loki__Enabled`, `Loki__Uri`               | Also ship logs from Information up to [Grafana Loki](https://grafana.com/oss/loki/), labelled `app="init7tv"` and `env`. The URI is Loki's address, e.g. `http://loki.example.ch:3100`; the push path is added automatically. | off | No |
 
-The FFmpeg preset and log level are not environment variables; they are configured at runtime under **admin → General
+The FFmpeg preset and FFmpeg's log level are not environment variables; they are configured at runtime under **admin → General
 Settings**, along with the recording preset and how many minutes to start early and keep going after.
 
 ---

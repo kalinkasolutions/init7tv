@@ -14,16 +14,46 @@ using Init7Tv.BusinessLogic.User;
 using Init7Tv.Dal;
 using Init7Tv.Dal.Repositories;
 using Init7Tv.Endpoints;
+using Init7Tv.Extensions;
 using Init7Tv.Services;
 using Init7Tv.Shared;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
+using Serilog.Events;
+using Serilog.Sinks.Grafana.Loki;
 
 var builder = WebApplication.CreateBuilder(args);
 
-using var loggerFactory = LoggerFactory.Create(loggingBuilder => { loggingBuilder.AddConsole(); });
+// the app-wide minimum comes from Logging:LogLevel:Default; the Microsoft.* overrides keep the
+// framework's own chatter down whatever level is chosen
+var minimumLevel = ParseLogLevel(builder.Configuration["Logging:LogLevel:Default"]);
+var lokiUri = builder.Configuration["Loki:Uri"];
+var lokiEnabled = builder.Configuration.GetValue("Loki:Enabled", false);
+builder.Host.UseSerilog((_, configuration) =>
+{
+    configuration
+        .MinimumLevel.Is(minimumLevel)
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+        .Enrich.FromLogContext()
+        .WriteTo.Console();
+
+    if (lokiEnabled && !string.IsNullOrWhiteSpace(lokiUri))
+    {
+        configuration.WriteTo.GrafanaLoki(
+            uri: lokiUri,
+            labels:
+            [
+                new LokiLabel { Key = "app", Value = "init7tv" },
+                new LokiLabel { Key = "env", Value = builder.Environment.EnvironmentName }
+            ],
+            restrictedToMinimumLevel: LogEventLevel.Information);
+    }
+});
 
 builder.Services.AddMemoryCache();
 builder.Services.AddEndpointsApiExplorer();
@@ -111,6 +141,9 @@ if (proxyAddress is not null)
     app.UseForwardedHeaders(forwardedHeadersOptions);
 }
 
+// after the forwarded headers, so the summary carries the caller's address and not the proxy's
+app.UseInit7TvRequestLogging();
+
 app.Use(async (context, next) =>
 {
     try
@@ -159,3 +192,14 @@ app.MapRecordingEndpoints();
 await Seed.InitializeAsync(app);
 
 app.Run();
+
+static LogEventLevel ParseLogLevel(string? value) => value?.Trim().ToLowerInvariant() switch
+{
+    "trace" => LogEventLevel.Verbose,
+    "debug" => LogEventLevel.Debug,
+    "information" or "info" => LogEventLevel.Information,
+    "warning" or "warn" => LogEventLevel.Warning,
+    "error" => LogEventLevel.Error,
+    "critical" or "fatal" => LogEventLevel.Fatal,
+    _ => LogEventLevel.Information
+};
