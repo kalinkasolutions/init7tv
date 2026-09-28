@@ -5,5 +5,9 @@ export const headerView = () => ({
 
     get canRecord() {
         return this.$store.user.canRecord;
+    },
+
+    get isAdmin() {
+        return this.$store.user.info?.isAdmin === true;
     }
 });
