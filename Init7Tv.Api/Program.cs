@@ -17,6 +17,7 @@ using Init7Tv.Endpoints;
 using Init7Tv.Extensions;
 using Init7Tv.Services;
 using Init7Tv.Shared;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.StaticFiles;
@@ -63,6 +64,10 @@ builder.Services.AddSignalR();
 builder.Services.Configure<Init7TvOptions>(builder.Configuration.GetSection("Init7TvOptions"));
 
 builder.Services.AddDbContext<Init7TvContext>(options => options.UseSqlite("Data Source=/var/srv/Init7Tv.db"));
+
+// the keys sign the login cookie and reset tokens; kept in the volume so an update does not void them
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo("/var/srv/keys"));
 
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
     {

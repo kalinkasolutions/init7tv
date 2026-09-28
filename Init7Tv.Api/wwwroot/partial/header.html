@@ -11,12 +11,12 @@
                 <a href="/#recording" :class="{ 'active': is('recording') }">recording</a>
             </li>
         </template>
-        <template x-if="userInfo?.isAdmin">
+        <template x-if="isAdmin">
             <li>
                 <a href="/#admin" :class="{ 'active': is('admin') }">admin</a>
             </li>
         </template>
-        <template x-if="userInfo?.isAdmin">
+        <template x-if="isAdmin">
             <li>
                 <a href="/#dashboard" :class="{ 'active': is('dashboard') }">dashboard</a>
             </li>
