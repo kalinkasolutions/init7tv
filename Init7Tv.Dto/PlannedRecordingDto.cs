@@ -25,4 +25,7 @@ public sealed record PlannedRecordingDto
     /// programme, which somebody else having picked it says nothing about.
     /// </summary>
     public bool IsMine { get; init; }
+
+    /// <summary>Recorded from the channel with no end, rather than a programme the guide named.</summary>
+    public bool OpenEnded { get; init; }
 }

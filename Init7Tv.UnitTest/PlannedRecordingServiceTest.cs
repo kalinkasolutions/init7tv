@@ -4,6 +4,7 @@ using Init7Tv.Dal.Entities;
 using Init7Tv.Dal.Repositories;
 using Init7Tv.Dto;
 using Init7Tv.Shared;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace Init7Tv.UnitTest;
@@ -20,6 +21,7 @@ public class PlannedRecordingServiceTest
     };
 
     private Mock<IPlannedRecordingRepository> m_repository = null!;
+    private Mock<IRecordingEngine> m_engine = null!;
     private PlannedRecordingService m_service = null!;
 
     [SetUp]
@@ -36,7 +38,14 @@ public class PlannedRecordingServiceTest
         m_repository = new Mock<IPlannedRecordingRepository>();
         m_repository.Setup(x => x.GetForUserAsync(It.IsAny<string>())).ReturnsAsync([]);
 
-        m_service = new PlannedRecordingService(m_repository.Object, channelService.Object, new RecordingSignal());
+        m_engine = new Mock<IRecordingEngine>();
+
+        m_service = new PlannedRecordingService(
+            m_repository.Object,
+            channelService.Object,
+            new RecordingSignal(),
+            m_engine.Object,
+            Options.Create(new Init7TvOptions()));
     }
 
     /// The guide gives UTC. A time read back without a kind reaches the browser
@@ -236,4 +245,110 @@ public class PlannedRecordingServiceTest
         EndsAt = ends,
         PlannedAt = DateTime.UtcNow
     };
+
+    [Test]
+    public async Task RecordingNowStartsFromNowWithNoEndInMind()
+    {
+        PlannedRecording? stored = null;
+        m_repository.Setup(x => x.AddAsync(It.IsAny<PlannedRecording>()))
+            .Callback<PlannedRecording>(x => stored = x)
+            .Returns(Task.CompletedTask);
+
+        var result = await m_service.RecordNowAsync("niggi", SrfOne);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorMessage);
+        Assert.That(stored, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(stored!.OpenEnded, Is.True);
+            Assert.That(stored.StartsAt, Is.EqualTo(DateTime.UtcNow).Within(TimeSpan.FromSeconds(5)));
+            Assert.That(stored.UserName, Is.EqualTo("niggi"));
+        });
+    }
+
+    /// <summary>
+    /// Far enough out that it is never why one ends. It still has to be a real time, because the
+    /// scheduling arithmetic adds a post-roll to it.
+    /// </summary>
+    [Test]
+    public async Task ARecordingWithNoEndStillCarriesABackstop()
+    {
+        PlannedRecording? stored = null;
+        m_repository.Setup(x => x.AddAsync(It.IsAny<PlannedRecording>()))
+            .Callback<PlannedRecording>(x => stored = x)
+            .Returns(Task.CompletedTask);
+
+        await m_service.RecordNowAsync("niggi", SrfOne);
+
+        Assert.That(stored!.EndsAt - stored.StartsAt, Is.EqualTo(new Init7TvOptions().OpenEndedBackstop));
+        Assert.That(stored.EndsAt, Is.LessThan(DateTime.MaxValue.AddDays(-1)), "and nothing that can overflow");
+    }
+
+    [Test]
+    public async Task TheChannelIsWhatTheRecordingIsCalled()
+    {
+        PlannedRecording? stored = null;
+        m_repository.Setup(x => x.AddAsync(It.IsAny<PlannedRecording>()))
+            .Callback<PlannedRecording>(x => stored = x)
+            .Returns(Task.CompletedTask);
+
+        await m_service.RecordNowAsync("niggi", SrfOne);
+
+        Assert.That(stored!.Title, Is.EqualTo(Channel.DisplayName));
+    }
+
+    /// <summary>
+    /// Two people recording the same channel share one capture, exactly as two people picking the
+    /// same programme do. Anything else would encode it twice.
+    /// </summary>
+    [Test]
+    public async Task TwoPeopleRecordingTheSameChannelNameTheSameThing()
+    {
+        var ids = new List<Guid>();
+        m_repository.Setup(x => x.AddAsync(It.IsAny<PlannedRecording>()))
+            .Callback<PlannedRecording>(x => ids.Add(x.ProgrammeId))
+            .Returns(Task.CompletedTask);
+
+        await m_service.RecordNowAsync("niggi", SrfOne);
+        await m_service.RecordNowAsync("sami", SrfOne);
+
+        Assert.That(ids, Has.Count.EqualTo(2));
+        Assert.That(ids[0], Is.EqualTo(ids[1]));
+        Assert.That(ids[0], Is.Not.EqualTo(Guid.Empty));
+    }
+
+    [Test]
+    public async Task AnUnknownChannelCannotBeRecorded()
+    {
+        var result = await m_service.RecordNowAsync("niggi", Guid.NewGuid());
+
+        Assert.That(result.ResultCode, Is.EqualTo(ResultCode.NotFound));
+        m_repository.Verify(x => x.AddAsync(It.IsAny<PlannedRecording>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A pick whose window is a day wide is never given up on, so the pass would keep finding it
+    /// in the way and keep saying nothing. Pressing record has to say why it did not take.
+    /// </summary>
+    [Test]
+    public async Task RecordingNowSaysSoWhenThereIsNoRoomToStartAnother()
+    {
+        m_engine.Setup(x => x.ActiveCount).Returns(new Init7TvOptions().MaxConcurrentRecordings);
+
+        var result = await m_service.RecordNowAsync("niggi", SrfOne);
+
+        Assert.That(result.ResultCode, Is.EqualTo(ResultCode.Conflict));
+        Assert.That(result.ErrorMessage, Does.Contain("Already recording"));
+        m_repository.Verify(x => x.AddAsync(It.IsAny<PlannedRecording>()), Times.Never);
+    }
+
+    [Test]
+    public async Task WithRoomToSpareRecordingNowGoesAhead()
+    {
+        m_engine.Setup(x => x.ActiveCount).Returns(0);
+
+        var result = await m_service.RecordNowAsync("niggi", SrfOne);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorMessage);
+    }
 }

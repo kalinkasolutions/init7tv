@@ -43,25 +43,49 @@ public class RecordingAdBreaksTest
     }
 
     /// <summary>
-    /// A break is placed where its announcement went past, not at the splice time the announcement
-    /// carries.
+    /// A break is placed at the splice point its announcement names.
     ///
-    /// The two are the same thing on a broadcast and different things in a capture, which is what
-    /// this has to cope with: ffmpeg copies the cue messages out untouched, so the splice time
-    /// inside them is still on the source's clock, while the pictures around them were given a
-    /// clock starting near zero. Measured on a real 3+ capture the splice times read as twenty one
-    /// hours into a ten minute recording. Placing them by arrival puts a break a few seconds early,
-    /// by however long the broadcaster announces ahead, which is the safe direction for both a skip
-    /// button and a cut.
+    /// That is only readable because the capture keeps the broadcaster's clock: ffmpeg copies the
+    /// cue messages out untouched, so the splice time inside one is on the clock of the source it
+    /// came from, and a capture given a clock of its own could not be compared against it at all.
+    /// Placing them by when the announcement went past instead — which is what a capture made
+    /// before that keeps doing — puts a break early by however far ahead the broadcaster signals,
+    /// measured at about seven seconds on SRF.
     /// </summary>
     [Test]
-    public void ABreakIsPlacedWhereItWasAnnounced()
+    public void ABreakIsPlacedAtTheSplicePointItNames()
     {
         var start = 1_000_000UL;
 
-        // announced one keyframe in, saying it will last thirty seconds
+        // announced one keyframe in, naming a splice three keyframes in and thirty seconds long
         var cue = SpliceSectionBuilder
             .SpliceInsert(1, ptsTime: start + 12 * Hz, durationTicks: 30 * Hz)
+            .Build();
+
+        // long enough that the break fits inside it, so nothing here is about the clamp
+        WriteCapture(part: 0, keyframes: 15, firstPts: start, cue: (After: 1, Cue: cue));
+
+        var breaks = Read();
+
+        Assert.That(breaks, Has.Count.EqualTo(1));
+        Assert.That(breaks[0].StartsAt, Is.EqualTo(12).Within(0.5), "where the splice was named, not where the cue arrived");
+        Assert.That(breaks[0].EndsAt, Is.EqualTo(42).Within(0.5), "and as long as it said it would be");
+    }
+
+    /// <summary>
+    /// A splice time that cannot belong to this capture is the mark of one recorded before the
+    /// broadcaster's clock was kept — measured on a real 3+ capture the splice times read as
+    /// twenty one hours into a ten minute recording. Those fall back on when the announcement went
+    /// past, which is a few seconds early and the safe direction for both a skip and a cut.
+    /// </summary>
+    [Test]
+    public void ASpliceTimeFromAnotherClockFallsBackOnWhenItArrived()
+    {
+        var start = 1_000_000UL;
+
+        // twenty one hours out, as an untouched source clock reads against a capture's own
+        var cue = SpliceSectionBuilder
+            .SpliceInsert(1, ptsTime: start + 21 * 3600 * Hz, durationTicks: 30 * Hz)
             .Build();
 
         WriteCapture(part: 0, keyframes: 10, firstPts: start, cue: (After: 1, Cue: cue));
@@ -70,7 +94,6 @@ public class RecordingAdBreaksTest
 
         Assert.That(breaks, Has.Count.EqualTo(1));
         Assert.That(breaks[0].StartsAt, Is.EqualTo(4).Within(0.5), "one keyframe in, where it was announced");
-        Assert.That(breaks[0].EndsAt, Is.EqualTo(34).Within(0.5), "and as long as it said it would be");
     }
 
     /// <summary>
@@ -93,8 +116,8 @@ public class RecordingAdBreaksTest
 
         Assert.That(breaks, Has.Count.EqualTo(1));
 
-        // five keyframes of the first part, four seconds each, then one keyframe into the second
-        Assert.That(breaks[0].StartsAt, Is.EqualTo(20 + 4).Within(0.5));
+        // five keyframes of the first part, four seconds each, then the splice two keyframes into the second
+        Assert.That(breaks[0].StartsAt, Is.EqualTo(20 + 8).Within(0.5));
     }
 
     [Test]

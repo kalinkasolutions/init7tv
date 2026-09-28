@@ -7,6 +7,11 @@ public interface IPlannedRecordingService
 {
     Task<OperationResult<PlannedRecordingDto[]>> GetAsync(string userName, bool isAdmin);
     Task<OperationResult<PlannedRecordingDto>> PlanAsync(string userName, PlannedRecordingDto recording);
+
+    /// <summary>
+    /// Records a channel from now until somebody stops it, rather than a programme the guide named.
+    /// </summary>
+    Task<OperationResult<PlannedRecordingDto>> RecordNowAsync(string userName, Guid channelId);
     /// <summary>
     /// Drops one pick. <paramref name="owner"/> is whose it is, which only an admin may make
     /// anybody but themselves: they are shown everybody's picks, and a list that cannot be acted

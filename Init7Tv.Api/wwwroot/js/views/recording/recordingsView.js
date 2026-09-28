@@ -72,6 +72,7 @@ export const recordingsView = () => ({
         this.$store.tabs.counts.recording = this.inProgress.length;
         this.$store.tabs.counts.recorded = this.finished.length;
         this.$store.recordings.underway = this.inProgress.map(x => x.programmeId);
+        this.$store.recordings.channels = [...new Set(this.inProgress.map(x => x.channelId))];
     },
 
     isBusy(recording) {

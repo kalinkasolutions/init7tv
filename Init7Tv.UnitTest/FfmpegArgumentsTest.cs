@@ -256,11 +256,12 @@ public class FfmpegArgumentsTest
         bool interlaced = true,
         bool multicast = true,
         int? cueStream = 1,
+        double? sourceClock = null,
         params int[] audioStreams
     ) =>
         FfmpegArguments.BuildRecording(
             Channel, audioStreams.Length == 0 ? [0] : audioStreams, "veryfast", "warning", Probe(interlaced),
-            multicast, keyframeSeconds: 4, TimeSpan.FromMinutes(65), CapturePath, cueStream);
+            multicast, keyframeSeconds: 4, TimeSpan.FromMinutes(65), CapturePath, cueStream, sourceClock);
 
     /// <summary>
     /// A recording is kept for weeks and the choice cannot be revisited, so it carries every track
@@ -413,5 +414,51 @@ public class FfmpegArgumentsTest
         var args = FfmpegArguments.BuildDownload("error");
 
         Assert.That(ValueOf(args, "-movflags"), Does.Contain("delay_moov"));
+    }
+
+    /// <summary>
+    /// Keeping the broadcaster's clock is what makes a cue message readable: the splice time
+    /// inside one is on that clock, and ffmpeg copies the cue out untouched.
+    /// </summary>
+    [Test]
+    public void Recording_KeepsTheSourceClockWhenTheProbeGaveOne()
+    {
+        var args = BuildRecording(sourceClock: 12706.4);
+
+        Assert.That(args, Does.Contain("-copyts"));
+    }
+
+    /// <summary>
+    /// -t counts from wherever the output timestamps begin. With the source's clock kept that is
+    /// hours into a broadcast day, so ffmpeg reckons the duration already spent and writes nothing
+    /// whatsoever — an empty recording rather than a slightly wrong one.
+    /// </summary>
+    [Test]
+    public void Recording_EndsAtAMomentRatherThanAfterALengthWhenTheClockIsKept()
+    {
+        var args = BuildRecording(sourceClock: 12706.4);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(args, Does.Not.Contain("-t"));
+            Assert.That(ValueOf(args, "-to"), Is.EqualTo("16606"), "the clock it started on plus the 65 minutes");
+        });
+    }
+
+    /// <summary>
+    /// A probe that could not say leaves the recording made the way it always was, rather than
+    /// risking an end time worked out from nothing.
+    /// </summary>
+    [Test]
+    public void Recording_FallsBackOnALengthWithNoClockToGoOn()
+    {
+        var args = BuildRecording(sourceClock: null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(args, Does.Not.Contain("-copyts"));
+            Assert.That(args, Does.Not.Contain("-to"));
+            Assert.That(ValueOf(args, "-t"), Is.EqualTo("3900"));
+        });
     }
 }

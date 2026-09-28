@@ -166,13 +166,24 @@ public class RecordingWindowTest
     private static IGrouping<Guid, PlannedRecording> Group(PlannedRecording pick) =>
         new[] { pick }.GroupBy(x => x.ProgrammeId).Single();
 
+    /// <summary>
+    /// The next moment, with the while-recording tick pushed out beyond the horizon so it cannot
+    /// be the answer. Tests about that tick pass their own.
+    /// </summary>
+    private static DateTime? NextMoment(
+        RecordingRow[] unfinished,
+        PlannedRecording[] plans,
+        TimeSpan preRoll,
+        DateTime now,
+        DateTime horizon
+    ) => RecordingWindow.NextMoment(unfinished, plans, preRoll, now, horizon, TimeSpan.FromHours(2));
+
     [Test]
     public void TheNextMomentIsAPicksPaddedStart()
     {
         var pick = Pick(Now.AddMinutes(20), Now.AddHours(1));
 
-        var next = RecordingWindow.NextMoment(
-            [], [pick], TimeSpan.FromMinutes(5), Now, Now.AddHours(1));
+        var next = NextMoment([], [pick], TimeSpan.FromMinutes(5), Now, Now.AddHours(1));
 
         Assert.That(next, Is.EqualTo(Now.AddMinutes(15)));
     }
@@ -180,8 +191,7 @@ public class RecordingWindowTest
     [Test]
     public void AnEmptyScheduleHasNoNextMoment()
     {
-        Assert.That(
-            RecordingWindow.NextMoment([], [], TimeSpan.Zero, Now, Now.AddHours(1)), Is.Null);
+        Assert.That(NextMoment([], [], TimeSpan.Zero, Now, Now.AddHours(1)), Is.Null);
     }
 
     [Test]
@@ -190,8 +200,7 @@ public class RecordingWindowTest
         // the next pass redraws the window and finds it then
         var pick = Pick(Now.AddHours(3), Now.AddHours(4));
 
-        Assert.That(
-            RecordingWindow.NextMoment([], [pick], TimeSpan.Zero, Now, Now.AddHours(1)), Is.Null);
+        Assert.That(NextMoment([], [pick], TimeSpan.Zero, Now, Now.AddHours(1)), Is.Null);
     }
 
     [Test]
@@ -200,8 +209,7 @@ public class RecordingWindowTest
         // it would hand the caller a zero delay and the loop would spin on it
         var pick = Pick(Now.AddMinutes(-10), Now.AddHours(1));
 
-        Assert.That(
-            RecordingWindow.NextMoment([], [pick], TimeSpan.Zero, Now, Now.AddHours(1)), Is.Null);
+        Assert.That(NextMoment([], [pick], TimeSpan.Zero, Now, Now.AddHours(1)), Is.Null);
     }
 
     [Test]
@@ -209,7 +217,7 @@ public class RecordingWindowTest
     {
         var row = Row(Guid.NewGuid(), RecordingState.Recording, Now.AddMinutes(20));
 
-        var next = RecordingWindow.NextMoment([row], [], TimeSpan.Zero, Now, Now.AddHours(1));
+        var next = NextMoment([row], [], TimeSpan.Zero, Now, Now.AddHours(1));
 
         Assert.That(next, Is.EqualTo(Now.AddMinutes(20) + RecordingWindow.OverrunGrace));
     }
@@ -220,7 +228,7 @@ public class RecordingWindowTest
         // only one that is running can outstay its window
         var row = Row(Guid.NewGuid(), RecordingState.Pending, Now.AddMinutes(20));
 
-        Assert.That(RecordingWindow.NextMoment([row], [], TimeSpan.Zero, Now, Now.AddHours(1)), Is.Null);
+        Assert.That(NextMoment([row], [], TimeSpan.Zero, Now, Now.AddHours(1)), Is.Null);
     }
 
     [Test]
@@ -231,7 +239,7 @@ public class RecordingWindowTest
         var row = Row(programmeId, RecordingState.Pending, Now.AddHours(1));
         var pick = Pick(Now.AddMinutes(20), Now.AddHours(1), programmeId);
 
-        Assert.That(RecordingWindow.NextMoment([row], [pick], TimeSpan.Zero, Now, Now.AddHours(1)), Is.Null);
+        Assert.That(NextMoment([row], [pick], TimeSpan.Zero, Now, Now.AddHours(1)), Is.Null);
     }
 
     [Test]
@@ -241,9 +249,47 @@ public class RecordingWindowTest
         var later = Pick(Now.AddMinutes(40), Now.AddHours(2));
         var running = Row(Guid.NewGuid(), RecordingState.Recording, Now.AddMinutes(25));
 
-        var next = RecordingWindow.NextMoment(
-            [running], [later, soon], TimeSpan.Zero, Now, Now.AddHours(1));
+        var next = NextMoment([running], [later, soon], TimeSpan.Zero, Now, Now.AddHours(1));
 
         Assert.That(next, Is.EqualTo(Now.AddMinutes(10)));
+    }
+
+    /// <summary>
+    /// A recording with no end has nothing of its own to bring the loop back before the horizon,
+    /// and the free space has to be looked at rather more often than once an hour.
+    /// </summary>
+    [Test]
+    public void WhileSomethingIsRecordingTheLoopComesBackSoon()
+    {
+        var row = Row(Guid.NewGuid(), RecordingState.Recording, Now.AddHours(20));
+
+        var next = RecordingWindow.NextMoment(
+            [row], [], TimeSpan.Zero, Now, Now.AddHours(1), TimeSpan.FromMinutes(1));
+
+        Assert.That(next, Is.EqualTo(Now.AddMinutes(1)));
+    }
+
+    [Test]
+    public void WithNothingRecordingThereIsNoSuchTick()
+    {
+        // an idle loop has no reason to wake, and waking it would be a poll
+        var row = Row(Guid.NewGuid(), RecordingState.Pending, Now.AddHours(20));
+
+        var next = RecordingWindow.NextMoment(
+            [row], [], TimeSpan.Zero, Now, Now.AddHours(1), TimeSpan.FromMinutes(1));
+
+        Assert.That(next, Is.Null);
+    }
+
+    [Test]
+    public void SomethingDueSoonerThanTheTickStillWins()
+    {
+        var row = Row(Guid.NewGuid(), RecordingState.Recording, Now.AddHours(20));
+        var pick = Pick(Now.AddSeconds(20), Now.AddHours(1));
+
+        var next = RecordingWindow.NextMoment(
+            [row], [pick], TimeSpan.Zero, Now, Now.AddHours(1), TimeSpan.FromMinutes(1));
+
+        Assert.That(next, Is.EqualTo(Now.AddSeconds(20)));
     }
 }

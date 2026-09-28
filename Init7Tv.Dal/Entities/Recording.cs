@@ -81,4 +81,10 @@ public sealed class Recording
     public string ErrorMessage { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// Started from the channel with no end in mind. Stopping one is how it was meant to end, so it
+    /// is not cut short however far it got.
+    /// </summary>
+    public bool OpenEnded { get; set; }
 }

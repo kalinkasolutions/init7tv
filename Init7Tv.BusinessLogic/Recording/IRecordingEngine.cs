@@ -13,7 +13,7 @@ public sealed record RecordingRequest
     public required ChannelDto Channel { get; init; }
     public required string Directory { get; init; }
 
-    /// <summary>What -t is set from; the recording ends by itself after this.</summary>
+    /// <summary>How long to record for; the recording ends by itself after this.</summary>
     public required TimeSpan Duration { get; init; }
 
     public required string Preset { get; init; }

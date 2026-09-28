@@ -206,4 +206,18 @@ public sealed class FfprobeRoot
                    || tagged.StartsWith(language, StringComparison.OrdinalIgnoreCase)
                    || language.StartsWith(tagged, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// Where the source's own clock stands, in seconds, or null when it could not be read.
+    ///
+    /// Only a recording cares. Keeping that clock rather than starting a fresh one is what lets a
+    /// cue message be believed: the splice time inside one is on the broadcaster's clock, and
+    /// against a clock of our own it is meaningless.
+    /// </summary>
+    public double? GetSourceClock =>
+        double.TryParse(Format.StartTime, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
+        && double.IsFinite(seconds)
+        && seconds >= 0
+            ? seconds
+            : null;
 }

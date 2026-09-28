@@ -70,12 +70,18 @@ public static class RecordingWindow
     /// Only what is still ahead counts: a moment left in the past would hand the caller a zero delay
     /// and spin on it.
     /// </summary>
+    /// <param name="whileRecording">
+    /// How soon to come back while something is being captured, whatever else the schedule holds.
+    /// A recording with no end has nothing of its own to bring the loop back before the horizon,
+    /// and the free space has to be looked at rather more often than once an hour.
+    /// </param>
     public static DateTime? NextMoment(
         IReadOnlyList<RecordingRow> unfinished,
         IReadOnlyList<PlannedRecording> plans,
         TimeSpan preRoll,
         DateTime now,
-        DateTime horizon
+        DateTime horizon,
+        TimeSpan whileRecording
     )
     {
         var moments = new List<DateTime>();
@@ -88,6 +94,7 @@ public static class RecordingWindow
             if (row.State == RecordingState.Recording)
             {
                 moments.Add(row.ScheduledEnd + OverrunGrace);
+                moments.Add(now + whileRecording);
             }
         }
 

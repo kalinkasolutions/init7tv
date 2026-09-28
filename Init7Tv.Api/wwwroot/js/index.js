@@ -9,6 +9,7 @@ import {tabStore} from './stores/tabStore.js';
 import {filterStore} from './stores/filterStore.js';
 import {recordingStore} from './stores/recordingStore.js';
 import {modalStore} from './stores/modalStore.js';
+import {userStore} from './stores/userStore.js';
 
 import {headerView} from './views/headerView.js';
 import {notificationView} from './views/notificationView.js';
@@ -38,6 +39,9 @@ Alpine.store('tabs', tabStore());
 Alpine.store('filter', filterStore());
 Alpine.store('recordings', recordingStore());
 Alpine.store('modal', modalStore());
+
+Alpine.store('user', userStore());
+Alpine.store('user').load();
 
 Alpine.data('headerView', headerView);
 Alpine.data('notificationView', notificationView);

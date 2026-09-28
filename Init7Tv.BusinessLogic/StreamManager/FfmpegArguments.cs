@@ -40,9 +40,14 @@ public static class FfmpegArguments
     /// what is played; an mp4 is only made when somebody downloads one.
     /// </summary>
     /// <param name="duration">
-    /// What -t is set from, and the thing that actually ends the recording. A
+    /// How long to record for, and the thing that actually ends the recording. A
     /// scheduler that is wedged or restarting must not leave an ffmpeg running
     /// against a multicast for ever.
+    /// </param>
+    /// <param name="sourceClock">
+    /// Where the source's clock stood when it was probed, which keeps the broadcaster's clock on
+    /// the capture instead of giving it a fresh one. Null when the probe could not say, and then
+    /// the recording is made the old way rather than not at all.
     /// </param>
     /// <param name="audioStreamIndexes">
     /// Every track to carry, in the order they should appear. A player with no way to choose takes
@@ -58,7 +63,8 @@ public static class FfmpegArguments
         int keyframeSeconds,
         TimeSpan duration,
         string capturePath,
-        int? cueStreamIndex
+        int? cueStreamIndex,
+        double? sourceClock = null
     )
     {
         // without -nostdin an existing output file makes ffmpeg ask on stdin and
@@ -66,6 +72,16 @@ public static class FfmpegArguments
         // the cue messages are a data stream ffmpeg has no decoder for, and without this it refuses
         // to carry one at all
         var args = new List<string> { "-nostdin", "-y", "-copy_unknown" };
+
+        // Keep the broadcaster's clock rather than starting one at zero. ffmpeg copies the cue
+        // messages byte for byte, so the splice time inside one stays on that clock; against a
+        // clock of our own it cannot be read, and an advertising break can only be placed by when
+        // its announcement went past — which is the several seconds early that a cue is sent.
+        if (sourceClock != null)
+        {
+            args.Add("-copyts");
+        }
+
         args.AddRange(LogLevel(logLevel));
         args.AddRange(Input(channel, useMultiCast));
         args.AddRange(Transcode(preset, streamInfo, audioStreamIndexes, keyframeSeconds));
@@ -80,7 +96,7 @@ public static class FfmpegArguments
         {
             args.AddRange(["-map", $"0:d:{cues.ToString(CultureInfo.InvariantCulture)}?", "-c:d", "copy"]);
         }
-        args.AddRange(["-t", ((int)duration.TotalSeconds).ToString(CultureInfo.InvariantCulture)]);
+        args.AddRange(StopAt(duration, sourceClock));
         args.AddRange(["-f", "mpegts"]);
         args.Add(capturePath);
 
@@ -117,6 +133,28 @@ public static class FfmpegArguments
             "-movflags", "frag_keyframe+empty_moov+default_base_moof+delay_moov",
             "-f", "mp4", "pipe:1"
         ];
+    }
+
+    /// <summary>
+    /// What ends the recording by itself.
+    ///
+    /// -t counts from wherever the output timestamps begin, so with the source's clock kept it is
+    /// measured against a number hours into a broadcast day and ffmpeg writes nothing at all. The
+    /// end has to be given as the moment it falls on that same clock instead.
+    /// </summary>
+    private static string[] StopAt(TimeSpan duration, double? sourceClock)
+    {
+        var seconds = (int)duration.TotalSeconds;
+
+        if (sourceClock is not { } from)
+        {
+            return ["-t", seconds.ToString(CultureInfo.InvariantCulture)];
+        }
+
+        // whole seconds, so the argument reads the way the -t it replaces did
+        var until = Math.Round(from) + seconds;
+
+        return ["-to", until.ToString("0", CultureInfo.InvariantCulture)];
     }
 
     /// <summary>The transport ffmpeg reads, which is also the one worth probing.</summary>
