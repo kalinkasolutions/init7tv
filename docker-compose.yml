@@ -11,5 +11,8 @@ services:
       - ProxyAddress=10.10.0.20
       - Init7TvOptions__UseMultiCast=false
       - ASPNETCORE_HTTP_PORTS=8080
+      # optional: also ship logs (Information and up) to Grafana Loki
+      # - Loki__Enabled=true
+      # - Loki__Uri=http://loki.example.ch:3100
     # Multicast needs network_mode: host instead of the ports mapping above,
     # see the README.
