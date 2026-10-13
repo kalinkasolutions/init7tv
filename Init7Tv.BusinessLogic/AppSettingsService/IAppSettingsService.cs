@@ -6,6 +6,7 @@ namespace Init7Tv.BusinessLogic.AppSettingsService;
 public interface IAppSettingsService
 {
     Task<OperationResult<EmailAppSettingsDto>> GetEmailAppSettingsAsync();
+    Task<OperationResult<EmailAppSettingsDto>> GetEmailSendSettingsAsync();
     Task<OperationResult<EmailAppSettingsDto>> UpdateEmailAppSettingsAsync(EmailAppSettingsDto emailAppSettings);
     Task<OperationResult<GeneralAppSettingsDto>> GetGeneralSettingsAsync();
     Task<OperationResult<GeneralAppSettingsDto>> UpdateGeneralSettingsAsync(GeneralAppSettingsDto appSettingsDto);

@@ -34,6 +34,20 @@ public sealed class AppSettingsService : IAppSettingsService
         return OperationResult<EmailAppSettingsDto>.Success(appSettings.Value.ToDto());
     }
 
+    // For sending only: ToDto blanks the password for the browser, and SMTP needs the real one
+    public async Task<OperationResult<EmailAppSettingsDto>> GetEmailSendSettingsAsync()
+    {
+        var appSettings = await GetAppSettings();
+        if (!appSettings.IsSuccess)
+        {
+            return appSettings.MapError<EmailAppSettingsDto>();
+        }
+
+        var sendSettings = appSettings.Value.ToDto();
+        sendSettings.Password = appSettings.Value.Password;
+        return OperationResult<EmailAppSettingsDto>.Success(sendSettings);
+    }
+
     public async Task<OperationResult<EmailAppSettingsDto>> UpdateEmailAppSettingsAsync(EmailAppSettingsDto emailAppSettings)
     {
         var updateResult = await m_appSettingsRepository.UpdateEmailAppSettingsAsync(emailAppSettings.ToEntity());
