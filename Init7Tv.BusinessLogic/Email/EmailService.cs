@@ -24,7 +24,7 @@ public sealed class EmailService : IEmailService
 
     private async Task<OperationResult<MessageDto>> SendMailAsync(string subject, string recipient, string body)
     {
-        var appSettingsResult = await m_appSettingsService.GetEmailAppSettingsAsync();
+        var appSettingsResult = await m_appSettingsService.GetEmailSendSettingsAsync();
         if (!appSettingsResult.IsSuccess)
         {
             return appSettingsResult.MapError<MessageDto>();
