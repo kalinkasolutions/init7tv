@@ -17,11 +17,11 @@ public static class Seed
         var db = services.GetRequiredService<Init7TvContext>();
         await db.Database.MigrateAsync();
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(Seed));
-        await AddInitialUsersAndRolesAsync(services, logger);
+        await AddInitialUsersAndRolesAsync(services, logger, app.Environment.IsDevelopment());
         await AddInitialSettingsRecordAsync(services);
     }
 
-    private static async Task AddInitialUsersAndRolesAsync(IServiceProvider services, ILogger logger)
+    private static async Task AddInitialUsersAndRolesAsync(IServiceProvider services, ILogger logger, bool isDevelopment)
     {
         var userManager = services.GetRequiredService<UserManager<IdentityUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
@@ -44,6 +44,13 @@ public static class Seed
         const string adminEmail = "admin@local";
         const string adminPassword = "admin";
 
+        // A renamed or deleted default admin must stay gone once someone else holds the role.
+        var hasAdmins = (await userManager.GetUsersInRoleAsync(Init7TvRoles.Admin)).Count > 0;
+        if (hasAdmins && !isDevelopment)
+        {
+            return;
+        }
+
         var adminUser = await userManager.FindByNameAsync(adminUserName);
         if (adminUser != null)
         {
@@ -61,6 +68,7 @@ public static class Seed
         if (!addAdmin.Succeeded)
         {
             logger.LogError("Failed to add Admin: {Errors}", addAdmin.ToErrorString());
+            return;
         }
 
         var addAdminRoleRes = await userManager.AddToRoleAsync(adminUser, Init7TvRoles.Admin);
